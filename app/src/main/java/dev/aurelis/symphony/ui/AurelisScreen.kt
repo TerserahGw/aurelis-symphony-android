@@ -61,6 +61,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.unit.IntOffset
@@ -644,7 +645,6 @@ private fun InlineGlassSongMenu(
     if (!visibility.currentState && !visibility.targetState) return
     val density = LocalDensity.current
     val margin = with(density) { 9.dp.roundToPx() }
-    val closedSize = with(density) { 40.dp.roundToPx() }
     val provider = remember(lyricOffset, margin) {
         AdaptiveGlassMenuPosition(preferDown = lyricOffset, inset = margin)
     }
@@ -655,17 +655,19 @@ private fun InlineGlassSongMenu(
     ) {
         AnimatedVisibility(
             visibleState = visibility,
-            enter = expandIn(
-                expandFrom = Alignment.TopEnd,
-                initialSize = { IntSize(closedSize, closedSize) },
-                animationSpec = spring(dampingRatio = .86f,
-                    stiffness = Spring.StiffnessLow)
-            ) + fadeIn(tween(190)),
-            exit = shrinkOut(
-                shrinkTowards = Alignment.TopEnd,
-                targetSize = { IntSize(closedSize, closedSize) },
-                animationSpec = tween(330)
-            ) + fadeOut(tween(210))
+            // Keep layout bounds constant during morph: resizing the popup's
+            // window on every spring frame caused its anchor to visibly jitter.
+            enter = scaleIn(
+                initialScale = .22f,
+                transformOrigin = TransformOrigin(1f, 0f),
+                animationSpec = spring(dampingRatio = .93f,
+                    stiffness = Spring.StiffnessMediumLow)
+            ) + fadeIn(tween(170)),
+            exit = scaleOut(
+                targetScale = .22f,
+                transformOrigin = TransformOrigin(1f, 0f),
+                animationSpec = tween(255)
+            ) + fadeOut(tween(195))
         ) {
         Glass(
             Modifier.width(252.dp).shadow(15.dp, RoundedCornerShape(23.dp)),
