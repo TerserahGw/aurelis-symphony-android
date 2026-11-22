@@ -76,8 +76,17 @@ class AurelisApi(val base: String = "https://aurelis-symphony.go.altare.global")
             val pending = lyrics.lines.indices.filter { index ->
                 index !in translated && lyrics.lines[index].text.isNotBlank()
             }
+            // BitChord-inspired fast path: Google lightweight translation in
+            // at most two parallel bounded batches with strict index checking.
+            // Existing Aurelis/MyMemory API remains the fallback if Google
+            // rate-limits, strips markers, or stops supporting this endpoint.
+            val quick = FastLyricTranslator.translate(
+                pending.map { it to lyrics.lines[it].text.take(250) }, target
+            )
+            translated.putAll(quick)
+            val fallback = pending.filterNot { it in quick }
             var failures = 0
-            for (batch in pending.chunked(16)) {
+            for (batch in fallback.chunked(16)) {
                 val body = JSONObject()
                     .put("target", target)
                     .put("texts", JSONArray().apply {
