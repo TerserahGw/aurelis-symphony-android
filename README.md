@@ -167,3 +167,14 @@ The Android app is now version **1.0.0** (`versionCode = 5`). It retains the per
 ### Shipping and verification
 
 GitHub Actions compiles a test APK, then builds and verifies the release-signed ARM64 APK using the repository's private signing secrets. Only the signed APK is attached to the public Stable Release. Android's package installer still obtains user consent during app updates. Real playback, UI animation, network translation, and device-specific behavior require testing on the target Android device.
+
+
+## 1.0.1 Stable Hotfix
+
+- **Glass intensity:** Navigation, Search, full mini-player and compact mini-player use stronger album-art frost (38 dp radius, adjusted translucency), still retaining content readability. Blur uses album artwork, rather than dynamically capturing and blurring live list items behind the dock.
+- **Unified scroll behavior:** Compact dock now responds to scrolling on Home, Search and Library. Each tab keeps its own LazyListState and the mini-player moves into the center island between the hamburger and Search. The full player/navigation layout returns after three seconds of scroll inactivity. Search-input expansion is preserved when its tab is in use.
+- **Smoothness / reliability:** Stable glass gradients are memoized; high-frequency progress is isolated into its own Composable and interpolated; slider settings are persisted after a short debounce with a final flush on close. Rapid song changes preserve coroutine cancellation rather than showing errors from stale playback requests.
+- **Settings fast-scroll fix:** Modal sheet's drag gestures are disabled while the dedicated content scroll remains enabled, the sheet uses an opaque background behind its artwork-tinted glass, and the content fills the full sheet including its bottom. This prevents the underlying Home screen from showing through the lower gap visible in the provided recording.
+- **Version:** `1.0.1`, `versionCode = 6`, **Stable**, using the same release-signing secrets as v1.0.0 for in-place Android updates.
+
+Release APKs are built and signature-verified by GitHub Actions, but animation smoothness and interaction on each physical Android device still require device testing.
