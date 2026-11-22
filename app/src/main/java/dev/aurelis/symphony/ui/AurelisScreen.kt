@@ -15,6 +15,8 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.expandIn
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.shrinkOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
@@ -1834,7 +1836,11 @@ private fun FullPlayer(state: AurelisState, onClose: () -> Unit, onQueue: () -> 
                             Text("Up Next", color = white, fontSize = 27.sp,
                                 fontWeight = FontWeight.SemiBold)
                             Spacer(Modifier.height(4.dp))
-                            Text("Antrean musik selanjutnya", color = mist, fontSize = 12.sp)
+                            Text(
+                                state.activePlaylist?.let { "Playlist · $it" }
+                                    ?: "Antrean rekomendasi musik selanjutnya",
+                                color = mist, fontSize = 12.sp
+                            )
                             Spacer(Modifier.height(17.dp))
                             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                                 Artwork(song, 49.dp, 12.dp)
@@ -1854,11 +1860,14 @@ private fun FullPlayer(state: AurelisState, onClose: () -> Unit, onQueue: () -> 
                                 }
                             } else {
                                 LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                                    items(state.queue, key = { "player-queue-${it.key}" }) { queued ->
+                                    items(state.queue.size,
+                                        key = { i -> "player-queue-$i-${state.queue[i].key}" }
+                                    ) { i ->
+                                        val queued = state.queue[i]
                                         Row(verticalAlignment = Alignment.CenterVertically) {
                                             Box(Modifier.weight(1f)) {
                                                 SongRow(queued, state,
-                                                    onPlay = { state.play(queued) },
+                                                    onPlay = { state.playFromQueue(queued, i) },
                                                     onMenu = { })
                                             }
                                             IconButton(onClick = { state.removeQueue(queued) }) {
@@ -2545,13 +2554,19 @@ private fun QueueSheet(state: AurelisState, onClose: () -> Unit) {
     ModalBottomSheet(onDismissRequest = onClose, containerColor = Color(0xFF111C1B), shape = RoundedCornerShape(topStart = 30.dp, topEnd = 30.dp)) {
         Column(Modifier.fillMaxWidth().fillMaxHeight(.68f).padding(horizontal = 21.dp)) {
             Text("Up Next", color = white, fontSize = 24.sp, fontWeight = FontWeight.SemiBold)
-            Text("Antrean berikutnya", color = mist, fontSize = 12.sp)
+            Text(state.activePlaylist?.let { "Playlist · $it" }
+                ?: "Antrean berikutnya", color = mist, fontSize = 12.sp)
             Spacer(Modifier.height(22.dp))
             if (state.queue.isEmpty()) EmptyPage("Antrean kosong", "Pemutar akan mencari rekomendasi setelah lagu selesai.")
             else LazyColumn(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                items(state.queue, key = { "queued-${it.key}" }) { song ->
+                items(state.queue.size, key = { i -> "queued-$i-${state.queue[i].key}" }) { i ->
+                    val song = state.queue[i]
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.weight(1f)) { SongRow(song, state, onPlay = { state.play(song); onClose() }, onMenu = { state.removeQueue(song) }) }
+                        Box(Modifier.weight(1f)) {
+                            SongRow(song, state,
+                                onPlay = { state.playFromQueue(song, i); onClose() },
+                                onMenu = { state.removeQueue(song) })
+                        }
                         IconButton(onClick = { state.removeQueue(song) }) { Icon(Icons.Default.Close, "Hapus antrean", tint = mist) }
                     }
                 }
