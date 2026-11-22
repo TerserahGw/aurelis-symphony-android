@@ -109,6 +109,11 @@ private val groove = Color(0xFF243632)
 private val motion = spring<Float>(dampingRatio = .86f, stiffness = Spring.StiffnessLow)
 private val LocalGlassDensity = compositionLocalOf { .68f }
 private val LocalVisualStyle = compositionLocalOf { VisualStyle.GLASS }
+private val LocalAppLanguage = compositionLocalOf { AppLanguage.INDONESIAN }
+
+@Composable
+private fun uiText(key: String): String =
+    AurelisI18n.text(LocalAppLanguage.current, key)
 private val LocalReducedMotion = compositionLocalOf { false }
 
 private fun Color.mix(other: Color, amount: Float) = Color(
@@ -131,9 +136,10 @@ private fun Glass(
 ) {
     val visualStyle = LocalVisualStyle.current
     if (visualStyle == VisualStyle.AMBIENT) {
-        val cleanTint = tint.mix(bg, .84f).copy(alpha = .67f)
-        Box(modifier.clip(shape).background(cleanTint, shape)
-            .border(1.dp, white.copy(alpha = .045f), shape)) {
+        // Ambient deliberately draws a flat opaque capsule: no frosted
+        // artwork, glass-border highlight or translucent blur.
+        val cleanTint = tint.mix(bg, .86f).copy(alpha = 1f)
+        Box(modifier.clip(shape).background(cleanTint, shape)) {
             content()
         }
         return
@@ -284,7 +290,8 @@ fun AurelisScreen(state: AurelisState) {
     CompositionLocalProvider(
         LocalGlassDensity provides state.settings.glassOpacity,
         LocalReducedMotion provides !state.settings.motion,
-        LocalVisualStyle provides state.settings.visualStyle
+        LocalVisualStyle provides state.settings.visualStyle,
+        LocalAppLanguage provides state.settings.language
     ) {
     MaterialTheme(colorScheme = darkColorScheme(
         primary = lime, secondary = Color(0xFF98CDB9), background = bg,
