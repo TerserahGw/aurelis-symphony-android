@@ -677,82 +677,272 @@ private fun IslandDock(tab: String, expanded: Boolean, query: String,
 @Composable
 private fun FullPlayer(state: AurelisState, onClose: () -> Unit, onQueue: () -> Unit, onMenu: () -> Unit) {
     val song = state.current ?: return
-    val stamp = state.libraryStamp // observe local like/playlist changes
+    val stamp = state.libraryStamp
     var pane by rememberSaveable { mutableStateOf("Lirik") }
+    var optionsOpen by remember { mutableStateOf(false) }
+    var showTranslation by rememberSaveable { mutableStateOf(false) }
+    var showRoman by rememberSaveable { mutableStateOf(state.settings.romanize) }
+    val artwork = song.artwork.takeIf { it.startsWith("https://") }
+    val animateMs = if (state.settings.motion) 360 else 0
+
     Box(Modifier.fillMaxSize().background(bg)) {
-    Ambient(state)
-    Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
-        Box(Modifier.fillMaxWidth().height(3.dp).background(Brush.horizontalGradient(listOf(state.ambientColor, Color.Transparent))))
-        Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-            CircleAction(Icons.Default.KeyboardArrowDown, "Tutup pemutar", onClose)
-            Spacer(Modifier.weight(1f))
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("NOW PLAYING", color = mist, fontSize = 10.sp, letterSpacing = 2.sp)
-                Text("Aurelis Symphony", color = white, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-            }
-            Spacer(Modifier.weight(1f))
-            var playerMenu by remember { mutableStateOf(false) }
-            Box {
-                CircleAction(if (playerMenu) Icons.Default.Close else Icons.Default.MoreHoriz,
-                    if (playerMenu) "Tutup opsi" else "Opsi lagu", action = { playerMenu = !playerMenu })
-                DropdownMenu(expanded = playerMenu, onDismissRequest = { playerMenu = false },
-                    modifier = Modifier.width(224.dp).background(Color(0xFF142520), RoundedCornerShape(20.dp))) {
-                    DropdownMenuItem(text = { Text(if (state.isLiked(song)) "Hapus dari Disukai" else "Sukai lagu") },
-                        leadingIcon = { Icon(Icons.Default.FavoriteBorder, null, tint = lime) },
-                        onClick = { state.like(song); playerMenu = false })
-                    DropdownMenuItem(text = { Text("Tambahkan ke antrean") },
-                        leadingIcon = { Icon(Icons.Default.QueueMusic, null, tint = lime) },
-                        onClick = { state.enqueue(song); playerMenu = false })
-                    state.library.playlists.keys.take(5).forEach { name ->
-                        DropdownMenuItem(text = { Text("Playlist · $name", maxLines = 1) },
-                            leadingIcon = { Icon(Icons.Default.PlaylistAdd, null, tint = lime) },
-                            onClick = { state.addToPlaylist(name, song); playerMenu = false })
-                    }
+        Ambient(state)
+        // Full-bleed cover: clear center, soft/vignetted upper and lower edges.
+        if (artwork != null) {
+            if (pane == "Cover") {
+                AsyncImage(model = artwork, contentDescription = null,
+                    modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                Box(Modifier.fillMaxWidth().height(150.dp).align(Alignment.TopCenter)) {
+                    AsyncImage(model = artwork, contentDescription = null,
+                        modifier = Modifier.fillMaxSize().blur(28.dp).graphicsLayer { alpha = .55f },
+                        contentScale = ContentScale.Crop)
                 }
-            }
-        }
-        AnimatedContent(targetState = pane, modifier = Modifier.weight(1f), label = "playerPane", transitionSpec = {
-            fadeIn(tween(if (state.settings.motion) 250 else 0)) togetherWith fadeOut(tween(if (state.settings.motion) 140 else 0))
-        }) { page ->
-            if (page == "Lirik") {
-                Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Row(Modifier.fillMaxWidth().padding(horizontal = 27.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Artwork(song, 61.dp, 17.dp)
-                        Spacer(Modifier.width(13.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text(song.title, color = white, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            Spacer(Modifier.height(4.dp)); Text(song.artist, color = mist, fontSize = 12.sp, maxLines = 1)
-                        }
-                        IconButton(onClick = { state.like(song) }) {
-                            Icon(if (state.isLiked(song)) Icons.Default.Favorite else Icons.Default.FavoriteBorder, "Sukai lagu", tint = if (state.isLiked(song)) lime else mist)
-                        }
-                    }
-                    Glass(Modifier.fillMaxWidth().weight(1f).padding(horizontal = 12.dp),
-                        RoundedCornerShape(29.dp), tint = state.ambientColor, opacity = .45f,
-                        backdrop = song.artwork) {
-                        LyricContent(state, Modifier.fillMaxSize())
-                    }
+                Box(Modifier.fillMaxWidth().fillMaxHeight(.43f).align(Alignment.BottomCenter)) {
+                    AsyncImage(model = artwork, contentDescription = null,
+                        modifier = Modifier.fillMaxSize().blur(30.dp).graphicsLayer { alpha = .29f },
+                        contentScale = ContentScale.Crop)
                 }
+                Box(Modifier.fillMaxSize().background(
+                    Brush.verticalGradient(listOf(
+                        bg.copy(alpha = .80f), bg.copy(alpha = .10f),
+                        bg.copy(alpha = .16f), bg.copy(alpha = .80f), bg.copy(alpha = .98f)
+                    ))
+                ))
             } else {
-                Column(Modifier.fillMaxSize().padding(horizontal = 27.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Spacer(Modifier.weight(.22f))
-                    Artwork(song, 285.dp, 28.dp)
-                    Spacer(Modifier.height(25.dp))
-                    Text(song.title, color = white, fontSize = 24.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center, maxLines = 2)
-                    Spacer(Modifier.height(5.dp)); Text(song.artist, color = mist, fontSize = 14.sp)
-                    Spacer(Modifier.weight(.28f))
-                }
+                AsyncImage(model = artwork, contentDescription = null,
+                    modifier = Modifier.fillMaxSize().blur(78.dp).graphicsLayer { alpha = .38f },
+                    contentScale = ContentScale.Crop)
+                Box(Modifier.fillMaxSize().background(
+                    Brush.verticalGradient(listOf(
+                        bg.copy(alpha = .49f), bg.copy(alpha = .52f),
+                        bg.copy(alpha = .69f), bg.copy(alpha = .96f)
+                    ))
+                ))
             }
         }
-        PlayerControls(state)
-        Row(Modifier.fillMaxWidth().padding(start = 27.dp, end = 27.dp, top = 5.dp, bottom = 17.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
-            TextButton(onClick = { pane = if (pane == "Lirik") "Sampul" else "Lirik" }) {
-                Icon(if (pane == "Lirik") Icons.Default.Album else Icons.Default.Mic, null, Modifier.size(17.dp)); Spacer(Modifier.width(7.dp))
-                Text(if (pane == "Lirik") "Sampul" else "Lirik", fontSize = 12.sp)
+
+        Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
+            Row(
+                Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 11.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                CircleAction(Icons.Rounded.KeyboardArrowDown, "Tutup pemutar", onClose)
+                Spacer(Modifier.weight(1f))
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("NOW PLAYING", color = white.copy(alpha = .54f),
+                        fontSize = 9.sp, letterSpacing = 2.2.sp)
+                    Text("Aurelis Symphony", color = white, fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold)
+                }
+                Spacer(Modifier.weight(1f))
+                Box {
+                    CircleAction(if (optionsOpen) Icons.Rounded.Close else Icons.Rounded.MoreHoriz,
+                        if (optionsOpen) "Tutup opsi" else "Opsi dan offset lirik",
+                        action = { optionsOpen = !optionsOpen })
+                    InlineGlassSongMenu(state, song, optionsOpen,
+                        onDismiss = { optionsOpen = false }, lyricOffset = true)
+                }
             }
-            TextButton(onClick = onQueue) { Icon(Icons.Default.QueueMusic, null, Modifier.size(18.dp)); Spacer(Modifier.width(7.dp)); Text("Up Next", fontSize = 12.sp) }
+
+            AnimatedContent(
+                targetState = pane,
+                modifier = Modifier.fillMaxWidth().weight(1f),
+                label = "fullscreenPlayerMode",
+                transitionSpec = {
+                    (fadeIn(tween(animateMs)) +
+                        slideInHorizontally(tween(animateMs)) { it / 7 }) togetherWith
+                        (fadeOut(tween(animateMs * 2 / 3)) +
+                            slideOutHorizontally(tween(animateMs * 2 / 3)) { -it / 9 })
+                }
+            ) { mode ->
+                when (mode) {
+                    "Cover" -> {
+                        Box(Modifier.fillMaxSize()) {
+                            Column(
+                                Modifier.align(Alignment.BottomStart)
+                                    .fillMaxWidth()
+                                    .padding(start = 27.dp, end = 27.dp, bottom = 34.dp)
+                            ) {
+                                Text("AURELIS  ·  NOW PLAYING", color = lime.copy(alpha = .82f),
+                                    fontSize = 10.sp, letterSpacing = 1.5.sp,
+                                    fontWeight = FontWeight.SemiBold)
+                                Spacer(Modifier.height(10.dp))
+                                Text(song.title, color = white, fontSize = 29.sp,
+                                    lineHeight = 33.sp, fontWeight = FontWeight.SemiBold,
+                                    maxLines = 3, overflow = TextOverflow.Ellipsis)
+                                Spacer(Modifier.height(7.dp))
+                                Text(song.artist, color = white.copy(alpha = .74f), fontSize = 15.sp)
+                                Spacer(Modifier.height(10.dp))
+                                IconButton(onClick = { state.like(song) }) {
+                                    Icon(if (state.isLiked(song)) Icons.Rounded.Favorite
+                                        else Icons.Rounded.FavoriteBorder,
+                                        "Sukai lagu", Modifier.size(23.dp),
+                                        tint = if (state.isLiked(song)) lime else white)
+                                }
+                            }
+                        }
+                    }
+                    "Lirik" -> {
+                        Column(Modifier.fillMaxSize()) {
+                            Row(
+                                Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 15.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Artwork(song, 49.dp, 13.dp)
+                                Spacer(Modifier.width(11.dp))
+                                Column(Modifier.weight(1f)) {
+                                    Text(song.title, color = white, fontSize = 14.sp,
+                                        fontWeight = FontWeight.SemiBold, maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis)
+                                    Spacer(Modifier.height(3.dp))
+                                    Text(song.artist, color = mist, fontSize = 11.sp, maxLines = 1)
+                                }
+                                IconButton(onClick = {
+                                    showRoman = !showRoman
+                                    if (showRoman && !state.settings.romanize)
+                                        state.update(state.settings.copy(romanize = true))
+                                }, modifier = Modifier.size(40.dp)) {
+                                    Glass(Modifier.fillMaxSize(), RoundedCornerShape(20.dp),
+                                        opacity = if (showRoman) .78f else .37f,
+                                        tint = if (showRoman) state.ambientColor else groove,
+                                        backdrop = artwork) {
+                                        Icon(Icons.Rounded.Language, "Romanisasi",
+                                            Modifier.size(18.dp).align(Alignment.Center),
+                                            tint = if (showRoman) lime else mist)
+                                    }
+                                }
+                                Spacer(Modifier.width(6.dp))
+                                IconButton(onClick = { showTranslation = !showTranslation },
+                                    modifier = Modifier.size(40.dp)) {
+                                    Glass(Modifier.fillMaxSize(), RoundedCornerShape(20.dp),
+                                        opacity = if (showTranslation) .78f else .37f,
+                                        tint = if (showTranslation) state.ambientColor else groove,
+                                        backdrop = artwork) {
+                                        Icon(Icons.Rounded.Translate, "Terjemahan",
+                                            Modifier.size(18.dp).align(Alignment.Center),
+                                            tint = if (showTranslation) lime else mist)
+                                    }
+                                }
+                            }
+                            if (showTranslation && state.lyrics.lines.none { it.translation.isNotBlank() }) {
+                                Text("Terjemahan belum tersedia dari sumber lirik.",
+                                    Modifier.padding(horizontal = 28.dp, vertical = 2.dp),
+                                    color = mist, fontSize = 11.sp)
+                            }
+                            // There is deliberately NO separate glass lyric panel.
+                            LyricContent(state, Modifier.fillMaxWidth().weight(1f),
+                                showRoman = showRoman, showTranslation = showTranslation)
+                        }
+                    }
+                    else -> {
+                        Column(Modifier.fillMaxSize().padding(horizontal = 24.dp)) {
+                            Spacer(Modifier.height(13.dp))
+                            Text("Up Next", color = white, fontSize = 27.sp,
+                                fontWeight = FontWeight.SemiBold)
+                            Spacer(Modifier.height(4.dp))
+                            Text("Antrean musik selanjutnya", color = mist, fontSize = 12.sp)
+                            Spacer(Modifier.height(17.dp))
+                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                Artwork(song, 49.dp, 12.dp)
+                                Spacer(Modifier.width(11.dp))
+                                Column {
+                                    Text("Sedang diputar", color = lime, fontSize = 10.sp)
+                                    Text(song.title, color = white, fontSize = 13.sp,
+                                        maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                }
+                            }
+                            Spacer(Modifier.height(19.dp))
+                            if (state.queue.isEmpty()) {
+                                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                    Text("Belum ada lagu dalam antrean.\nTambahkan lagu melalui menu titik tiga.",
+                                        color = mist, fontSize = 13.sp,
+                                        lineHeight = 20.sp, textAlign = TextAlign.Center)
+                                }
+                            } else {
+                                LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                    items(state.queue, key = { "player-queue-${it.key}" }) { queued ->
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Box(Modifier.weight(1f)) {
+                                                SongRow(queued, state,
+                                                    onPlay = { state.play(queued) },
+                                                    onMenu = { })
+                                            }
+                                            IconButton(onClick = { state.removeQueue(queued) }) {
+                                                Icon(Icons.Rounded.Close, "Hapus dari antrean",
+                                                    tint = mist, modifier = Modifier.size(20.dp))
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            PlayerControls(state)
+            Spacer(Modifier.height(11.dp))
+            PlayerModeIsland(pane, { pane = it }, artwork.orEmpty(), state.settings.motion)
+            Spacer(Modifier.height(15.dp))
         }
     }
+}
+
+@Composable
+private fun PlayerModeIsland(selected: String, onSelect: (String) -> Unit,
+    artwork: String, enabledMotion: Boolean) {
+    val modes = listOf("Cover", "Lirik", "Up Next")
+    val icons = listOf(Icons.Rounded.Album, Icons.Rounded.Mic, Icons.Rounded.QueueMusic)
+    var dragging by remember { mutableIntStateOf(-1) }
+    Glass(
+        Modifier.fillMaxWidth().padding(horizontal = 31.dp).height(57.dp),
+        RoundedCornerShape(30.dp), opacity = .62f, backdrop = artwork
+    ) {
+        BoxWithConstraints(Modifier.fillMaxSize().padding(5.dp).pointerInput(selected) {
+            detectDragGestures(
+                onDragStart = { p -> dragging = ((p.x / size.width) * 3f).toInt().coerceIn(0, 2) },
+                onDrag = { change, _ ->
+                    dragging = ((change.position.x / size.width) * 3f).toInt().coerceIn(0, 2)
+                    change.consume()
+                },
+                onDragEnd = {
+                    val target = dragging
+                    dragging = -1
+                    if (target in 0..2) onSelect(modes[target])
+                },
+                onDragCancel = { dragging = -1 }
+            )
+        }) {
+            val cellWidth = maxWidth / 3
+            val highlight = if (dragging >= 0) dragging else modes.indexOf(selected).coerceAtLeast(0)
+            val x by animateDpAsState(
+                targetValue = cellWidth * highlight,
+                animationSpec = if (!enabledMotion) tween(0) else
+                    spring(dampingRatio = .78f, stiffness = Spring.StiffnessMediumLow),
+                label = "playerTabHighlight"
+            )
+            Box(Modifier.offset(x = x).width(cellWidth).fillMaxHeight()
+                .clip(RoundedCornerShape(26.dp))
+                .background(Brush.verticalGradient(listOf(
+                    lime.copy(alpha = .30f), Color(0xFF467A67).copy(alpha = .25f)
+                )))
+                .border(1.dp, lime.copy(alpha = .20f), RoundedCornerShape(26.dp)))
+            Row(Modifier.fillMaxSize()) {
+                modes.forEachIndexed { i, label ->
+                    Tactile(Modifier.weight(1f).fillMaxHeight(), { dragging = -1; onSelect(label) }) {
+                        Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically) {
+                            Icon(icons[i], label, Modifier.size(18.dp),
+                                tint = if (i == highlight) white else mist)
+                            Spacer(Modifier.width(5.dp))
+                            Text(label, fontSize = 11.sp,
+                                fontWeight = if (i == highlight) FontWeight.SemiBold else FontWeight.Medium,
+                                color = if (i == highlight) white else mist)
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
