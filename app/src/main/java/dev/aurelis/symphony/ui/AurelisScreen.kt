@@ -1254,6 +1254,7 @@ private fun InlineGlassSongMenu(
     lyricOffset: Boolean = false,
     transitionState: androidx.compose.animation.core.MutableTransitionState<Boolean>? = null
 ) {
+    val isGlass = LocalVisualStyle.current == VisualStyle.GLASS
     val visibility = transitionState ?: remember {
         androidx.compose.animation.core.MutableTransitionState(false)
     }
@@ -1286,7 +1287,9 @@ private fun InlineGlassSongMenu(
             ) + fadeOut(tween(195))
         ) {
         Glass(
-            Modifier.width(252.dp).shadow(15.dp, RoundedCornerShape(23.dp)),
+            Modifier.width(252.dp).shadow(
+                if (isGlass) 15.dp else 0.dp, RoundedCornerShape(23.dp)
+            ),
             RoundedCornerShape(topStart = 25.dp, topEnd = 20.dp,
                 bottomStart = 25.dp, bottomEnd = 25.dp),
             tint = state.ambientColor, opacity = .83f,
@@ -1437,6 +1440,7 @@ private fun IslandDock(
 ) {
     val focus = LocalFocusManager.current
     val reduced = LocalReducedMotion.current
+    val isGlass = LocalVisualStyle.current == VisualStyle.GLASS
     val tabs = listOf("Home", "Search", "Library")
     val track = state.current
     val compactNow = compact && track != null
@@ -1511,14 +1515,16 @@ private fun IslandDock(
                                     stiffness = Spring.StiffnessMediumLow),
                             label = "dockSelection"
                         )
-                        Box(Modifier.offset(x = x).width(segment).fillMaxHeight()
-                            .clip(RoundedCornerShape(26.dp))
+                        val highlight = if (isGlass) Modifier
                             .background(Brush.verticalGradient(listOf(
                                 lime.copy(alpha = .28f),
                                 Color(0xFF547C69).copy(alpha = .19f)
                             )))
                             .border(1.dp, lime.copy(alpha = .18f),
-                                RoundedCornerShape(26.dp)))
+                                RoundedCornerShape(26.dp))
+                        else Modifier.background(Color(0xFF365D4D))
+                        Box(Modifier.offset(x = x).width(segment).fillMaxHeight()
+                            .clip(RoundedCornerShape(26.dp)).then(highlight))
                         Row(Modifier.fillMaxSize()) {
                             tabs.forEachIndexed { index, name ->
                                 val icon = when (name) {
@@ -1900,6 +1906,7 @@ private fun PlayerModeIsland(selected: String, onSelect: (String) -> Unit,
     artwork: String, enabledMotion: Boolean) {
     val modes = listOf("Cover", "Lirik", "Up Next")
     val icons = listOf(Icons.Rounded.Album, Icons.Rounded.Mic, Icons.Rounded.QueueMusic)
+    val isGlass = LocalVisualStyle.current == VisualStyle.GLASS
     var dragging by remember { mutableIntStateOf(-1) }
     Glass(
         Modifier.fillMaxWidth().padding(horizontal = 31.dp).height(57.dp),
@@ -1928,12 +1935,14 @@ private fun PlayerModeIsland(selected: String, onSelect: (String) -> Unit,
                     spring(dampingRatio = .78f, stiffness = Spring.StiffnessMediumLow),
                 label = "playerTabHighlight"
             )
-            Box(Modifier.offset(x = x).width(cellWidth).fillMaxHeight()
-                .clip(RoundedCornerShape(26.dp))
+            val highlightStyle = if (isGlass) Modifier
                 .background(Brush.verticalGradient(listOf(
                     lime.copy(alpha = .30f), Color(0xFF467A67).copy(alpha = .25f)
                 )))
-                .border(1.dp, lime.copy(alpha = .20f), RoundedCornerShape(26.dp)))
+                .border(1.dp, lime.copy(alpha = .20f), RoundedCornerShape(26.dp))
+            else Modifier.background(Color(0xFF365D4D))
+            Box(Modifier.offset(x = x).width(cellWidth).fillMaxHeight()
+                .clip(RoundedCornerShape(26.dp)).then(highlightStyle))
             Row(Modifier.fillMaxSize()) {
                 modes.forEachIndexed { i, label ->
                     Tactile(Modifier.weight(1f).fillMaxHeight(), { dragging = -1; onSelect(label) }) {
