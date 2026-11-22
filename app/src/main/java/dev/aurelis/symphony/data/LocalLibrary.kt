@@ -44,7 +44,9 @@ class LocalLibrary(context: Context) {
         put("favorites", favorites)
     }
     fun addHistory(song: Song) {
-        history = (listOf(song) + history.filterNot { it.key == song.key }).take(50)
+        // Preserve every playback event (including replays), newest first.
+        // LazyColumn renders large history lists efficiently.
+        history = (listOf(song) + history).take(500)
         put("history", history)
     }
     fun newPlaylist(name: String) {
