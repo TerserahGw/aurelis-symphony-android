@@ -110,7 +110,7 @@ jobs:
           if ! gh release view v1.2.0 >/dev/null 2>&1; then
             gh release create v1.2.0 --target "$GITHUB_SHA" \
               --title "Aurelis Symphony Android v1.2.0 Stable" \
-              --notes "Aurelis Symphony Android v1.2.0 Stable. YouTube Music personalized Up Next from account radio, home and history; playlist-context playback for local and YouTube collections, YouTube-labeled playlists, link import and ordered queue; five app languages (Indonesian default) with lyrics translated to selected language; non-glass Ambient mode corrected for capsules and buttons. Login Keystore AES-GCM hotfix preserved. versionCode 9, signed with persistent release certificate." \
+              --notes "Aurelis Symphony Android v1.2.0 Stable. YouTube Music personalized Up Next from account radio, home and history; playlist-context playback for local and YouTube collections, YouTube-labeled playlists, link import and ordered queue; five app languages (Indonesian default) with lyrics translated to selected language; non-glass Ambient mode corrected for capsules and buttons. Login Keystore AES-GCM hotfix preserved. versionCode 9, signed with persistent release certificate."
           fi
           gh release upload v1.2.0 \
             AurelisSymphony-Android-arm64-v1.2.0.apk --clobber
