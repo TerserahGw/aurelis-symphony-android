@@ -33,6 +33,7 @@ data class AurelisRelease(
 
 class AurelisUpdater(context: Context) {
     private val app = context.applicationContext
+    private val preferences = app.getSharedPreferences("aurelis_release_updates", Context.MODE_PRIVATE)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val client = OkHttpClient.Builder()
         .connectTimeout(16, TimeUnit.SECONDS)
@@ -116,14 +117,25 @@ class AurelisUpdater(context: Context) {
                 }
             }
             response.onSuccess { release ->
-                available = release
-                if (release == null && manual) message = "Aurelis sudah versi terbaru."
+                val suppressed = preferences.getString("dismissed_tag", "")
+                if (release != null && (manual || release.tag != suppressed)) {
+                    if (available?.tag != release.tag) {
+                        apk = null
+                        downloaded = false
+                        progress = 0f
+                    }
+                    available = release
+                } else if (release == null && manual) {
+                    available = null
+                    message = "Aurelis sudah versi terbaru."
+                }
             }.onFailure { if (manual) message = "Pemeriksaan update gagal: ${it.message}" }
             checking = false
         }
     }
 
     fun dismiss() {
+        available?.tag?.let { preferences.edit().putString("dismissed_tag", it).apply() }
         available = null
         message = null
     }
