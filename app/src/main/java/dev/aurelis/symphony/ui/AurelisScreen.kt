@@ -119,6 +119,8 @@ private fun Glass(
     tint: Color = Color(0xFF213A32),
     opacity: Float = .68f,
     backdrop: String? = null,
+    backdropBlur: Dp = 24.dp,
+    backdropOpacity: Float = .47f,
     content: @Composable BoxScope.() -> Unit
 ) {
     val density = LocalGlassDensity.current
@@ -139,7 +141,8 @@ private fun Glass(
             AsyncImage(
                 model = backdrop,
                 contentDescription = null,
-                modifier = Modifier.matchParentSize().blur(24.dp).graphicsLayer { alpha = .47f },
+                modifier = Modifier.matchParentSize().blur(backdropBlur)
+                    .graphicsLayer { alpha = backdropOpacity },
                 contentScale = ContentScale.Crop
             )
         }
@@ -800,7 +803,9 @@ private fun MiniPlayer(state: AurelisState, onExpand: () -> Unit) {
     val song = state.current ?: return
     Tactile(Modifier.fillMaxWidth(), onExpand) {
         Glass(Modifier.fillMaxWidth().height(72.dp), RoundedCornerShape(25.dp),
-            tint = state.ambientColor.mix(Color(0xFF284037), .45f), opacity = .33f, backdrop = song.artwork) {
+            tint = state.ambientColor.mix(Color(0xFF284037), .45f),
+            opacity = .39f, backdrop = song.artwork,
+            backdropBlur = 38.dp, backdropOpacity = .67f) {
             Column {
                 Row(Modifier.weight(1f).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Artwork(song, 55.dp, 17.dp)
@@ -870,7 +875,8 @@ private fun IslandDock(
                 Modifier.width(navWidth).fillMaxHeight(),
                 RoundedCornerShape(32.dp),
                 tint = state.ambientColor,
-                opacity = .31f, backdrop = artwork
+                opacity = .38f, backdrop = artwork,
+                backdropBlur = 38.dp, backdropOpacity = .67f
             ) {
                 if (expanded || compactNow || navWidth < 165.dp) {
                     Tactile(Modifier.fillMaxSize(), {
@@ -953,8 +959,10 @@ private fun IslandDock(
                             Modifier.fillMaxSize(),
                             RoundedCornerShape(31.dp),
                             tint = state.ambientColor,
-                            opacity = .36f,
-                            backdrop = artwork
+                            opacity = .39f,
+                            backdrop = artwork,
+                            backdropBlur = 38.dp,
+                            backdropOpacity = .67f
                         ) {
                             Tactile(Modifier.fillMaxSize(), onExpandPlayer) {
                                 Row(
@@ -992,8 +1000,10 @@ private fun IslandDock(
                 Modifier.width(searchWidth).fillMaxHeight(),
                 RoundedCornerShape(32.dp),
                 tint = state.ambientColor,
-                opacity = .32f,
-                backdrop = artwork
+                opacity = .38f,
+                backdrop = artwork,
+                backdropBlur = 38.dp,
+                backdropOpacity = .67f
             ) {
                 if (expanded) {
                     Row(Modifier.fillMaxSize().padding(start = 16.dp, end = 6.dp),
@@ -1620,7 +1630,8 @@ private fun SettingsSheet(state: AurelisState, updater: AurelisUpdater, onClose:
     ModalBottomSheet(
         onDismissRequest = onClose,
         sheetState = sheetState,
-        containerColor = Color.Transparent,
+        sheetGesturesEnabled = false,
+        containerColor = Color(0xFF0D191E),
         contentColor = white,
         tonalElevation = 0.dp,
         scrimColor = bg.copy(alpha = .73f),
@@ -1628,15 +1639,15 @@ private fun SettingsSheet(state: AurelisState, updater: AurelisUpdater, onClose:
         shape = RoundedCornerShape(topStart = 34.dp, topEnd = 34.dp)
     ) {
         Glass(
-            Modifier.fillMaxWidth().fillMaxHeight(.88f),
+            Modifier.fillMaxWidth().fillMaxHeight(),
             RoundedCornerShape(topStart = 34.dp, topEnd = 34.dp),
             tint = state.ambientColor,
             opacity = .83f,
             backdrop = song?.artwork
         ) {
-            Column(Modifier.fillMaxSize().verticalScroll(
-                androidx.compose.foundation.rememberScrollState()
-            ).padding(start = 23.dp, end = 23.dp, top = 12.dp, bottom = 26.dp)) {
+            val settingsScroll = androidx.compose.foundation.rememberScrollState()
+            Column(Modifier.fillMaxSize().verticalScroll(settingsScroll)
+                .padding(start = 23.dp, end = 23.dp, top = 12.dp, bottom = 42.dp)) {
                 Box(Modifier.align(Alignment.CenterHorizontally).width(34.dp).height(4.dp)
                     .clip(CircleShape).background(white.copy(alpha = .28f)))
                 Spacer(Modifier.height(21.dp))
