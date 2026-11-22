@@ -264,3 +264,16 @@ total, that total can also include other application caches/data.
 
 The app is `1.2.1` (`versionCode = 10`), signed with the existing release
 keystore for in-place updates from v1.2.0 Stable.
+
+
+## v1.2.2 Stable — Playlists & launcher identity
+
+- **Contextual playlist actions:** when you open a track's three-dot menu inside one of your *local Aurelis playlists*, that playlist's existing "add" entry is replaced by **Hapus dari playlist ini**. Other local playlists remain valid add targets. Removing a song updates the currently playing local playlist's Up Next without deleting the song from Library or other playlists.
+- **Tap to play:** tapping a local playlist, an authenticated YouTube playlist card, a Home YouTube playlist card, or opening a YouTube playlist URL loads its first available song into the normal playlist-ordered queue and opens the full player with its established animation.
+- **Separate expand control:** the arrow next to an Aurelis playlist expands/collapses its song rows without starting playback. YouTube playlists now have their own animated down/up expand arrow. Expanded remote songs are inserted lazily into the parent list, with loading progress and a clear empty message.
+- **Launcher icon:** Aurelis Orbit is a crisp, restrained geometric vector mark in deep evergreen/mint. Includes adaptive round and Android 13+ monochrome themed-icon resources; no raster-heavy artwork or fake 3D effects.
+- **Update continuity:** signed Stable version **1.2.2** uses `versionCode 11` and the same release certificate as v1.2.1. No new permissions, account credentials, or installation steps are needed.
+
+**YouTube limitation:** this release reads and plays YouTube playlist contents but does not edit Google-hosted playlists. Removing a track is intentionally available only in *local* Aurelis playlists. Access to remote playlists depends on Google login/session and unofficial InnerTube availability.
+
+As with prior releases, GitHub Actions validates compilation and APK signing. Physical-device animation and remote YouTube behavior need testing on the user's Android device.
