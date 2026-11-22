@@ -1,4 +1,36 @@
-<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
-  <path android:fillColor="#DDFCE9" android:pathData="M54,15 L65,43 L93,54 L65,65 L54,93 L43,65 L15,54 L43,43 Z"/>
-  <path android:fillColor="#8BC9B3" android:pathData="M77,19 L81,27 L89,31 L81,35 L77,43 L73,35 L65,31 L73,27 Z"/>
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Aurelis Symphony · Orbit Mark. Restrained geometric identity, vector at any DPI. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Two asymmetric orbital strokes suggest movement through sound. -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#498F7F"
+        android:strokeWidth="2.3"
+        android:strokeLineCap="round"
+        android:pathData="M24,45 C27,31 39,21 53,20 C66,19 77,26 83,37" />
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#356B64"
+        android:strokeWidth="2.3"
+        android:strokeLineCap="round"
+        android:pathData="M84,64 C80,79 68,87 54,88 C41,89 29,82 24,71" />
+
+    <!-- Singular four-point light motif: the enduring Aurelis symbol. -->
+    <path
+        android:fillColor="#DCFFE9"
+        android:pathData="M54,28 C57.2,41.2 65.1,50.8 79,54 C65.1,57.2 57.2,66.8 54,80 C50.8,66.8 42.9,57.2 29,54 C42.9,50.8 50.8,41.2 54,28 Z" />
+
+    <!-- Precision highlight; no bevels, excessive shine or pseudo-3D. -->
+    <path
+        android:fillColor="#79CEAD"
+        android:pathData="M54,38 C56.1,47.1 60.9,52 69,54 C60.9,56 56.1,60.9 54,70 C51.9,60.9 47.1,56 39,54 C47.1,52 51.9,47.1 54,38 Z" />
+
+    <path
+        android:fillColor="#D9FFEA"
+        android:pathData="M78,24 C79.3,28.6 82.4,31.7 87,33 C82.4,34.3 79.3,37.4 78,42 C76.7,37.4 73.6,34.3 69,33 C73.6,31.7 76.7,28.6 78,24 Z" />
 </vector>
