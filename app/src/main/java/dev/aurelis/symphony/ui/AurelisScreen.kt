@@ -946,81 +946,121 @@ private fun PlayerModeIsland(selected: String, onSelect: (String) -> Unit,
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun LyricContent(state: AurelisState, modifier: Modifier = Modifier) {
-    val currentSec = state.progress / 1000.0
+private fun LyricContent(
+    state: AurelisState, modifier: Modifier = Modifier,
+    showRoman: Boolean = true, showTranslation: Boolean = false
+) {
+    val currentSec = (state.progress + state.settings.lyricOffsetMs) / 1000.0
     val lines = state.lyrics.lines
     val active = lines.indexOfLast { it.time != null && it.time <= currentSec }
     val scroll = rememberLazyListState()
-    LaunchedEffect(active) {
+
+    LaunchedEffect(active, state.current?.key) {
         if (active >= 0 && lines.isNotEmpty()) {
-            if (state.settings.motion) scroll.animateScrollToItem((active - 2).coerceAtLeast(0))
-            else scroll.scrollToItem((active - 2).coerceAtLeast(0))
+            val target = (active - 1).coerceAtLeast(0)
+            if (state.settings.motion) scroll.animateScrollToItem(target)
+            else scroll.scrollToItem(target)
         }
     }
+
     if (lines.isEmpty()) {
         Box(modifier, contentAlignment = Alignment.Center) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("✦", color = lime.copy(alpha = .45f), fontSize = 34.sp)
-                Spacer(Modifier.height(12.dp)); Text("Lirik belum tersedia", color = white, fontWeight = FontWeight.Medium)
-                Spacer(Modifier.height(7.dp)); Text("Lirik disinkronkan jika sumber menyediakannya.", color = mist, fontSize = 12.sp, textAlign = TextAlign.Center)
+            Column(horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.padding(horizontal = 28.dp)) {
+                Icon(Icons.Rounded.GraphicEq, null, tint = lime.copy(alpha = .7f),
+                    modifier = Modifier.size(30.dp))
+                Spacer(Modifier.height(13.dp))
+                Text("Lirik belum tersedia", color = white,
+                    fontWeight = FontWeight.Medium, fontSize = 16.sp)
+                Spacer(Modifier.height(8.dp))
+                Text("Lirik akan mengikuti musik jika sumber menyediakan waktu sinkronisasi.",
+                    color = mist, fontSize = 12.sp, textAlign = TextAlign.Center,
+                    lineHeight = 18.sp)
             }
         }
         return
     }
-    LazyColumn(state = scroll, modifier = modifier, contentPadding = PaddingValues(horizontal = 27.dp, vertical = 30.dp),
-        verticalArrangement = Arrangement.spacedBy(25.dp)) {
+
+    LazyColumn(
+        state = scroll, modifier = modifier,
+        contentPadding = PaddingValues(horizontal = 23.dp, vertical = 39.dp),
+        verticalArrangement = Arrangement.spacedBy(22.dp)
+    ) {
         items(lines.size, key = { "lyric-$it" }) { i ->
             val line = lines[i]
-            val selected = if (active >= 0) i == active else true
+            val focused = active < 0 || i == active
+            val nearby = active < 0 || i in (active - 1)..(active + 1)
+            val targetAlpha = if (focused) 1f else if (nearby) .46f else .24f
+            val opacity by animateFloatAsState(
+                targetValue = targetAlpha,
+                animationSpec = tween(if (state.settings.motion) 360 else 0),
+                label = "lyricFocus"
+            )
             Column(
                 Modifier.fillMaxWidth()
-                    .clip(RoundedCornerShape(19.dp))
-                    .background(if (selected) Brush.horizontalGradient(listOf(
-                        lime.copy(alpha = .12f), lime.copy(alpha = .045f), Color.Transparent
-                    )) else Brush.horizontalGradient(listOf(Color.Transparent, Color.Transparent)))
+                    .graphicsLayer { alpha = opacity }
                     .clickable(enabled = line.time != null) {
-                        line.time?.let { state.seek((it * 1000 / state.duration.coerceAtLeast(1)).toFloat()) }
-                    }
-                    .padding(horizontal = 14.dp, vertical = 11.dp)
-            ) {
-                val color by animateColorAsState(if (selected) white else mist.copy(alpha = .54f), label = "lyricColor")
-                val formatted = remember(line, currentSec, selected) {
-                    if (line.words.isEmpty()) null else buildAnnotatedString {
-                        line.words.forEachIndexed { index, w ->
-                            // Respect real timestamps. Preserve a space between Latin tokens
-                            // even when the source returns word strings without whitespace.
-                            val previous = line.words.getOrNull(index - 1)?.text.orEmpty()
-                            val a = previous.lastOrNull()
-                            val b = w.text.firstOrNull()
-                            val latinBoundary = a != null && b != null &&
-                                (a in 'a'..'z' || a in 'A'..'Z' || a in '0'..'9') &&
-                                (b in 'a'..'z' || b in 'A'..'Z' || b in '0'..'9')
-                            val token = if (latinBoundary && !previous.endsWith(" ") && !w.text.startsWith(" ")) " " + w.text else w.text
-                            val ratio = if (w.end > w.start)
-                                ((currentSec - w.start) / (w.end - w.start)).coerceIn(0.0, 1.0)
-                            else if (currentSec >= w.start) 1.0 else 0.0
-                            val sung = (token.length * ratio).roundToInt().coerceIn(0, token.length)
-                            withStyle(SpanStyle(color = lime, fontWeight = FontWeight.SemiBold,
-                                shadow = if (selected) Shadow(lime.copy(alpha = .82f), Offset.Zero, 13f) else null)) {
-                                append(token.take(sung))
-                            }
-                            withStyle(SpanStyle(color = mist.copy(alpha = if (selected) .82f else .45f),
-                                fontWeight = FontWeight.Medium)) { append(token.drop(sung)) }
+                        line.time?.let {
+                            val seekTime = (it * 1000 - state.settings.lyricOffsetMs).coerceAtLeast(0.0)
+                            state.seek((seekTime / state.duration.coerceAtLeast(1)).toFloat())
                         }
                     }
+                    .padding(start = 4.dp, end = 9.dp, top = 5.dp, bottom = 5.dp)
+            ) {
+                if (focused && active >= 0) {
+                    Box(Modifier.width(27.dp).height(3.dp)
+                        .clip(RoundedCornerShape(3.dp))
+                        .background(Brush.horizontalGradient(listOf(lime, lime.copy(alpha = 0f)))))
+                    Spacer(Modifier.height(9.dp))
                 }
-                if (formatted != null) Text(formatted, fontSize = 24.sp, lineHeight = 33.sp, fontWeight = FontWeight.Medium)
-                else Text(line.text, color = color, fontSize = 23.sp, lineHeight = 33.sp,
-                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
-                    style = androidx.compose.ui.text.TextStyle(
-                        shadow = if (selected) Shadow(lime.copy(alpha = .43f), Offset.Zero, 9f) else null
-                    ))
-                state.romanized[i]?.takeIf { state.settings.romanize && it != line.text }?.let {
-                    Spacer(Modifier.height(6.dp)); Text(it, color = if (selected) lime.copy(alpha = .86f) else mist.copy(alpha = .45f), fontSize = 13.sp, lineHeight = 19.sp)
+
+                if (focused && line.words.isNotEmpty() && active >= 0) {
+                    // Continuous fractional highlight per *real* word timestamp.
+                    // Plain LRC lines are never given fabricated karaoke timing.
+                    FlowRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
+                        line.words.forEachIndexed { idx, word ->
+                            val previous = line.words.getOrNull(idx - 1)?.text.orEmpty()
+                            val last = previous.lastOrNull()
+                            val first = word.text.firstOrNull()
+                            val separated = last != null && first != null &&
+                                last.isLetterOrDigit() && first.isLetterOrDigit() &&
+                                last.code < 128 && first.code < 128 &&
+                                !previous.endsWith(" ") && !word.text.startsWith(" ")
+                            val rendered = (if (separated) " " else "") + word.text
+                            val fraction = if (word.end > word.start)
+                                ((currentSec - word.start) / (word.end - word.start))
+                                    .coerceIn(0.0, 1.0).toFloat()
+                            else if (currentSec >= word.start) 1f else 0f
+                            KaraokeToken(rendered, fraction)
+                        }
+                    }
+                } else {
+                    Text(
+                        text = line.text, color = if (focused) white else mist,
+                        fontSize = 23.sp, lineHeight = 34.sp,
+                        fontWeight = if (focused) FontWeight.SemiBold else FontWeight.Medium,
+                        style = androidx.compose.ui.text.TextStyle(
+                            shadow = if (focused) Shadow(lime.copy(alpha = .21f),
+                                Offset.Zero, 8f) else null
+                        )
+                    )
                 }
-                if (line.translation.isNotBlank()) {
-                    Spacer(Modifier.height(5.dp)); Text(line.translation, color = mist.copy(alpha = if (selected) .85f else .5f), fontSize = 12.sp, lineHeight = 18.sp)
+                if (showRoman) {
+                    state.romanized[i]?.takeIf { it != line.text }?.let {
+                        Spacer(Modifier.height(6.dp))
+                        Text(it, color = if (focused) lime.copy(alpha = .80f) else mist,
+                            fontSize = 13.sp, lineHeight = 19.sp)
+                    }
+                }
+                if (showTranslation && line.translation.isNotBlank()) {
+                    Spacer(Modifier.height(6.dp))
+                    Text(line.translation, color = if (focused) white.copy(alpha = .77f) else mist,
+                        fontSize = 12.sp, lineHeight = 18.sp)
                 }
             }
         }
@@ -1028,12 +1068,39 @@ private fun LyricContent(state: AurelisState, modifier: Modifier = Modifier) {
 }
 
 @Composable
+private fun KaraokeToken(word: String, target: Float) {
+    val reduce = LocalReducedMotion.current
+    val progress by animateFloatAsState(
+        targetValue = target,
+        animationSpec = tween(if (reduce) 0 else 95, easing = LinearEasing),
+        label = "karaokeFraction"
+    )
+    Box {
+        Text(word, color = white.copy(alpha = .62f), fontSize = 23.sp,
+            lineHeight = 34.sp, fontWeight = FontWeight.Medium)
+        Text(word, color = lime, fontSize = 23.sp, lineHeight = 34.sp,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.drawWithContent {
+                clipRect(right = size.width * progress) { drawContent() }
+            },
+            style = androidx.compose.ui.text.TextStyle(
+                shadow = Shadow(lime.copy(alpha = .77f), Offset.Zero, 11f)
+            ))
+    }
+}
+
+@Composable
 private fun PlayerControls(state: AurelisState) {
     val fraction = if (state.duration > 0) (state.progress.toFloat() / state.duration).coerceIn(0f, 1f) else 0f
     var scrub by remember { mutableFloatStateOf(-1f) }
+    val smoothed by animateFloatAsState(
+        targetValue = if (scrub >= 0) scrub else fraction,
+        animationSpec = tween(if (state.settings.motion) 135 else 0, easing = LinearEasing),
+        label = "playheadSmooth"
+    )
     Column(Modifier.padding(horizontal = 26.dp)) {
         Box(Modifier.fillMaxWidth()) {
-            val progressFraction = if (scrub >= 0) scrub else fraction
+            val progressFraction = if (scrub >= 0) scrub else smoothed
             Box(Modifier.fillMaxWidth().height(44.dp).align(Alignment.Center).drawBehind {
                 val x = size.width * progressFraction
                 val y = size.height / 2
@@ -1052,7 +1119,7 @@ private fun PlayerControls(state: AurelisState) {
                     inactiveTrackColor = white.copy(alpha = .13f)), modifier = Modifier.fillMaxWidth())
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(formatMs(state.progress), color = mist, fontSize = 11.sp)
+            Text(formatMs(state.progress), color = white.copy(alpha = .84f), fontSize = 11.sp)
             Text(formatMs(state.duration), color = mist, fontSize = 11.sp)
         }
         Spacer(Modifier.height(12.dp))
