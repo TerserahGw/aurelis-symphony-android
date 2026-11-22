@@ -30,6 +30,8 @@ internal object RecommendationRanker {
         incoming: List<Song>,
         favorites: List<Song>,
         history: List<Song>,
+        youtubeHistory: List<Song> = emptyList(),
+        youtubeRecommendations: List<Song> = emptyList(),
         excluded: Set<String>,
         maxCount: Int
     ): List<Song> {
@@ -39,6 +41,16 @@ internal object RecommendationRanker {
         val counts = recent.groupingBy { it.key }.eachCount()
         val favored = favorites.map { it.key }.toSet()
         val historyPos = recent.mapIndexed { i, item -> item.key to i }.toMap()
+        // The signed-in user's own YouTube Music feed and listening history
+        // are signals; no generic title-matching-only pseudo-personalization.
+        val ytPositions = youtubeHistory.take(90).mapIndexed { idx, song ->
+            song.key to idx
+        }.toMap()
+        val ytArtists = youtubeHistory.take(90).groupingBy { artist(it) }.eachCount()
+        val ytSeen = youtubeRecommendations.take(140).map { it.key }.toSet()
+        val ytShelfOrder = youtubeRecommendations.take(140).mapIndexed { idx, song ->
+            song.key to idx
+        }.toMap()
         val seenVariants = mutableSetOf(signature(seed))
         val candidates = incoming.asSequence()
             .filter { it.key.isNotBlank() && it.title.isNotBlank() }
@@ -57,9 +69,19 @@ internal object RecommendationRanker {
             val recentlyPlayed = historyPos[song.key]?.let { (35 - it) / 35.0 } ?: 0.0
             val repeat = counts[song.key] ?: 0
             // Prioritize a related song, mix favorites, penalize loops and variants.
-            return (if (fromSameArtist) 3.1 else 0.0) +
-                titleMatch * 2.2 +
-                (if (song.key in favored) 1.15 else 0.0) -
+            // Personalized YouTube Music gets a meaningful boost:
+            //  - tracks ranked in account Home shelves
+            //  - artists listened to by the account
+            //  - account history used for taste, but immediate exact repeats penalized
+            val ytArtistPlays = (ytArtists[artist(song)] ?: 0).coerceAtMost(5)
+            val ytHome = ytShelfOrder[song.key]?.let { (140 - it) / 140.0 } ?: 0.0
+            val ytRecentExact = ytPositions[song.key]?.let { (90 - it) / 90.0 } ?: 0.0
+            return (if (fromSameArtist) 2.5 else 0.0) +
+                titleMatch * 1.6 +
+                (if (song.key in favored) 1.2 else 0.0) +
+                (if (song.key in ytSeen) 2.5 + ytHome * 2.1 else 0.0) +
+                ytArtistPlays * .74 -
+                ytRecentExact * 1.4 -
                 recentlyPlayed * 3.2 -
                 repeat * 0.7 -
                 (if (song.duration in 1L..35L) 1.5 else 0.0)
