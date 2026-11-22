@@ -110,7 +110,7 @@ class AurelisState(context: Context) {
                     progress = c.currentPosition.coerceAtLeast(0)
                     duration = c.duration.takeIf { it > 0 } ?: current?.duration?.times(1000) ?: 0
                 }
-                delay(if (isPlaying) 220 else 700)
+                delay(if (isPlaying) 65 else 500)
             }
         }
         refreshHome()
