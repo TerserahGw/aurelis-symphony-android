@@ -210,8 +210,12 @@ fun AurelisScreen(state: AurelisState) {
     var playlistName by remember { mutableStateOf("") }
     var creatingPlaylist by remember { mutableStateOf(false) }
     LaunchedEffect(searchQuery) {
-        if (searchQuery.isBlank()) state.search("")
-        else { delay(420); state.search(searchQuery) }
+        // Cancel the previous network request immediately on each keystroke.
+        state.cancelSearch()
+        if (searchQuery.isNotBlank()) {
+            delay(300)
+            state.search(searchQuery)
+        }
     }
     LaunchedEffect(state.current) { if (state.current == null) expanded = false }
 
@@ -489,7 +493,9 @@ private fun LibraryPage(state: AurelisState, onPlay: (Song) -> Unit, onMenu: (So
         when (segment) { "Disukai" -> state.library.favorites; "Riwayat" -> state.library.history; else -> emptyList() }
     }
     LazyColumn(contentPadding = PaddingValues(horizontal = 21.dp, vertical = 18.dp), verticalArrangement = Arrangement.spacedBy(13.dp)) {
-        item { SectionHeading("Your Library", "Satu ruang untuk semua musikmu") }
+        item { SectionHeading("Your Library",
+            if (segment == "Riwayat") "${list.size} pemutaran terakhir · termasuk lagu yang diputar ulang"
+            else "Satu ruang untuk semua musikmu") }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                 listOf("Disukai", "Riwayat", "Playlist").forEach { item ->
@@ -521,7 +527,10 @@ private fun LibraryPage(state: AurelisState, onPlay: (Song) -> Unit, onMenu: (So
                 }
             }
         } else if (list.isEmpty()) item { EmptyPage("Belum ada lagu", if (segment == "Disukai") "Ketuk ikon hati untuk menyimpan lagu." else "Lagu yang kamu dengarkan akan muncul di sini.") }
-        else items(list, key = { "${segment}-${it.key}" }) { song -> SongRow(song, state, onPlay = { onPlay(song) }, onMenu = { onMenu(song) }) }
+        else items(list.size, key = { index -> "${segment}-${index}-${list[index].key}" }) { index ->
+            val song = list[index]
+            SongRow(song, state, onPlay = { onPlay(song) }, onMenu = { onMenu(song) })
+        }
     }
 }
 
@@ -875,28 +884,25 @@ private fun FullPlayer(state: AurelisState, onClose: () -> Unit, onQueue: () -> 
         // Full-bleed cover: clear center, soft/vignetted upper and lower edges.
         if (artwork != null) {
             if (pane == "Cover") {
-                // Blur a full-frame backdrop, then fit HD artwork into it.
-                // No chopped upper/lower image strips or visible seams.
-                AsyncImage(model = coverUrl, contentDescription = null,
-                    modifier = Modifier.fillMaxSize().blur(31.dp).graphicsLayer {
-                        scaleX = 1.10f; scaleY = 1.10f; alpha = .64f
-                    },
+                // A SINGLE full-bleed cover, with no fit-size rectangle or seams.
+                // Keep texture at the top and fade only where text/controls need contrast.
+                AsyncImage(
+                    model = coverUrl,
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop,
-                    onError = { if (useMaxres) useMaxres = false })
-                AsyncImage(model = coverUrl, contentDescription = null,
-                    modifier = Modifier.fillMaxWidth().fillMaxHeight(.83f)
-                        .align(Alignment.Center),
-                    contentScale = ContentScale.Fit,
-                    onError = { if (useMaxres) useMaxres = false })
+                    alignment = Alignment.Center,
+                    onError = { if (useMaxres) useMaxres = false }
+                )
                 Box(Modifier.fillMaxSize().background(
                     Brush.verticalGradient(colorStops = arrayOf(
-                        0f to bg.copy(alpha = .81f),
-                        .13f to bg.copy(alpha = .29f),
-                        .29f to bg.copy(alpha = .08f),
-                        .59f to bg.copy(alpha = .02f),
-                        .77f to bg.copy(alpha = .43f),
-                        .92f to bg.copy(alpha = .90f),
-                        1f to bg.copy(alpha = .98f)
+                        0f to bg.copy(alpha = .59f),
+                        .11f to bg.copy(alpha = .28f),
+                        .30f to bg.copy(alpha = .03f),
+                        .52f to bg.copy(alpha = .02f),
+                        .72f to bg.copy(alpha = .34f),
+                        .87f to bg.copy(alpha = .75f),
+                        1f to bg.copy(alpha = .94f)
                     ))
                 ))
             } else {
@@ -1335,28 +1341,22 @@ private fun PlayerControls(state: AurelisState) {
             drawLine(
                 color = white.copy(alpha = .24f),
                 start = Offset(0f, y), end = Offset(size.width, y),
-                strokeWidth = 2.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round
+                strokeWidth = 1.3.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round
             )
             if (filled > 0f) {
                 val start = Offset(0f, y)
                 val end = Offset(filled, y)
-                val active = Brush.horizontalGradient(listOf(
-                    Color(0xFF74BFAE).copy(alpha = .63f), lime, white
-                ), endX = max(filled, 1f))
-                drawLine(brush = active, start = start, end = end,
-                    strokeWidth = 13.dp.toPx(), alpha = .11f,
+                val bloom = Brush.horizontalGradient(
+                    listOf(lime.copy(alpha = .61f), white.copy(alpha = .94f)),
+                    endX = max(filled, 1f)
+                )
+                // Subtle emissive progress line: intentionally NO knob/circles.
+                drawLine(brush = bloom, start = start, end = end,
+                    strokeWidth = 5.5.dp.toPx(), alpha = .09f,
                     cap = androidx.compose.ui.graphics.StrokeCap.Round)
-                drawLine(brush = active, start = start, end = end,
-                    strokeWidth = 6.dp.toPx(), alpha = .25f,
+                drawLine(brush = bloom, start = start, end = end,
+                    strokeWidth = 1.9.dp.toPx(), alpha = .91f,
                     cap = androidx.compose.ui.graphics.StrokeCap.Round)
-                drawLine(brush = active, start = start, end = end,
-                    strokeWidth = 2.5.dp.toPx(),
-                    cap = androidx.compose.ui.graphics.StrokeCap.Round)
-                drawCircle(color = lime.copy(alpha = .14f),
-                    radius = 12.dp.toPx(), center = end)
-                drawCircle(color = lime.copy(alpha = .40f),
-                    radius = 6.dp.toPx(), center = end)
-                drawCircle(color = white, radius = 2.2.dp.toPx(), center = end)
             }
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
