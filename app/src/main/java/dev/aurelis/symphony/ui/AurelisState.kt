@@ -27,6 +27,7 @@ class AurelisState(context: Context) {
     private val app = context.applicationContext
     val library = LocalLibrary(app)
     val api = AurelisApi()
+    val youtube = YouTubeMusicHub(app)
     private val newPipe by lazy { NewPipeSource() }
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val controllerFuture: ListenableFuture<MediaController>
@@ -313,6 +314,8 @@ class AurelisState(context: Context) {
         // The server ranks candidates first; local signals improve relevance and
         // diversify them. Use catalog/history fallback if the backend is offline.
         return remotelyRecommended +
+            youtube.shelves.flatMap { it.tracks }.take(60) +
+            youtube.history.take(25) +
             home.take(30) + originals.take(20) +
             library.favorites.take(40) + library.history.take(100)
     }
@@ -335,12 +338,18 @@ class AurelisState(context: Context) {
         recommendationJob?.cancel()
         val revision = ++recommendationRevision
         recommendationJob = scope.launch {
-            val candidates = try {
-                api.recommendations(seed)
-            } catch (cancelled: CancellationException) {
-                throw cancelled
-            } catch (_: Exception) {
-                emptyList()
+            val candidates = coroutineScope {
+                val fromAurelis = async {
+                    try { api.recommendations(seed) }
+                    catch (cancelled: CancellationException) { throw cancelled }
+                    catch (_: Exception) { emptyList() }
+                }
+                val radio = async {
+                    if (seed.isYouTube) youtube.radio(seed) else emptyList()
+                }
+                // Prefer related YouTube Music radio, then existing Aurelis
+                // suggestions; both are requested concurrently.
+                radio.await() + fromAurelis.await()
             }
             if (revision != recommendationRevision || current?.key != seed.key) return@launch
             val needed = (queueTargetSize - queue.size).coerceAtLeast(0)
@@ -377,12 +386,14 @@ class AurelisState(context: Context) {
         // If the user presses Next before prefetch returns, fetch once and
         // fall back gracefully instead of making an unrelated song choice.
         nextJob = scope.launch {
-            val remote = try {
-                api.recommendations(seed)
-            } catch (cancelled: CancellationException) {
-                throw cancelled
-            } catch (_: Exception) {
-                emptyList()
+            val remote = coroutineScope {
+                val yt = async { if (seed.isYouTube) youtube.radio(seed) else emptyList() }
+                val server = async {
+                    try { api.recommendations(seed) }
+                    catch (cancelled: CancellationException) { throw cancelled }
+                    catch (_: Exception) { emptyList() }
+                }
+                yt.await() + server.await()
             }
             if (current?.key != seed.key) return@launch
             val picked = queue.firstOrNull() ?: rankQueue(seed, remote, 1).firstOrNull()
