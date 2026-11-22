@@ -1,6 +1,7 @@
 package dev.aurelis.symphony.data
 
 import android.content.Context
+import android.net.Uri
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import androidx.compose.runtime.getValue
@@ -73,6 +74,8 @@ class YouTubeMusicHub(context: Context) {
     var selectedPlaylist by mutableStateOf<YouTubePlaylist?>(null)
         private set
     var playlistTracks by mutableStateOf<List<Song>>(emptyList())
+        private set
+    var playlistLoading by mutableStateOf(false)
         private set
 
     private fun key(): SecretKey {
@@ -421,21 +424,104 @@ class YouTubeMusicHub(context: Context) {
         } finally { refreshing = false }
     }
 
-    suspend fun playlistTracks(playlist: YouTubePlaylist) {
+    private fun continuation(root: JSONObject): String? {
+        fun scan(node: Any?, depth: Int = 0): String? {
+            if (depth > 25) return null
+            return when (node) {
+                is JSONObject -> {
+                    val direct = node.optJSONObject("continuationItemRenderer")
+                        ?.optJSONObject("continuationEndpoint")
+                        ?.optJSONObject("continuationCommand")
+                        ?.optString("token")
+                        ?: node.optJSONObject("nextContinuationData")
+                            ?.optString("continuation")
+                    if (!direct.isNullOrBlank()) direct
+                    else {
+                        val keys = node.keys()
+                        var token: String? = null
+                        while (keys.hasNext() && token == null)
+                            token = scan(node.opt(keys.next()), depth + 1)
+                        token
+                    }
+                }
+                is JSONArray -> {
+                    var token: String? = null
+                    for (i in 0 until node.length()) {
+                        if (token != null) break
+                        token = scan(node.opt(i), depth + 1)
+                    }
+                    token
+                }
+                else -> null
+            }
+        }
+        return scan(root)?.takeIf { it.length in 8..4096 }
+    }
+
+    /**
+     * Browser URL or bare playlist ID. Private playlists can only load
+     * when the connected YouTube Music session has access.
+     */
+    fun playlistFromUrl(value: String): YouTubePlaylist {
+        val raw = value.trim()
+        val extracted = if (raw.startsWith("https://")) {
+            val uri = Uri.parse(raw)
+            val host = uri.host?.lowercase(Locale.ROOT).orEmpty()
+            require(host == "youtube.com" || host == "www.youtube.com"
+                || host == "music.youtube.com" || host == "m.youtube.com") {
+                "Gunakan URL playlist YouTube atau YouTube Music."
+            }
+            uri.getQueryParameter("list").orEmpty()
+        } else raw
+        val id = extracted.removePrefix("VL")
+        require(id.matches(Regex("[A-Za-z0-9_-]{10,128}"))) {
+            "ID playlist YouTube tidak valid."
+        }
+        return YouTubePlaylist("VL$id", "Playlist YouTube", "")
+    }
+
+    suspend fun playlistTracks(playlist: YouTubePlaylist): List<Song> {
         selectedPlaylist = playlist
+        playlistLoading = true
         playlistTracks = emptyList()
+        status = null
         try {
-            val id = if (playlist.id.startsWith("VL")) playlist.id else "VL${playlist.id}"
-            val page = post("browse", JSONObject().put("browseId", id))
-            if (selectedPlaylist?.id == playlist.id) playlistTracks = parseSongs(page, 150)
+            val id = if (playlist.id.startsWith("VL"))
+                playlist.id else "VL${playlist.id}"
+            val first = post("browse", JSONObject().put("browseId", id))
+            val songs = ArrayList<Song>()
+            songs += parseSongs(first, 500)
+            val pagesVisited = HashSet<String>()
+            var token = continuation(first)
+            // Pagination is bounded so long imported playlists cannot exhaust
+            // a small phone's RAM or flood the YouTube Music endpoint.
+            while (token != null && pagesVisited.add(token) && songs.size < 800
+                && pagesVisited.size <= 12) {
+                val page = post("browse", JSONObject().put("continuation", token))
+                songs += parseSongs(page, 500)
+                token = continuation(page)
+            }
+            if (selectedPlaylist?.id == playlist.id) {
+                playlistTracks = songs
+                if (songs.isEmpty()) status =
+                    "Playlist tidak memiliki lagu yang dapat diakses, atau API YouTube membatasinya."
+            }
+            return songs
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         } catch (e: Exception) {
-            if (selectedPlaylist?.id == playlist.id) status = e.message
+            if (selectedPlaylist?.id == playlist.id)
+                status = e.message ?: "Gagal membuka playlist YouTube."
+            return emptyList()
+        } finally {
+            if (selectedPlaylist?.id == playlist.id) playlistLoading = false
         }
     }
 
     fun closePlaylist() {
         selectedPlaylist = null
         playlistTracks = emptyList()
+        playlistLoading = false
     }
 
     suspend fun radio(seed: Song): List<Song> {
