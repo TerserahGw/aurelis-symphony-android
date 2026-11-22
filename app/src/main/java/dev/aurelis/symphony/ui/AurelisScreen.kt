@@ -2511,12 +2511,46 @@ private fun SettingsSheet(
                         }
                     }
                 }
+                Spacer(Modifier.height(13.dp))
+                Glass(Modifier.fillMaxWidth(), RoundedCornerShape(21.dp),
+                    tint = state.ambientColor, opacity = .37f,
+                    backdrop = song?.artwork) {
+                    Column(Modifier.fillMaxWidth().padding(15.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Rounded.CleaningServices, null,
+                                Modifier.size(20.dp), tint = lime)
+                            Spacer(Modifier.width(11.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text("Penyimpanan file pembaruan",
+                                    fontSize = 13.sp, color = white,
+                                    fontWeight = FontWeight.SemiBold)
+                                Spacer(Modifier.height(4.dp))
+                                Text("%.1f MB tersimpan · otomatis dibersihkan setelah 24 jam".format(
+                                    java.util.Locale.US, updater.cachedApkBytes / 1048576.0),
+                                    fontSize = 11.sp, color = mist)
+                            }
+                        }
+                        Spacer(Modifier.height(10.dp))
+                        Tactile(Modifier.fillMaxWidth(), {
+                            updater.clearDownloadedUpdates()
+                        }) {
+                            Box(Modifier.fillMaxWidth().height(38.dp)
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(white.copy(alpha = .075f)),
+                                contentAlignment = Alignment.Center) {
+                                Text("Bersihkan file update sekarang",
+                                    fontSize = 12.sp, color = lime,
+                                    fontWeight = FontWeight.Medium)
+                            }
+                        }
+                    }
+                }
                 updater.message?.let {
                     Spacer(Modifier.height(11.dp))
                     Text(it, color = lime, fontSize = 11.sp, lineHeight = 17.sp)
                 }
                 Spacer(Modifier.height(17.dp))
-                Text("AURELIS SYMPHONY  ·  ANDROID 1.2.0 STABLE",
+                Text("AURELIS SYMPHONY  ·  ANDROID 1.2.1 STABLE",
                     color = mist.copy(alpha = .8f), fontSize = 10.sp,
                     letterSpacing = 1.sp)
                 Text("APK dipasang melalui konfirmasi sistem Android.",
