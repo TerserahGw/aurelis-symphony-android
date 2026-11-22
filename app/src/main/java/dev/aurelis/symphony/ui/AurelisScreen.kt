@@ -1188,7 +1188,7 @@ private fun SettingsSheet(state: AurelisState, onClose: () -> Unit) {
             SettingsCategory("LIRIK", "Bahasa")
             SettingsSwitch("Romanisasi otomatis", "Untuk Jepang, Korea, dan Mandarin jika server mendukung", s.romanize, { state.update(s.copy(romanize = it)) })
             Spacer(Modifier.height(28.dp))
-            Text("AURELIS SYMPHONY  ·  ANDROID 0.1.0 BETA", color = mist.copy(alpha = .65f), fontSize = 10.sp, letterSpacing = 1.sp)
+            Text("AURELIS SYMPHONY  ·  ANDROID 0.1.1 BETA", color = mist.copy(alpha = .65f), fontSize = 10.sp, letterSpacing = 1.sp)
             Spacer(Modifier.height(31.dp))
         }
     }
