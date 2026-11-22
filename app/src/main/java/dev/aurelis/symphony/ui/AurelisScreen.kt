@@ -1132,7 +1132,11 @@ private fun LibraryPage(
                                 youtube.playlistFromUrl(importUrl)
                             }.onSuccess { playlist ->
                                 scope.launch {
-                                    youtube.playlistTracks(playlist)
+                                    val tracks = youtube.playlistTracks(playlist)
+                                    if (tracks.isNotEmpty()) {
+                                        state.playPlaylist(playlist.title, tracks)
+                                        onOpenPlayer()
+                                    }
                                 }
                             }.onFailure {
                                 importError = it.message
