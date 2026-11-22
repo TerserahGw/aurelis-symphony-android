@@ -67,10 +67,12 @@ class AurelisApi(val base: String = "https://aurelis-symphony.go.altare.global")
      */
     suspend fun translateLyrics(lyrics: Lyrics, target: String = "id"): Map<Int, String> =
         withContext(Dispatchers.IO) {
-            require(target == "id" || target == "en") { "Unsupported translation target" }
+            require(target in setOf("id", "en", "ja", "es", "ko")) {
+                "Unsupported translation target"
+            }
             val translated = mutableMapOf<Int, String>()
             // Reuse translation text already embedded in the lyric source.
-            lyrics.lines.forEachIndexed { index, line ->
+            if (target == "id") lyrics.lines.forEachIndexed { index, line ->
                 if (line.translation.isNotBlank()) translated[index] = line.translation
             }
             val pending = lyrics.lines.indices.filter { index ->
