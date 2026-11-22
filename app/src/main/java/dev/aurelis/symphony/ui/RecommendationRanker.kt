@@ -62,7 +62,7 @@ internal object RecommendationRanker {
                 (if (song.key in favored) 1.15 else 0.0) -
                 recentlyPlayed * 3.2 -
                 repeat * 0.7 -
-                (if (song.duration in 1..35) 1.5 else 0.0)
+                (if (song.duration in 1L..35L) 1.5 else 0.0)
         }
 
         while (output.size < maxCount && candidates.isNotEmpty()) {
