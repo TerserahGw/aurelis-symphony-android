@@ -57,6 +57,7 @@ class YouTubeMusicHub(context: Context) {
     private val videoPattern = Regex("[A-Za-z0-9_-]{11}")
     private var session: YouTubeSession? = loadSession()
     private var lastRefreshMs = 0L
+    private var discoveredVersion: String? = null
 
     var isConnected by mutableStateOf(session != null)
         private set
@@ -245,7 +246,7 @@ class YouTubeMusicHub(context: Context) {
         return YouTubePlaylist(id, title, thumbnails(item))
     }
 
-    private fun walk(node: Any?, onItem: (String, JSONObject) -> Unit, depth: Int = 0) {
+    private fun walk(node: Any?, depth: Int = 0, onItem: (String, JSONObject) -> Unit) {
         if (depth > 32) return
         when (node) {
             is JSONObject -> {
@@ -256,10 +257,10 @@ class YouTubeMusicHub(context: Context) {
                     if (value is JSONObject &&
                         (key == "musicResponsiveListItemRenderer"
                             || key == "musicTwoRowItemRenderer")) onItem(key, value)
-                    else walk(value, onItem, depth + 1)
+                    else walk(value, depth + 1, onItem)
                 }
             }
-            is JSONArray -> for (i in 0 until node.length()) walk(node.opt(i), onItem, depth + 1)
+            is JSONArray -> for (i in 0 until node.length()) walk(node.opt(i), depth + 1, onItem)
         }
     }
 
@@ -313,11 +314,30 @@ class YouTubeMusicHub(context: Context) {
         return collected.distinctBy { it.title }.take(15)
     }
 
+    private fun activeClientVersion(): String {
+        session?.version?.takeIf { it.matches(Regex("[0-9.]{8,30}")) }
+            ?.let { return it }
+        discoveredVersion?.let { return it }
+        val candidate = runCatching {
+            client.newCall(Request.Builder()
+                .url("$origin/")
+                .header("User-Agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/130.0.0.0 Safari/537.36")
+                .build()).execute().use { response ->
+                    if (!response.isSuccessful) return@use null
+                    val html = response.body?.string().orEmpty()
+                    Regex("""INNERTUBE_CLIENT_VERSION["\\s:]+([0-9.]+)""")
+                        .find(html)?.groupValues?.getOrNull(1)
+                        ?: Regex("""INNERTUBE_CLIENT_VERSION[^0-9]{0,16}([0-9.]+)""")
+                            .find(html)?.groupValues?.getOrNull(1)
+                }
+        }.getOrNull()?.takeIf { it.length in 10..30 }
+        return (candidate ?: fallbackVersion).also { discoveredVersion = it }
+    }
+
     private suspend fun post(endpoint: String, params: JSONObject): JSONObject =
         withContext(Dispatchers.IO) {
             val user = session
-            val version = user?.version?.takeIf { it.matches(Regex("[0-9.]{8,30}")) }
-                ?: fallbackVersion
+            val version = activeClientVersion()
             val context = JSONObject().put("client", JSONObject()
                 .put("clientName", "WEB_REMIX").put("clientVersion", version)
                 .put("hl", "id").put("gl", "ID"))
