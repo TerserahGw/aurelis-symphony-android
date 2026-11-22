@@ -10,6 +10,10 @@ on:
       - 'gradle.properties'
       - '.github/workflows/android-arm64.yml'
 
+concurrency:
+  group: aurelis-android-arm64
+  cancel-in-progress: true
+
 permissions:
   contents: write
 
@@ -29,37 +33,85 @@ jobs:
         shell: bash
         run: |
           set -e
-          if [ -z "${ANDROID_HOME:-}" ]; then
-            echo "Android SDK is unavailable on runner"
-            exit 1
-          fi
+          test -n "${ANDROID_HOME:-}"
           printf 'sdk.dir=%s\n' "$ANDROID_HOME" > local.properties
           if [ -x "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" ]; then
             yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
             "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;36.0.0"
           fi
-      - name: Build debug APK
+
+      - name: Build debug APK for test
         run: gradle :app:assembleDebug --no-daemon --stacktrace
-      - name: Upload APK artifact
+
+      - name: Upload test APK (signing varies per runner)
         uses: actions/upload-artifact@v4
         with:
-          name: AurelisSymphony-Android-ARM64-v0.1.1-beta
+          name: AurelisSymphony-ARM64-v0.1.2-beta-TEST-DEBUG
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
-      - name: Publish GitHub Release v0.1.1 Beta
-        if: github.ref == 'refs/heads/main'
+          retention-days: 14
+
+      # Required once: 4 encrypted GitHub Actions secrets. Never upload a
+      # signing keystore to the source tree or publish a random debug key.
+      - name: Prepare persistent signing
+        id: signing
+        shell: bash
+        env:
+          KEYSTORE_BASE64: ${{ secrets.AURELIS_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.AURELIS_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.AURELIS_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.AURELIS_KEY_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ] || [ -z "$KEYSTORE_PASSWORD" ] ||
+             [ -z "$KEY_ALIAS" ] || [ -z "$KEY_PASSWORD" ]; then
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Signed release withheld until AURELIS_KEYSTORE_* and AURELIS_KEY_* secrets are set."
+            exit 0
+          fi
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/aurelis-release.jks"
+          chmod 600 "$RUNNER_TEMP/aurelis-release.jks"
+          echo "enabled=true" >> "$GITHUB_OUTPUT"
+
+      - name: Build stable-signed release APK
+        if: steps.signing.outputs.enabled == 'true'
+        env:
+          AURELIS_SIGNING_STORE_FILE: ${{ runner.temp }}/aurelis-release.jks
+          AURELIS_SIGNING_STORE_PASSWORD: ${{ secrets.AURELIS_KEYSTORE_PASSWORD }}
+          AURELIS_SIGNING_KEY_ALIAS: ${{ secrets.AURELIS_KEY_ALIAS }}
+          AURELIS_SIGNING_KEY_PASSWORD: ${{ secrets.AURELIS_KEY_PASSWORD }}
+        run: gradle :app:assembleRelease --no-daemon --stacktrace
+
+      - name: Verify APK signature
+        if: steps.signing.outputs.enabled == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk="app/build/outputs/apk/release/app-release.apk"
+          test -s "$apk"
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose "$apk"
+
+      - name: Upload signed release artifact
+        if: steps.signing.outputs.enabled == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: AurelisSymphony-ARM64-v0.1.2-beta-SIGNED
+          path: app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
+
+      - name: Publish GitHub Release v0.1.2 Beta
+        if: steps.signing.outputs.enabled == 'true' && github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
-          apk="$(find app/build/outputs/apk/debug -maxdepth 1 -name '*.apk' -print -quit)"
-          test -n "$apk"
-          cp "$apk" AurelisSymphony-Android-arm64-v0.1.1-beta.apk
-          if ! gh release view v0.1.1-beta >/dev/null 2>&1; then
-            gh release create v0.1.1-beta --target "$GITHUB_SHA" \
-              --title "Aurelis Symphony Android v0.1.1 Beta" \
-              --notes "Kotlin Android ARM64 beta: refreshed Ambient Glass, frosted island capsules, drag-follow navigation highlight, anchored song menus, lyric word glow and progress trail. Debug-signed APK intended for testing." \
+          cp app/build/outputs/apk/release/app-release.apk \
+            AurelisSymphony-Android-arm64-v0.1.2-beta.apk
+          if ! gh release view v0.1.2-beta >/dev/null 2>&1; then
+            gh release create v0.1.2-beta --target "$GITHUB_SHA" \
+              --title "Aurelis Symphony Android v0.1.2 Beta" \
+              --notes "Single-layer karaoke glow, fine bloom line progress, adaptive liquid-glass popup morph, glass playback controls, better cover artwork and redesigned settings. In-app release checking, download progress and Android-managed installer. Persistent signing required for direct APK upgrades." \
               --prerelease
           fi
-          gh release upload v0.1.1-beta AurelisSymphony-Android-arm64-v0.1.1-beta.apk --clobber
+          gh release upload v0.1.2-beta \
+            AurelisSymphony-Android-arm64-v0.1.2-beta.apk --clobber
