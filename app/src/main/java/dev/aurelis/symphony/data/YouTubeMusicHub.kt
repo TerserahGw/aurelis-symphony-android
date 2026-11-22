@@ -20,7 +20,6 @@ import org.json.JSONObject
 import java.io.File
 import java.security.KeyStore
 import java.security.MessageDigest
-import java.security.SecureRandom
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 import javax.crypto.Cipher
@@ -95,10 +94,14 @@ class YouTubeMusicHub(context: Context) {
             .put("version", value.version).put("visitor", value.visitor)
             .put("authUser", value.authUser).put("pageId", value.pageId)
             .put("dataSyncId", value.dataSyncId).toString().toByteArray(Charsets.UTF_8)
-        val iv = ByteArray(12).also { SecureRandom().nextBytes(it) }
+        // AndroidKeyStore AES-GCM keys enforce randomized encryption.
+        // The provider MUST generate the IV during ENCRYPT_MODE init;
+        // supplying our own IV throws "Caller-provided IV not permitted".
         val cipher = Cipher.getInstance("AES/GCM/NoPadding").apply {
-            init(Cipher.ENCRYPT_MODE, key(), GCMParameterSpec(128, iv))
+            init(Cipher.ENCRYPT_MODE, key())
         }
+        val iv = cipher.iv
+        check(iv.size == 12) { "Android Keystore returned an invalid GCM nonce" }
         val bytes = byteArrayOf(1) + iv + cipher.doFinal(payload)
         val temp = File(app.noBackupFilesDir, "ytmusic_session.tmp")
         temp.writeBytes(bytes)
