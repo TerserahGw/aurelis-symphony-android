@@ -11,7 +11,7 @@ on:
       - '.github/workflows/android-arm64.yml'
 
 concurrency:
-  group: aurelis-android-arm64
+  group: aurelis-android-release-v2
   cancel-in-progress: true
 
 permissions:
