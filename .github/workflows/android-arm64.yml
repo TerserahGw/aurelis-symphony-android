@@ -43,10 +43,10 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: AurelisSymphony-Android-ARM64-v0.1.0-beta
+          name: AurelisSymphony-Android-ARM64-v0.1.1-beta
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
-      - name: Publish GitHub Release v0.1.0 Beta
+      - name: Publish GitHub Release v0.1.1 Beta
         if: github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
@@ -55,11 +55,11 @@ jobs:
           set -euo pipefail
           apk="$(find app/build/outputs/apk/debug -maxdepth 1 -name '*.apk' -print -quit)"
           test -n "$apk"
-          cp "$apk" AurelisSymphony-Android-arm64-v0.1.0-beta.apk
-          if ! gh release view v0.1.0-beta >/dev/null 2>&1; then
-            gh release create v0.1.0-beta --target "$GITHUB_SHA" \
-              --title "Aurelis Symphony Android v0.1.0 Beta" \
+          cp "$apk" AurelisSymphony-Android-arm64-v0.1.1-beta.apk
+          if ! gh release view v0.1.1-beta >/dev/null 2>&1; then
+            gh release create v0.1.1-beta --target "$GITHUB_SHA" \
+              --title "Aurelis Symphony Android v0.1.1 Beta" \
               --notes "Kotlin Android ARM64 beta: refreshed Ambient Glass, frosted island capsules, drag-follow navigation highlight, anchored song menus, lyric word glow and progress trail. Debug-signed APK intended for testing." \
               --prerelease
           fi
-          gh release upload v0.1.0-beta AurelisSymphony-Android-arm64-v0.1.0-beta.apk --clobber
+          gh release upload v0.1.1-beta AurelisSymphony-Android-arm64-v0.1.1-beta.apk --clobber
