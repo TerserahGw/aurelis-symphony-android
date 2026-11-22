@@ -14,11 +14,15 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.expandIn
+import androidx.compose.animation.shrinkOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.BorderStroke
@@ -60,11 +64,17 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.window.PopupProperties
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
+import dev.aurelis.symphony.update.AurelisUpdater
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -80,6 +90,8 @@ import coil.compose.AsyncImage
 import dev.aurelis.symphony.data.*
 import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
+import kotlin.math.max
+import kotlin.math.min
 
 private val bg = Color(0xFF090D11)
 private val white = Color(0xFFF3F8F5)
@@ -1069,73 +1081,150 @@ private fun LyricContent(
 
 @Composable
 private fun KaraokeToken(word: String, target: Float) {
-    val reduce = LocalReducedMotion.current
+    val reduced = LocalReducedMotion.current
     val progress by animateFloatAsState(
-        targetValue = target,
-        animationSpec = tween(if (reduce) 0 else 95, easing = LinearEasing),
-        label = "karaokeFraction"
+        targetValue = target.coerceIn(0f, 1f),
+        animationSpec = tween(if (reduced) 0 else 110, easing = LinearEasing),
+        label = "singleLayerKaraokeFill"
     )
-    Box {
-        Text(word, color = white.copy(alpha = .62f), fontSize = 23.sp,
-            lineHeight = 34.sp, fontWeight = FontWeight.Medium)
-        Text(word, color = lime, fontSize = 23.sp, lineHeight = 34.sp,
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.drawWithContent {
-                val canvas = drawContext.canvas
-                canvas.save()
-                canvas.clipRect(0f, 0f, size.width * progress, size.height)
-                drawContent()
-                canvas.restore()
-            },
-            style = androidx.compose.ui.text.TextStyle(
-                shadow = Shadow(lime.copy(alpha = .77f), Offset.Zero, 11f)
-            ))
+    // One glyph raster / one Text. No doubled overlay, misplaced baselines, or ghost letters.
+    val edge = (progress + .045f).coerceIn(0f, 1f)
+    val stops = when {
+        progress <= .001f -> arrayOf(0f to mist.copy(alpha = .7f), 1f to mist.copy(alpha = .7f))
+        progress >= .999f -> arrayOf(0f to lime, 1f to lime)
+        else -> arrayOf(
+            0f to lime, progress to lime,
+            edge to white.copy(alpha = .91f),
+            (edge + .001f).coerceAtMost(1f) to mist.copy(alpha = .71f),
+            1f to mist.copy(alpha = .71f)
+        )
     }
+    Text(
+        text = word,
+        fontSize = 23.sp,
+        lineHeight = 34.sp,
+        fontWeight = FontWeight.SemiBold,
+        style = androidx.compose.ui.text.TextStyle(
+            brush = Brush.horizontalGradient(colorStops = stops),
+            shadow = if (progress > .01f) Shadow(
+                lime.copy(alpha = .12f + .24f * progress), Offset.Zero, 9f
+            ) else null
+        )
+    )
 }
 
 @Composable
 private fun PlayerControls(state: AurelisState) {
-    val fraction = if (state.duration > 0) (state.progress.toFloat() / state.duration).coerceIn(0f, 1f) else 0f
-    var scrub by remember { mutableFloatStateOf(-1f) }
+    val fraction = if (state.duration > 0)
+        (state.progress.toFloat() / state.duration).coerceIn(0f, 1f) else 0f
+    var scrubbing by remember { mutableFloatStateOf(-1f) }
+    val intended = if (scrubbing >= 0f) scrubbing else fraction
     val smoothed by animateFloatAsState(
-        targetValue = if (scrub >= 0) scrub else fraction,
+        targetValue = intended,
         animationSpec = tween(if (state.settings.motion) 135 else 0, easing = LinearEasing),
-        label = "playheadSmooth"
+        label = "glowLineProgress"
     )
-    Column(Modifier.padding(horizontal = 26.dp)) {
-        Box(Modifier.fillMaxWidth()) {
-            val progressFraction = if (scrub >= 0) scrub else smoothed
-            Box(Modifier.fillMaxWidth().height(44.dp).align(Alignment.Center).drawBehind {
-                val x = size.width * progressFraction
-                val y = size.height / 2
-                if (x > 0f) {
-                    drawLine(
-                        brush = Brush.horizontalGradient(listOf(Color.Transparent, lime.copy(alpha = .58f), lime)),
-                        start = Offset(0f, y), end = Offset(x, y), strokeWidth = 12.dp.toPx()
-                    )
-                    drawCircle(color = lime, radius = 18.dp.toPx(), center = Offset(x, y), alpha = .19f)
-                    drawCircle(color = lime, radius = 9.dp.toPx(), center = Offset(x, y), alpha = .27f)
+    val song = state.current
+    Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp)) {
+        Canvas(
+            Modifier.fillMaxWidth().height(38.dp)
+                .pointerInput(state.duration) {
+                    detectTapGestures { location ->
+                        if (size.width > 0) state.seek(
+                            (location.x / size.width).coerceIn(0f, 1f))
+                    }
                 }
-            })
-            Slider(value = progressFraction, onValueChange = { scrub = it },
-                onValueChangeFinished = { if (scrub >= 0) state.seek(scrub); scrub = -1f },
-                colors = SliderDefaults.colors(thumbColor = lime, activeTrackColor = lime,
-                    inactiveTrackColor = white.copy(alpha = .13f)), modifier = Modifier.fillMaxWidth())
+                .pointerInput(state.duration) {
+                    detectDragGestures(
+                        onDragStart = { p ->
+                            if (size.width > 0) scrubbing =
+                                (p.x / size.width).coerceIn(0f, 1f)
+                        },
+                        onDrag = { change, _ ->
+                            if (size.width > 0) scrubbing =
+                                (change.position.x / size.width).coerceIn(0f, 1f)
+                            change.consume()
+                        },
+                        onDragEnd = {
+                            if (scrubbing >= 0) state.seek(scrubbing)
+                            scrubbing = -1f
+                        },
+                        onDragCancel = { scrubbing = -1f }
+                    )
+                }
+        ) {
+            val y = size.height * .5f
+            val filled = size.width * smoothed
+            drawLine(
+                color = white.copy(alpha = .24f),
+                start = Offset(0f, y), end = Offset(size.width, y),
+                strokeWidth = 2.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round
+            )
+            if (filled > 0f) {
+                val start = Offset(0f, y)
+                val end = Offset(filled, y)
+                val active = Brush.horizontalGradient(listOf(
+                    Color(0xFF74BFAE).copy(alpha = .63f), lime, white
+                ), endX = max(filled, 1f))
+                drawLine(brush = active, start = start, end = end,
+                    strokeWidth = 13.dp.toPx(), alpha = .11f,
+                    cap = androidx.compose.ui.graphics.StrokeCap.Round)
+                drawLine(brush = active, start = start, end = end,
+                    strokeWidth = 6.dp.toPx(), alpha = .25f,
+                    cap = androidx.compose.ui.graphics.StrokeCap.Round)
+                drawLine(brush = active, start = start, end = end,
+                    strokeWidth = 2.5.dp.toPx(),
+                    cap = androidx.compose.ui.graphics.StrokeCap.Round)
+                drawCircle(color = lime.copy(alpha = .14f),
+                    radius = 12.dp.toPx(), center = end)
+                drawCircle(color = lime.copy(alpha = .40f),
+                    radius = 6.dp.toPx(), center = end)
+                drawCircle(color = white, radius = 2.2.dp.toPx(), center = end)
+            }
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text(formatMs(state.progress), color = white.copy(alpha = .84f), fontSize = 11.sp)
             Text(formatMs(state.duration), color = mist, fontSize = 11.sp)
         }
-        Spacer(Modifier.height(12.dp))
-        Row(Modifier.fillMaxWidth().height(69.dp), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = state::previous) { Icon(Icons.Default.SkipPrevious, "Sebelumnya", Modifier.size(30.dp), tint = white) }
-            Tactile(action = state::togglePlay) {
-                Box(Modifier.size(67.dp).clip(CircleShape).background(lime), contentAlignment = Alignment.Center) {
-                    if (state.preparing) CircularProgressIndicator(Modifier.size(28.dp), color = bg, strokeWidth = 2.dp)
-                    else Icon(if (state.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, "Putar atau jeda", Modifier.size(36.dp), tint = bg)
+        Spacer(Modifier.height(13.dp))
+        Row(Modifier.fillMaxWidth().height(70.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            verticalAlignment = Alignment.CenterVertically) {
+            Tactile(action = state::previous) {
+                Glass(Modifier.size(49.dp), RoundedCornerShape(25.dp),
+                    tint = state.ambientColor, opacity = .54f,
+                    backdrop = song?.artwork) {
+                    Icon(Icons.Rounded.SkipPrevious, "Sebelumnya",
+                        Modifier.size(24.dp).align(Alignment.Center), tint = white)
                 }
             }
-            IconButton(onClick = state::next) { Icon(Icons.Default.SkipNext, "Berikutnya", Modifier.size(30.dp), tint = white) }
+            Tactile(action = state::togglePlay) {
+                Glass(Modifier.size(69.dp), RoundedCornerShape(35.dp),
+                    tint = state.ambientColor, opacity = .85f,
+                    backdrop = song?.artwork) {
+                    if (state.preparing) {
+                        CircularProgressIndicator(Modifier.size(26.dp).align(Alignment.Center),
+                            color = lime, strokeWidth = 2.dp)
+                    } else {
+                        AnimatedContent(state.isPlaying, label = "playPauseMorph",
+                            modifier = Modifier.align(Alignment.Center), transitionSpec = {
+                                (fadeIn(tween(160)) + scaleIn(initialScale = .66f)) togetherWith
+                                    (fadeOut(tween(120)) + scaleOut(targetScale = .7f))
+                            }) { playing ->
+                            Icon(if (playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                                "Putar atau jeda", Modifier.size(33.dp), tint = lime)
+                        }
+                    }
+                }
+            }
+            Tactile(action = state::next) {
+                Glass(Modifier.size(49.dp), RoundedCornerShape(25.dp),
+                    tint = state.ambientColor, opacity = .54f,
+                    backdrop = song?.artwork) {
+                    Icon(Icons.Rounded.SkipNext, "Berikutnya",
+                        Modifier.size(24.dp).align(Alignment.Center), tint = white)
+                }
+            }
         }
     }
 }
