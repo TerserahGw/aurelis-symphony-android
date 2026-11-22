@@ -132,3 +132,16 @@ gh workflow run android-arm64.yml -R TerserahGw/aurelis-symphony-android
 Keep the `.p12` and passwords backed up securely **outside the public GitHub repository**. Every future stable release must use exactly the same key and a higher `versionCode`. Do not lose this key: replacing it makes ordinary in-place updates impossible. Do not publish the keystore, password, or their base64 encoding.
 
 **Migration note:** users who installed the older debug-signed APK may need **one final reinstall** when switching to this new permanent release key. Local app data may be lost on uninstall; no backup/migration of old beta installations is guaranteed. The in-app updater warns of incompatible signatures rather than offering a broken install.
+
+
+## v0.1.3 Beta — playback, search and player polish
+
+- Fixed search race conditions: the previous query is cancelled on the **first keystroke** of a replacement query, not after the search debounce. Cancellation is never shown as a search failure, and stale responses cannot overwrite a newer search.
+- Listening history now keeps the **500 most recent play events** rather than deduplicating the last 50 tracks. Replays are visible and have unique lazy-list keys.
+- Up Next now prefetches up to four tracks at the beginning of playback and replenishes as the queue drains. Candidate rankings use backend recommendations plus fallback tracks, taking favorite/recent history, related artist/title, diversity, and replay suppression into account. This is a **transparent heuristic re-ranker**, not a neural recommender. Removing a suggestion prevents immediate reselection for the current queue session.
+- Cover mode fills the entire viewport via crop, with a continuous transparent vignette and no `ContentScale.Fit` inset image.
+- The music seek bar is now a fine-line control without a circular thumb; subtle bloom applies only along the played part.
+- Three-dot popups are positioned to fit the viewport and animate outward from the originating capsule. Their original trigger is hidden until the closing animation finishes, so there is no double overlay.
+- `versionCode` is **4**, `versionName` is **0.1.3-beta**. Signing uses the existing persistent keystore and encrypted Actions secrets, enabling direct updates from **v0.1.2 Beta release-signed** installations. This does not solve incompatible older debug-signing keys.
+
+Android direct-update limitations remain: matching signing certificate and increasing version code are required. The in-app updater still requests Android's install consent rather than silently installing APKs.
