@@ -110,8 +110,7 @@ jobs:
           if ! gh release view v1.0.0 >/dev/null 2>&1; then
             gh release create v1.0.0 --target "$GITHUB_SHA" \
               --title "Aurelis Symphony Android v1.0.0 Stable" \
-              --notes "Aurelis Symphony Android 1.0.0 Stable. Smooth non-jittering anchored overflow morph, opt-in Indonesian lyric translation through Aurelis /api/v2/translate, more transparent artwork glass, and scroll-responsive Home dock: mini player moves between hamburger and Search; returns to full navigation after 3 seconds idle. Retains persistent signing and versionCode 5 for in-place upgrades." \
-              
+              --notes "Aurelis Symphony Android 1.0.0 Stable. Smooth non-jittering anchored overflow morph, opt-in Indonesian lyric translation through Aurelis /api/v2/translate, more transparent artwork glass, and scroll-responsive Home dock: mini player moves between hamburger and Search; returns to full navigation after 3 seconds idle. Retains persistent signing and versionCode 5 for in-place upgrades."
           fi
           gh release upload v1.0.0 \
             AurelisSymphony-Android-arm64-v1.0.0.apk --clobber
