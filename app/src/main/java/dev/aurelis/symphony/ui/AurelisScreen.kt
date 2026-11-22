@@ -25,6 +25,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -34,6 +35,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
@@ -103,6 +105,7 @@ private val lime = Color(0xFFBCEBD0)
 private val groove = Color(0xFF243632)
 private val motion = spring<Float>(dampingRatio = .86f, stiffness = Spring.StiffnessLow)
 private val LocalGlassDensity = compositionLocalOf { .68f }
+private val LocalVisualStyle = compositionLocalOf { VisualStyle.GLASS }
 private val LocalReducedMotion = compositionLocalOf { false }
 
 private fun Color.mix(other: Color, amount: Float) = Color(
@@ -123,6 +126,15 @@ private fun Glass(
     backdropOpacity: Float = .47f,
     content: @Composable BoxScope.() -> Unit
 ) {
+    val visualStyle = LocalVisualStyle.current
+    if (visualStyle == VisualStyle.AMBIENT) {
+        val cleanTint = tint.mix(bg, .84f).copy(alpha = .67f)
+        Box(modifier.clip(shape).background(cleanTint, shape)
+            .border(1.dp, white.copy(alpha = .045f), shape)) {
+            content()
+        }
+        return
+    }
     val density = LocalGlassDensity.current
     val strength = (opacity * (.46f + density * .69f)).coerceIn(.16f, .88f)
     // Brushes are stable between playback ticks, scroll frames, and morph frames.
@@ -222,6 +234,7 @@ fun AurelisScreen(state: AurelisState) {
     var searchExpanded by rememberSaveable { mutableStateOf(false) }
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var showSettings by remember { mutableStateOf(false) }
+    var showYouTubeLogin by remember { mutableStateOf(false) }
     var showQueue by remember { mutableStateOf(false) }
     var menuSong by remember { mutableStateOf<Song?>(null) }
     var playlistName by remember { mutableStateOf("") }
@@ -235,6 +248,14 @@ fun AurelisScreen(state: AurelisState) {
         }
     }
     LaunchedEffect(state.current) { if (state.current == null) expanded = false }
+    LaunchedEffect(state.youtube.isConnected) {
+        // While app is composed, refresh the authenticated YouTube Music
+        // library at most once per minute. This is polling, not push events.
+        while (true) {
+            state.youtube.refresh()
+            delay(60_000L)
+        }
+    }
     LaunchedEffect(tab, state.current?.key) {
         compactDock = false
         if (state.current == null) return@LaunchedEffect
@@ -255,7 +276,11 @@ fun AurelisScreen(state: AurelisState) {
             }
     }
 
-    CompositionLocalProvider(LocalGlassDensity provides state.settings.glassOpacity, LocalReducedMotion provides !state.settings.motion) {
+    CompositionLocalProvider(
+        LocalGlassDensity provides state.settings.glassOpacity,
+        LocalReducedMotion provides !state.settings.motion,
+        LocalVisualStyle provides state.settings.visualStyle
+    ) {
     MaterialTheme(colorScheme = darkColorScheme(
         primary = lime, secondary = Color(0xFF98CDB9), background = bg,
         surface = Color(0xFF15221F), onSurface = white, onBackground = white
@@ -273,7 +298,8 @@ fun AurelisScreen(state: AurelisState) {
                     }) { page ->
                         when (page) {
                             "Home" -> HomePage(state, homeScrollState,
-                                onPlay = { state.play(it) }, onMenu = { menuSong = it })
+                                onPlay = { state.play(it) }, onMenu = { menuSong = it },
+                                onConnect = { showYouTubeLogin = true })
                             "Search" -> SearchPage(state, searchQuery, searchScrollState,
                                 onPlay = { state.play(it) }, onMenu = { menuSong = it })
                             else -> LibraryPage(state, libraryScrollState,
@@ -334,7 +360,17 @@ fun AurelisScreen(state: AurelisState) {
             UpdateAnnouncement(updater, Modifier.align(Alignment.BottomCenter)
                 .padding(horizontal = 19.dp, vertical = 96.dp))
         }
-        if (showSettings) SettingsSheet(state, updater, onClose = { showSettings = false })
+        if (showSettings) SettingsSheet(
+            state, updater,
+            onClose = { showSettings = false },
+            onConnectYouTube = {
+                showSettings = false
+                showYouTubeLogin = true
+            }
+        )
+        if (showYouTubeLogin) YouTubeMusicLogin(state.youtube) {
+            showYouTubeLogin = false
+        }
         if (showQueue) QueueSheet(state, onClose = { showQueue = false })
         menuSong?.let { song -> SongMenu(state, song, onClose = { menuSong = null }) }
         if (creatingPlaylist) AlertDialog(
@@ -932,7 +968,8 @@ private fun IslandDock(
                         else onOpenNav()
                     }) {
                         Icon(Icons.Rounded.Menu, "Buka menu navigasi",
-                            Modifier.size(22.dp).align(Alignment.Center), tint = white)
+                            Modifier.size(22.dp).align(Alignment.Center)
+                                .offset(y = 2.dp), tint = white)
                     }
                 } else {
                     BoxWithConstraints(Modifier.fillMaxSize().padding(5.dp).pointerInput(tab) {
@@ -986,7 +1023,7 @@ private fun IslandDock(
                                     Column(Modifier.fillMaxSize(),
                                         horizontalAlignment = Alignment.CenterHorizontally,
                                         verticalArrangement = Arrangement.Center) {
-                                        Icon(icon, name, Modifier.size(19.dp),
+                                        Icon(icon, name, Modifier.size(19.dp).offset(y = 2.dp),
                                             tint = if (selected == index) white else mist)
                                         Spacer(Modifier.height(3.dp))
                                         Text(name, fontSize = 10.sp,
