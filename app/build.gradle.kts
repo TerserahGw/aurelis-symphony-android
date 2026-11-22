@@ -11,9 +11,30 @@ android {
         applicationId = "dev.aurelis.symphony"
         minSdk = 28
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0-beta"
+        versionCode = 3
+        versionName = "0.1.2-beta"
         ndk { abiFilters += "arm64-v8a" }
+    }
+    // A single private keystore must be reused for EVERY future update.
+    // GitHub Actions supplies these via repository secrets, never tracked files.
+    val storePath = providers.environmentVariable("AURELIS_SIGNING_STORE_FILE").orNull
+    val storePass = providers.environmentVariable("AURELIS_SIGNING_STORE_PASSWORD").orNull
+    val keyAlias = providers.environmentVariable("AURELIS_SIGNING_KEY_ALIAS").orNull
+    val keyPass = providers.environmentVariable("AURELIS_SIGNING_KEY_PASSWORD").orNull
+    val stableKeyPresent = listOf(storePath, storePass, keyAlias, keyPass).all { !it.isNullOrBlank() }
+    signingConfigs {
+        if (stableKeyPresent) create("aurelisStable") {
+            storeFile = file(storePath!!)
+            storePassword = storePass
+            this.keyAlias = keyAlias
+            keyPassword = keyPass
+        }
+    }
+    buildTypes {
+        getByName("release") {
+            isMinifyEnabled = false
+            if (stableKeyPresent) signingConfig = signingConfigs.getByName("aurelisStable")
+        }
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
