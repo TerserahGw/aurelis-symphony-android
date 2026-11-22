@@ -1661,7 +1661,8 @@ private fun FullPlayer(state: AurelisState, onClose: () -> Unit, onQueue: () -> 
     overflowTransition.targetState = optionsOpen
     var showTranslation by rememberSaveable { mutableStateOf(false) }
     var showRoman by rememberSaveable { mutableStateOf(state.settings.romanize) }
-    LaunchedEffect(showTranslation, state.lyrics.lines.size, song.key) {
+    LaunchedEffect(showTranslation, state.lyrics.lines.size,
+        song.key, state.settings.language) {
         if (showTranslation && state.lyrics.lines.isNotEmpty()) state.loadTranslations()
     }
     val artwork = song.artwork.takeIf { it.startsWith("https://") }
@@ -2067,7 +2068,10 @@ private fun LyricContent(
                             fontSize = 13.sp, lineHeight = 19.sp)
                     }
                 }
-                val translatedLine = state.translated[i].orEmpty().ifBlank { line.translation }
+                val translatedLine = state.translated[i].orEmpty().ifBlank {
+                    if (state.settings.language == AppLanguage.INDONESIAN)
+                        line.translation else ""
+                }
                 if (showTranslation && translatedLine.isNotBlank()) {
                     Spacer(Modifier.height(6.dp))
                     Text(translatedLine, color = if (focused) white.copy(alpha = .77f) else mist,
@@ -2427,8 +2431,37 @@ private fun SettingsSheet(
                 }
 
                 DividerSoft()
-                SettingsCategory("BAHASA", "Lirik")
-                SettingsSwitch("Romanisasi otomatis",
+                SettingsCategory(uiText("BAHASA"), uiText("Lirik"))
+                Text(uiText("Bahasa aplikasi"), color = white,
+                    fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                Spacer(Modifier.height(9.dp))
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+                    items(AppLanguage.entries) { language ->
+                        Tactile(action = {
+                            state.update(s.copy(language = language))
+                        }) {
+                            Glass(
+                                shape = RoundedCornerShape(20.dp),
+                                tint = if (s.language == language)
+                                    state.ambientColor else groove,
+                                opacity = if (s.language == language) .78f else .46f
+                            ) {
+                                Text(language.displayName,
+                                    Modifier.padding(horizontal = 14.dp, vertical = 11.dp),
+                                    color = if (s.language == language) lime else mist,
+                                    fontSize = 12.sp,
+                                    fontWeight = if (s.language == language)
+                                        FontWeight.SemiBold else FontWeight.Medium
+                                )
+                            }
+                        }
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+                Text(uiText("Bahasa terjemahan lirik mengikuti bahasa aplikasi."),
+                    color = mist, fontSize = 11.sp, lineHeight = 16.sp)
+                Spacer(Modifier.height(17.dp))
+                SettingsSwitch(uiText("Romanisasi otomatis"),
                     "Jepang, Korea, dan Mandarin bila tersedia",
                     s.romanize, { state.update(s.copy(romanize = it)) })
                 Row(Modifier.fillMaxWidth().padding(vertical = 10.dp),
