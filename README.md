@@ -208,3 +208,12 @@ Google's lightweight web translation endpoint is also not a versioned public tra
 The user-facing client remains GPL-3.0. BitChord is [GPLv3](https://github.com/kushagrasinghx/BitChord/blob/main/LICENSE); the implementation here was written independently after reviewing its architecture and includes attribution in documentation.
 
 **Testing:** CI compilation and APK signature verification are necessary but do not establish live Google login compatibility, remote playback, animation smoothness, or real-device UX. These are areas for hands-on beta testing.
+
+
+## v1.1.1 Beta — YouTube Music account linking hotfix
+
+v1.1.0 Beta could show **"Caller-provided IV not permitted"** even after the embedded YouTube Music page visibly signed in. The issue was not an account rejection: Aurelis attempted to pass a random IV to an Android Keystore AES-GCM key whose randomized encryption requirement rejects caller-supplied IVs.
+
+Fixed by invoking `Cipher.init(Cipher.ENCRYPT_MODE, keystoreKey)` without a GCM parameter, then persisting the **Keystore-generated IV** with the ciphertext. Decryption still uses the saved IV in `GCMParameterSpec`, and the authenticated session remains encrypted at rest under an Android Keystore-protected AES-256-GCM key. The login dialog now loads `music.youtube.com` first so previously signed-in WebView sessions may be reused, similar to BitChord.
+
+**Install v1.1.1-beta above v1.1.0-beta without uninstalling** if both are release-signed with the existing keystore; `versionCode = 8`. Open Settings → YouTube Music → Hubungkan akun; confirm after the YouTube Music account loads. User login remains required for account personalization, and the InnerTube endpoint can still change or refuse account access. Cloud history writeback and true realtime/push synchronization are still out of scope for this hotfix.
