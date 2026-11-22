@@ -228,6 +228,7 @@ fun AurelisScreen(state: AurelisState) {
         }
     }
     var tab by rememberSaveable { mutableStateOf("Home") }
+    var librarySegment by rememberSaveable { mutableStateOf("Disukai") }
     val homeScrollState = rememberLazyListState()
     val searchScrollState = rememberLazyListState()
     val libraryScrollState = rememberLazyListState()
@@ -305,12 +306,14 @@ fun AurelisScreen(state: AurelisState) {
                                 onConnect = { showYouTubeLogin = true },
                                 onPlaylist = { playlist ->
                                     tab = "Library"
-                                    state.youtube.closePlaylist()
+                                    librarySegment = "Playlist"
                                     pageScope.launch { state.youtube.playlistTracks(playlist) }
                                 })
                             "Search" -> SearchPage(state, searchQuery, searchScrollState,
                                 onPlay = { state.play(it) }, onMenu = { menuSong = it })
                             else -> LibraryPage(state, libraryScrollState,
+                                segment = librarySegment,
+                                onSegment = { librarySegment = it },
                                 onPlay = { state.play(it) },
                                 onMenu = { menuSong = it },
                                 onCreate = { creatingPlaylist = true },
@@ -841,183 +844,306 @@ private fun SearchPage(state: AurelisState, query: String,
 }
 
 @Composable
-private fun LibraryPage(state: AurelisState,
+private fun LibraryPage(
+    state: AurelisState,
     scrollState: androidx.compose.foundation.lazy.LazyListState,
-    onPlay: (Song) -> Unit, onMenu: (Song) -> Unit, onCreate: () -> Unit,
+    segment: String,
+    onSegment: (String) -> Unit,
+    onPlay: (Song) -> Unit,
+    onMenu: (Song) -> Unit,
+    onCreate: () -> Unit,
     onConnectYouTube: () -> Unit
 ) {
-    val playlistScope = rememberCoroutineScope()
-    var segment by rememberSaveable { mutableStateOf("Disukai") }
+    val scope = rememberCoroutineScope()
+    var importUrl by rememberSaveable { mutableStateOf("") }
+    var importError by remember { mutableStateOf<String?>(null) }
     val libraryStamp = state.libraryStamp
     val list = remember(segment, libraryStamp) {
-        when (segment) { "Disukai" -> state.library.favorites; "Riwayat" -> state.library.history; else -> emptyList() }
+        when (segment) {
+            "Disukai" -> state.library.favorites
+            "Riwayat" -> state.library.history
+            else -> emptyList()
+        }
     }
-    LazyColumn(state = scrollState,
-        contentPadding = PaddingValues(start = 21.dp, end = 21.dp, top = 18.dp, bottom = 180.dp),
-        verticalArrangement = Arrangement.spacedBy(13.dp)) {
-        item { SectionHeading("Your Library",
-            if (segment == "Riwayat") "${list.size} pemutaran terakhir · termasuk lagu yang diputar ulang"
-            else "Satu ruang untuk semua musikmu") }
-        item {
+    val youtube = state.youtube
+    LazyColumn(
+        state = scrollState,
+        contentPadding = PaddingValues(
+            start = 21.dp, end = 21.dp, top = 18.dp, bottom = 180.dp
+        ),
+        verticalArrangement = Arrangement.spacedBy(13.dp)
+    ) {
+        item(key = "library-head") {
+            SectionHeading("Your Library",
+                if (segment == "Riwayat")
+                    "${list.size} pemutaran terakhir"
+                else "Playlist, lagu disukai, dan riwayat musikmu")
+        }
+        item(key = "library-tabs") {
             LazyRow(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                 items(listOf("Disukai", "Riwayat", "Playlist", "YouTube")) { item ->
-                    Tactile(action = { segment = item }) {
-                        Glass(Modifier, RoundedCornerShape(22.dp), tint = if (item == segment) Color(0xFF476C5C) else Color(0xFF1F302D), opacity = if (item == segment) .9f else .54f) {
-                            Text(item, Modifier.padding(horizontal = 17.dp, vertical = 11.dp), color = if (item == segment) white else mist, fontSize = 12.sp)
+                    Tactile(action = { onSegment(item) }) {
+                        Glass(shape = RoundedCornerShape(22.dp),
+                            tint = if (item == segment) Color(0xFF476C5C)
+                                else Color(0xFF1F302D),
+                            opacity = if (item == segment) .8f else .44f) {
+                            Text(item,
+                                Modifier.padding(horizontal = 17.dp, vertical = 11.dp),
+                                color = if (item == segment) white else mist,
+                                fontSize = 12.sp)
                         }
                     }
                 }
             }
         }
-        if (segment == "YouTube") {
-            if (!state.youtube.isConnected) {
-                item(key = "yt-login") {
-                    Column(Modifier.fillMaxWidth().padding(vertical = 24.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(Icons.Rounded.LibraryMusic, null,
-                            Modifier.size(36.dp), tint = lime)
-                        Spacer(Modifier.height(14.dp))
-                        Text("Hubungkan YouTube Music", color = white,
-                            fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-                        Spacer(Modifier.height(6.dp))
-                        Text("Playlist dan riwayat akunmu muncul di sini.",
-                            color = mist, fontSize = 12.sp)
-                        Spacer(Modifier.height(16.dp))
-                        Button(onClick = onConnectYouTube) {
-                            Text("Hubungkan akun")
+
+        if (segment == "Playlist") {
+            item(key = "playlist-create") {
+                Tactile(Modifier.fillMaxWidth(), onCreate) {
+                    Glass(Modifier.fillMaxWidth(),
+                        RoundedCornerShape(19.dp), opacity = .46f) {
+                        Row(Modifier.padding(15.dp),
+                            verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Rounded.Add, null, tint = lime)
+                            Spacer(Modifier.width(12.dp))
+                            Text("Buat playlist", color = white)
                         }
                     }
+                }
+            }
+
+            state.library.playlists.forEach { (name, tracks) ->
+                item(key = "local-playlist-$name") {
+                    var opened by remember(name) { mutableStateOf(false) }
+                    Column {
+                        Row(Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically) {
+                            Tactile(Modifier.weight(1f), { opened = !opened }) {
+                                Row(Modifier.fillMaxWidth().padding(vertical = 14.dp),
+                                    verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Rounded.LibraryMusic, null,
+                                        tint = lime, modifier = Modifier.size(24.dp))
+                                    Spacer(Modifier.width(14.dp))
+                                    Column(Modifier.weight(1f)) {
+                                        Text(name, color = white, fontSize = 14.sp,
+                                            fontWeight = FontWeight.SemiBold)
+                                        Text("${tracks.size} lagu · Aurelis",
+                                            color = mist, fontSize = 11.sp)
+                                    }
+                                    Icon(if (opened) Icons.Rounded.ExpandLess
+                                        else Icons.Rounded.ChevronRight, null,
+                                        tint = mist)
+                                }
+                            }
+                            IconButton(
+                                onClick = { state.playPlaylist(name, tracks) },
+                                enabled = tracks.isNotEmpty()
+                            ) {
+                                Icon(Icons.Rounded.PlayArrow, "Putar playlist",
+                                    tint = lime, modifier = Modifier.size(25.dp))
+                            }
+                        }
+                        AnimatedVisibility(
+                            visible = opened,
+                            enter = fadeIn(tween(180)) +
+                                expandVertically(tween(260)),
+                            exit = fadeOut(tween(150)) +
+                                shrinkVertically(tween(220))
+                        ) {
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                tracks.forEachIndexed { index, song ->
+                                    SongRow(song, state,
+                                        onPlay = {
+                                            state.playPlaylist(name, tracks, index)
+                                        },
+                                        onMenu = { onMenu(song) })
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            item(key = "yt-playlists-heading") {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Playlist YouTube Music", Modifier.weight(1f),
+                        color = white, fontSize = 18.sp,
+                        fontWeight = FontWeight.SemiBold)
+                    if (youtube.isConnected) IconButton(onClick = {
+                        scope.launch { youtube.refresh(force = true) }
+                    }) {
+                        Icon(Icons.Rounded.Refresh, "Segarkan playlist", tint = lime)
+                    }
+                }
+            }
+            if (!youtube.isConnected) {
+                item(key = "yt-connect") {
+                    TextButton(onClick = onConnectYouTube) {
+                        Text("Hubungkan akun untuk melihat playlist pribadi",
+                            color = lime, fontSize = 12.sp)
+                    }
+                }
+            }
+            if (youtube.playlists.isNotEmpty()) {
+                items(youtube.playlists, key = { "remote-${it.id}" }) { playlist ->
+                    Row(Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically) {
+                        Tactile(Modifier.weight(1f), {
+                            scope.launch { youtube.playlistTracks(playlist) }
+                        }) {
+                            Row(Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically) {
+                                Glass(Modifier.size(55.dp),
+                                    RoundedCornerShape(14.dp),
+                                    tint = state.ambientColor, opacity = .45f) {
+                                    AsyncImage(
+                                        model = playlist.artwork.takeIf { it.isNotBlank() },
+                                        contentDescription = null,
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+                                }
+                                Spacer(Modifier.width(12.dp))
+                                Column(Modifier.weight(1f)) {
+                                    Text(playlist.title, color = white,
+                                        fontSize = 13.sp, fontWeight = FontWeight.Medium,
+                                        maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                    Spacer(Modifier.height(4.dp))
+                                    Text("YouTube", color = lime, fontSize = 10.sp)
+                                }
+                            }
+                        }
+                        Icon(Icons.Rounded.ChevronRight, null,
+                            tint = mist, modifier = Modifier.size(19.dp))
+                    }
+                }
+            }
+
+            item(key = "import-yt-playlist") {
+                Column {
+                    Text("Buka playlist dari tautan YouTube",
+                        color = white, fontSize = 13.sp)
+                    Spacer(Modifier.height(8.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        OutlinedTextField(
+                            value = importUrl,
+                            onValueChange = { importUrl = it; importError = null },
+                            singleLine = true,
+                            placeholder = {
+                                Text("music.youtube.com/playlist?list=…",
+                                    fontSize = 11.sp)
+                            },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(18.dp)
+                        )
+                        Spacer(Modifier.width(9.dp))
+                        IconButton(onClick = {
+                            runCatching {
+                                youtube.playlistFromUrl(importUrl)
+                            }.onSuccess { playlist ->
+                                scope.launch {
+                                    youtube.playlistTracks(playlist)
+                                }
+                            }.onFailure {
+                                importError = it.message
+                            }
+                        }) {
+                            Icon(Icons.Rounded.ArrowForward, "Buka playlist",
+                                tint = lime, modifier = Modifier.size(23.dp))
+                        }
+                    }
+                    importError?.let {
+                        Text(it, color = Color(0xFFFFBABD), fontSize = 11.sp)
+                    }
+                }
+            }
+            youtube.selectedPlaylist?.let { playlist ->
+                item(key = "yt-current-playlist") {
+                    Column {
+                        DividerSoft()
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text(playlist.title, color = white, fontSize = 19.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                Text("YouTube · ${youtube.playlistTracks.size} lagu",
+                                    color = lime, fontSize = 11.sp)
+                            }
+                            IconButton(onClick = {
+                                state.playPlaylist(playlist.title, youtube.playlistTracks)
+                            }, enabled = !youtube.playlistLoading &&
+                                youtube.playlistTracks.isNotEmpty()) {
+                                Icon(Icons.Rounded.PlayCircle, "Putar semua",
+                                    tint = lime, modifier = Modifier.size(32.dp))
+                            }
+                            IconButton(onClick = { youtube.closePlaylist() }) {
+                                Icon(Icons.Rounded.Close, "Tutup playlist", tint = mist)
+                            }
+                        }
+                    }
+                }
+                if (youtube.playlistLoading) item(key = "yt-playlist-loading") {
+                    LinearProgressIndicator(Modifier.fillMaxWidth(), color = lime)
+                }
+                items(youtube.playlistTracks.size,
+                    key = { i -> "import-track-$i-${youtube.playlistTracks[i].key}" }) { i ->
+                    val song = youtube.playlistTracks[i]
+                    SongRow(song, state,
+                        onPlay = {
+                            state.playPlaylist(playlist.title, youtube.playlistTracks, i)
+                        },
+                        onMenu = { onMenu(song) })
+                }
+            }
+        } else if (segment == "YouTube") {
+            if (!youtube.isConnected) item(key = "yt-login") {
+                TextButton(onClick = onConnectYouTube) {
+                    Text("Hubungkan YouTube Music", color = lime)
                 }
             } else {
-                state.youtube.selectedPlaylist?.let { picked ->
-                    item(key = "yt-selected-title") {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            IconButton(onClick = { state.youtube.closePlaylist() }) {
-                                Icon(Icons.Rounded.ArrowBack, "Kembali",
-                                    tint = white)
-                            }
-                            Spacer(Modifier.width(8.dp))
-                            Text(picked.title, color = white, fontSize = 19.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                maxLines = 2, overflow = TextOverflow.Ellipsis)
-                        }
-                    }
-                    if (state.youtube.playlistTracks.isEmpty()) {
-                        item(key = "yt-list-loading") {
-                            Text("Belum ada lagu, atau playlist masih dimuat.",
-                                color = mist, fontSize = 12.sp)
-                        }
-                    } else {
-                        items(state.youtube.playlistTracks,
-                            key = { "yt-playlist-${it.key}" }) { song ->
-                            SongRow(song, state,
-                                onPlay = { onPlay(song) },
-                                onMenu = { onMenu(song) })
-                        }
-                    }
-                } ?: run {
-                    item(key = "yt-sync") {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("YouTube Music", Modifier.weight(1f),
-                                color = white, fontSize = 21.sp,
-                                fontWeight = FontWeight.SemiBold)
-                            IconButton(onClick = {
-                                playlistScope.launch {
-                                    state.youtube.refresh(force = true)
-                                }
-                            }, enabled = !state.youtube.refreshing) {
-                                if (state.youtube.refreshing)
-                                    CircularProgressIndicator(Modifier.size(20.dp),
-                                        color = lime, strokeWidth = 2.dp)
-                                else Icon(Icons.Rounded.Refresh, "Segarkan",
-                                    tint = lime)
-                            }
-                        }
-                    }
-                    item(key = "yt-status") {
-                        Text("Rekomendasi, history, dan playlist dibaca dari akun " +
-                            "YouTube Music yang terhubung. Pembaruan dilakukan berkala.",
-                            fontSize = 11.sp, color = mist, lineHeight = 17.sp)
-                    }
-                    if (state.youtube.playlists.isNotEmpty()) {
-                        item(key = "yt-playlist-heading") {
-                            SectionHeading("Playlist akun",
-                                "Daftar koleksi dari YouTube Music")
-                        }
-                        items(state.youtube.playlists, key = { "ytp-${it.id}" }) { playlist ->
-                            Tactile(Modifier.fillMaxWidth(), {
-                                playlistScope.launch {
-                                    state.youtube.playlistTracks(playlist)
-                                }
-                            }) {
-                                Row(Modifier.fillMaxWidth().padding(vertical = 6.dp),
-                                    verticalAlignment = Alignment.CenterVertically) {
-                                    Glass(Modifier.size(57.dp),
-                                        RoundedCornerShape(15.dp),
-                                        tint = state.ambientColor, opacity = .43f,
-                                        backdrop = playlist.artwork) {
-                                        AsyncImage(
-                                            model = playlist.artwork.takeIf { it.isNotBlank() },
-                                            contentDescription = null,
-                                            modifier = Modifier.fillMaxSize(),
-                                            contentScale = ContentScale.Crop
-                                        )
-                                    }
-                                    Spacer(Modifier.width(13.dp))
-                                    Text(playlist.title, Modifier.weight(1f),
-                                        color = white, fontSize = 13.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        maxLines = 2, overflow = TextOverflow.Ellipsis)
-                                    Icon(Icons.Rounded.ChevronRight, null,
-                                        tint = mist, modifier = Modifier.size(20.dp))
-                                }
-                            }
-                        }
-                    }
-                    if (state.youtube.history.isNotEmpty()) {
-                        item(key = "yt-history-heading") {
-                            SectionHeading("Riwayat YouTube Music",
-                                "Aktivitas terbaru dari akun")
-                        }
-                        items(state.youtube.history,
-                            key = { "yth-${it.key}" }) { song ->
-                            SongRow(song, state,
-                                onPlay = { onPlay(song) },
-                                onMenu = { onMenu(song) })
-                        }
-                    }
-                    if (state.youtube.playlists.isEmpty() &&
-                        state.youtube.history.isEmpty()) {
-                        item(key = "yt-no-data") {
-                            EmptyPage("Belum ada data YouTube Music",
-                                "Coba segarkan. Akun atau endpoint dapat membatasi data.")
+                item(key = "yt-sync") {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        SectionHeading("Riwayat YouTube Music",
+                            "Lagu terbaru yang diputar lewat akun YouTube")
+                        Spacer(Modifier.weight(1f))
+                        IconButton(onClick = {
+                            scope.launch { youtube.refresh(force = true) }
+                        }, enabled = !youtube.refreshing) {
+                            Icon(Icons.Rounded.Refresh, "Segarkan", tint = lime)
                         }
                     }
                 }
-            }
-        } else if (segment == "Playlist") {
-            item { Tactile(action = onCreate) { Glass(Modifier.fillMaxWidth()) { Row(Modifier.padding(15.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.Add, null, tint = lime); Spacer(Modifier.width(12.dp)); Text("Buat playlist", color = white)
-            } } } }
-            state.library.playlists.forEach { (name, tracks) ->
-                item(key = "playlist-$name") {
-                    var opened by remember { mutableStateOf(false) }
-                    Column {
-                        Tactile(Modifier.fillMaxWidth(), { opened = !opened }) {
-                            Row(Modifier.fillMaxWidth().padding(vertical = 15.dp, horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.LibraryMusic, null, tint = lime); Spacer(Modifier.width(14.dp))
-                                Column(Modifier.weight(1f)) { Text(name, color = white, fontWeight = FontWeight.Medium); Text("${tracks.size} lagu", color = mist, fontSize = 11.sp) }
-                                Icon(if (opened) Icons.Default.ExpandLess else Icons.Default.ChevronRight, null, tint = mist)
-                            }
-                        }
-                        if (opened) tracks.forEach { song -> SongRow(song, state, onPlay = { onPlay(song) }, onMenu = { onMenu(song) }) }
-                    }
+                if (youtube.history.isEmpty()) item {
+                    EmptyPage("Riwayat akun belum tersedia",
+                        "Coba segarkan. Riwayat YouTube bergantung pada akses akun.")
+                }
+                items(youtube.history.size, key = { i ->
+                    "yt-history-${i}-${youtube.history[i].key}"
+                }) { i ->
+                    val song = youtube.history[i]
+                    SongRow(song, state,
+                        onPlay = { onPlay(song) },
+                        onMenu = { onMenu(song) })
                 }
             }
-        } else if (list.isEmpty()) item { EmptyPage("Belum ada lagu", if (segment == "Disukai") "Ketuk ikon hati untuk menyimpan lagu." else "Lagu yang kamu dengarkan akan muncul di sini.") }
-        else items(list.size, key = { index -> "${segment}-${index}-${list[index].key}" }) { index ->
-            val song = list[index]
-            SongRow(song, state, onPlay = { onPlay(song) }, onMenu = { onMenu(song) })
+            youtube.status?.let { message ->
+                item(key = "yt-status") {
+                    Text(message, color = Color(0xFFFFC7C7), fontSize = 11.sp)
+                }
+            }
+        } else if (list.isEmpty()) {
+            item(key = "library-empty") {
+                EmptyPage("Belum ada lagu",
+                    if (segment == "Disukai") "Ketuk ikon hati untuk menyimpan lagu."
+                    else "Lagu yang kamu dengarkan akan muncul di sini.")
+            }
+        } else {
+            items(list.size, key = { i -> "${segment}-$i-${list[i].key}" }) { i ->
+                val song = list[i]
+                SongRow(song, state,
+                    onPlay = { onPlay(song) },
+                    onMenu = { onMenu(song) })
+            }
         }
     }
 }
