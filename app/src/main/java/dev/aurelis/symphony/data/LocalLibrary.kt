@@ -18,7 +18,8 @@ class LocalLibrary(context: Context) {
         ambientIntensity = prefs.getFloat("ambientIntensity", .58f),
         motion = prefs.getBoolean("motion", true), ambient = prefs.getBoolean("ambient", true),
         romanize = prefs.getBoolean("romanize", true),
-        lyricOffsetMs = prefs.getInt("lyricOffsetMs", 0)
+        lyricOffsetMs = prefs.getInt("lyricOffsetMs", 0),
+        checkUpdates = prefs.getBoolean("checkUpdates", true)
     )
         private set
 
@@ -63,6 +64,7 @@ class LocalLibrary(context: Context) {
             .putFloat("glassOpacity", s.glassOpacity).putFloat("ambientIntensity", s.ambientIntensity)
             .putBoolean("motion", s.motion).putBoolean("ambient", s.ambient)
             .putBoolean("romanize", s.romanize)
-            .putInt("lyricOffsetMs", s.lyricOffsetMs.coerceIn(-5000, 5000)).apply()
+            .putInt("lyricOffsetMs", s.lyricOffsetMs.coerceIn(-5000, 5000))
+            .putBoolean("checkUpdates", s.checkUpdates).apply()
     }
 }
