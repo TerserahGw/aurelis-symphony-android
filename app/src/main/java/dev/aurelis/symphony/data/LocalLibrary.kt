@@ -15,6 +15,9 @@ class LocalLibrary(context: Context) {
     var settings: AppSettings = AppSettings(
         audioMode = runCatching { AudioMode.valueOf(prefs.getString("audioMode", "AUTO") ?: "AUTO") }.getOrDefault(AudioMode.AUTO),
         glassOpacity = prefs.getFloat("glassOpacity", .68f),
+        visualStyle = runCatching {
+            VisualStyle.valueOf(prefs.getString("visualStyle", "GLASS") ?: "GLASS")
+        }.getOrDefault(VisualStyle.GLASS),
         ambientIntensity = prefs.getFloat("ambientIntensity", .58f),
         motion = prefs.getBoolean("motion", true), ambient = prefs.getBoolean("ambient", true),
         romanize = prefs.getBoolean("romanize", true),
