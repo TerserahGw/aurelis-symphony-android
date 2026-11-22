@@ -60,6 +60,60 @@ class AurelisApi(val base: String = "https://aurelis-symphony.go.altare.global")
         }
         result
     }
+    /**
+     * Explicit user opt-in only. The Aurelis backend forwards lyrics to
+     * MyMemory; that free service has quotas and may return partial results.
+     * Index alignment is preserved so translations stay with their line.
+     */
+    suspend fun translateLyrics(lyrics: Lyrics, target: String = "id"): Map<Int, String> =
+        withContext(Dispatchers.IO) {
+            require(target == "id" || target == "en") { "Unsupported translation target" }
+            val translated = mutableMapOf<Int, String>()
+            // Reuse translation text already embedded in the lyric source.
+            lyrics.lines.forEachIndexed { index, line ->
+                if (line.translation.isNotBlank()) translated[index] = line.translation
+            }
+            val pending = lyrics.lines.indices.filter { index ->
+                index !in translated && lyrics.lines[index].text.isNotBlank()
+            }
+            var failures = 0
+            for (batch in pending.chunked(16)) {
+                val body = JSONObject()
+                    .put("target", target)
+                    .put("texts", JSONArray().apply {
+                        batch.forEach { put(lyrics.lines[it].text.take(250)) }
+                    })
+                val req = Request.Builder()
+                    .url(base.trimEnd('/') + "/api/v2/translate")
+                    .post(body.toString().toRequestBody("application/json".toMediaType()))
+                    .header("Accept", "application/json")
+                    .build()
+                try {
+                    client.newCall(req).execute().use { response ->
+                        if (!response.isSuccessful) error("Translation HTTP ${response.code}")
+                        val data = JSONObject(response.body?.string() ?: "{}")
+                        val entries = data.optJSONArray("translations")
+                            ?: error("Server did not return translations")
+                        batch.forEachIndexed { localIndex, lyricIndex ->
+                            val value = entries.optString(localIndex).trim()
+                            if (value.isNotBlank()) translated[lyricIndex] = value
+                            else failures++
+                        }
+                    }
+                } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    failures += batch.size
+                }
+            }
+            if (translated.isEmpty() && failures > 0) {
+                throw IllegalStateException(
+                    "Layanan terjemahan sedang tidak tersedia atau mencapai batas kuota."
+                )
+            }
+            translated
+        }
+
     suspend fun playback(song: Song): String {
         val o = json("/api/v2/playback/${encode(song.id)}")
         val relative = o.optString("streamUrl")
