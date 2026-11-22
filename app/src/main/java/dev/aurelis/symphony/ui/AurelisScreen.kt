@@ -194,8 +194,11 @@ private fun Ambient(state: AurelisState) {
 fun AurelisScreen(state: AurelisState) {
     val context = LocalContext.current
     val updater = remember(context) { AurelisUpdater(context) }
-    LaunchedEffect(Unit) {
-        if (state.settings.checkUpdates) updater.check()
+    LaunchedEffect(state.settings.checkUpdates) {
+        while (state.settings.checkUpdates) {
+            updater.check()
+            delay(6L * 60L * 60L * 1000L)
+        }
     }
     var tab by rememberSaveable { mutableStateOf("Home") }
     var expanded by rememberSaveable { mutableStateOf(false) }
