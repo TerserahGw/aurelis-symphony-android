@@ -125,16 +125,23 @@ private fun Glass(
 ) {
     val density = LocalGlassDensity.current
     val strength = (opacity * (.46f + density * .69f)).coerceIn(.16f, .88f)
-    val edge = Brush.linearGradient(
-        listOf(white.copy(alpha = .32f), white.copy(alpha = .06f), lime.copy(alpha = .15f))
-    )
-    val fill = Brush.linearGradient(
-        listOf(
-            tint.mix(Color(0xFF0D1C20), .55f).copy(alpha = strength * .67f),
-            Color(0xFF101B1E).copy(alpha = strength * .77f),
-            tint.copy(alpha = strength * .48f)
+    // Brushes are stable between playback ticks, scroll frames, and morph frames.
+    // This avoids constructing gradient lists on each unrelated recomposition.
+    val edge = remember {
+        Brush.linearGradient(
+            listOf(white.copy(alpha = .32f), white.copy(alpha = .06f),
+                lime.copy(alpha = .15f))
         )
-    )
+    }
+    val fill = remember(tint, strength) {
+        Brush.linearGradient(
+            listOf(
+                tint.mix(Color(0xFF0D1C20), .55f).copy(alpha = strength * .67f),
+                Color(0xFF101B1E).copy(alpha = strength * .77f),
+                tint.copy(alpha = strength * .48f)
+            )
+        )
+    }
     Box(modifier.clip(shape)) {
         // Real GPU blur is limited to the artwork layer, never the text/icons above it.
         if (backdrop?.startsWith("https://") == true) {
@@ -836,12 +843,35 @@ private fun MiniPlayer(state: AurelisState, onExpand: () -> Unit) {
                     }
                     IconButton(onClick = state::next) { Icon(Icons.Default.SkipNext, "Lagu berikutnya", tint = white, modifier = Modifier.size(22.dp)) }
                 }
-                Box(Modifier.fillMaxWidth().height(2.dp).background(white.copy(alpha = .12f))) {
-                    Box(Modifier.fillMaxWidth(if (state.duration > 0) (state.progress.toFloat() / state.duration).coerceIn(0f, 1f) else 0f)
-                        .fillMaxHeight().background(Brush.horizontalGradient(listOf(lime.copy(alpha = .63f), lime))))
-                }
+                MiniPlayerProgress(state)
             }
         }
+    }
+}
+
+@Composable
+private fun MiniPlayerProgress(state: AurelisState) {
+    val reduced = LocalReducedMotion.current
+    val progressFraction by remember(state) {
+        derivedStateOf {
+            if (state.duration > 0L)
+                (state.progress.toFloat() / state.duration).coerceIn(0f, 1f)
+            else 0f
+        }
+    }
+    val fluidFraction by animateFloatAsState(
+        targetValue = progressFraction,
+        animationSpec = tween(if (reduced) 0 else 95, easing = LinearEasing),
+        label = "miniPlayerFluidProgress"
+    )
+    Box(Modifier.fillMaxWidth().height(2.dp)
+        .background(white.copy(alpha = .11f))) {
+        Box(Modifier.fillMaxWidth(fluidFraction.coerceIn(0f, 1f))
+            .fillMaxHeight().background(
+                Brush.horizontalGradient(
+                    listOf(lime.copy(alpha = .63f), lime)
+                )
+            ))
     }
 }
 
