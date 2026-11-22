@@ -274,6 +274,24 @@ class AurelisState(context: Context) {
         play(tracks[safe], preserveQueue = true)
     }
 
+    fun removeFromPlaylist(name: String, song: Song) {
+        if (!library.removeFromPlaylist(name, song)) return
+        libraryStamp++
+        if (activePlaylist == name) {
+            // The current track may keep playing, while Up Next reflects
+            // the edited playlist rather than retaining removed songs.
+            playlistTracks = playlistTracks.filterNot { it.key == song.key }
+            val playingKey = current?.key
+            playlistIndex = playlistTracks.indexOfFirst { it.key == playingKey }
+            queue = if (playlistIndex >= 0) playlistTracks.drop(playlistIndex + 1)
+                else queue.filterNot { it.key == song.key }
+            if (playlistTracks.isEmpty()) {
+                activePlaylist = null
+                playlistIndex = -1
+            }
+        }
+    }
+
     /** Jump to an item in Up Next without destroying the remaining playlist. */
     fun playFromQueue(song: Song, position: Int = queue.indexOfFirst { it.key == song.key }) {
         val idx = if (position in queue.indices) position else return
