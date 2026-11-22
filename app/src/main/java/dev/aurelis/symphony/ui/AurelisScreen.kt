@@ -208,7 +208,9 @@ fun AurelisScreen(state: AurelisState) {
     }
     var tab by rememberSaveable { mutableStateOf("Home") }
     val homeScrollState = rememberLazyListState()
-    var compactHomeDock by remember { mutableStateOf(false) }
+    val searchScrollState = rememberLazyListState()
+    val libraryScrollState = rememberLazyListState()
+    var compactDock by remember { mutableStateOf(false) }
     var expanded by rememberSaveable { mutableStateOf(false) }
     var searchExpanded by rememberSaveable { mutableStateOf(false) }
     var searchQuery by rememberSaveable { mutableStateOf("") }
@@ -226,20 +228,22 @@ fun AurelisScreen(state: AurelisState) {
         }
     }
     LaunchedEffect(state.current) { if (state.current == null) expanded = false }
-    LaunchedEffect(tab, state.current?.key, homeScrollState) {
-        if (tab != "Home" || state.current == null) {
-            compactHomeDock = false
-            return@LaunchedEffect
+    LaunchedEffect(tab, state.current?.key) {
+        compactDock = false
+        if (state.current == null) return@LaunchedEffect
+        val activeScroll = when (tab) {
+            "Search" -> searchScrollState
+            "Library" -> libraryScrollState
+            else -> homeScrollState
         }
-        snapshotFlow { homeScrollState.isScrollInProgress }
+        snapshotFlow { activeScroll.isScrollInProgress }
             .distinctUntilChanged()
             .collectLatest { scrolling ->
-                if (scrolling) {
-                    compactHomeDock = true
-                } else {
-                    // Only return after a full three seconds without scrolling.
-                    delay(3000)
-                    compactHomeDock = false
+                if (scrolling) compactDock = true
+                else {
+                    // Repeated scrolls cancel and restart the full idle interval.
+                    delay(3000L)
+                    compactDock = false
                 }
             }
     }
@@ -263,8 +267,11 @@ fun AurelisScreen(state: AurelisState) {
                         when (page) {
                             "Home" -> HomePage(state, homeScrollState,
                                 onPlay = { state.play(it) }, onMenu = { menuSong = it })
-                            "Search" -> SearchPage(state, searchQuery, onPlay = { state.play(it) }, onMenu = { menuSong = it })
-                            else -> LibraryPage(state, onPlay = { state.play(it) }, onMenu = { menuSong = it }, onCreate = { creatingPlaylist = true })
+                            "Search" -> SearchPage(state, searchQuery, searchScrollState,
+                                onPlay = { state.play(it) }, onMenu = { menuSong = it })
+                            else -> LibraryPage(state, libraryScrollState,
+                                onPlay = { state.play(it) }, onMenu = { menuSong = it },
+                                onCreate = { creatingPlaylist = true })
                         }
                     }
                 }
@@ -274,7 +281,7 @@ fun AurelisScreen(state: AurelisState) {
             Column(Modifier.align(Alignment.BottomCenter).imePadding().navigationBarsPadding().padding(horizontal = 15.dp).padding(bottom = 10.dp)) {
                 state.current?.let {
                     AnimatedVisibility(
-                        visible = !expanded && !compactHomeDock,
+                        visible = !expanded && !compactDock,
                         enter = fadeIn(tween(if (state.settings.motion) 235 else 0)) +
                             slideInVertically(tween(if (state.settings.motion) 320 else 0)) { it / 3 },
                         exit = fadeOut(tween(if (state.settings.motion) 190 else 0)) +
@@ -284,7 +291,7 @@ fun AurelisScreen(state: AurelisState) {
                     }
                 }
                 val miniGap by animateDpAsState(
-                    targetValue = if (state.current != null && !expanded && !compactHomeDock) 10.dp else 0.dp,
+                    targetValue = if (state.current != null && !expanded && !compactDock) 10.dp else 0.dp,
                     animationSpec = if (!state.settings.motion) tween(0)
                         else spring(dampingRatio = .9f, stiffness = Spring.StiffnessMediumLow),
                     label = "miniPlayerDockGap"
@@ -292,15 +299,18 @@ fun AurelisScreen(state: AurelisState) {
                 Spacer(Modifier.height(miniGap))
                 IslandDock(
                     tab = tab, expanded = searchExpanded, query = searchQuery,
-                    onTab = { tab = it; searchExpanded = false; compactHomeDock = false },
+                    onTab = { tab = it; searchExpanded = false; compactDock = false },
                     onSearchExpand = {
-                        tab = "Search"; searchExpanded = !searchExpanded; compactHomeDock = false
+                        val wasCompact = compactDock
+                        tab = "Search"
+                        searchExpanded = if (wasCompact) true else !searchExpanded
+                        compactDock = false
                     },
                     onQuery = { searchQuery = it },
                     artwork = state.current?.artwork.orEmpty(),
                     state = state,
-                    compact = compactHomeDock && tab == "Home" && !expanded && !searchExpanded,
-                    onOpenNav = { compactHomeDock = false },
+                    compact = compactDock && !expanded,
+                    onOpenNav = { compactDock = false; searchExpanded = false },
                     onExpandPlayer = { expanded = true }
                 )
             }
@@ -524,8 +534,11 @@ private fun SectionHeading(title: String, subtitle: String) {
 }
 
 @Composable
-private fun SearchPage(state: AurelisState, query: String, onPlay: (Song) -> Unit, onMenu: (Song) -> Unit) {
-    LazyColumn(contentPadding = PaddingValues(start = 21.dp, end = 21.dp, top = 18.dp, bottom = 180.dp), verticalArrangement = Arrangement.spacedBy(13.dp)) {
+private fun SearchPage(state: AurelisState, query: String,
+    scrollState: androidx.compose.foundation.lazy.LazyListState,
+    onPlay: (Song) -> Unit, onMenu: (Song) -> Unit) {
+    LazyColumn(state = scrollState,
+        contentPadding = PaddingValues(start = 21.dp, end = 21.dp, top = 18.dp, bottom = 180.dp), verticalArrangement = Arrangement.spacedBy(13.dp)) {
         item { SectionHeading("Search", if (query.isBlank()) "Mulai cari dari Island Search di bawah" else "Hasil untuk “${query.take(60)}”") }
         if (state.searching) item { LinearProgressIndicator(Modifier.fillMaxWidth(), color = lime) }
         if (query.isBlank()) item { EmptyPage("Temukan sesuatu yang baru", "Cari judul, artis, atau musik untuk didengarkan.") }
@@ -535,13 +548,16 @@ private fun SearchPage(state: AurelisState, query: String, onPlay: (Song) -> Uni
 }
 
 @Composable
-private fun LibraryPage(state: AurelisState, onPlay: (Song) -> Unit, onMenu: (Song) -> Unit, onCreate: () -> Unit) {
+private fun LibraryPage(state: AurelisState,
+    scrollState: androidx.compose.foundation.lazy.LazyListState,
+    onPlay: (Song) -> Unit, onMenu: (Song) -> Unit, onCreate: () -> Unit) {
     var segment by rememberSaveable { mutableStateOf("Disukai") }
     val libraryStamp = state.libraryStamp
     val list = remember(segment, libraryStamp) {
         when (segment) { "Disukai" -> state.library.favorites; "Riwayat" -> state.library.history; else -> emptyList() }
     }
-    LazyColumn(contentPadding = PaddingValues(start = 21.dp, end = 21.dp, top = 18.dp, bottom = 180.dp),
+    LazyColumn(state = scrollState,
+        contentPadding = PaddingValues(start = 21.dp, end = 21.dp, top = 18.dp, bottom = 180.dp),
         verticalArrangement = Arrangement.spacedBy(13.dp)) {
         item { SectionHeading("Your Library",
             if (segment == "Riwayat") "${list.size} pemutaran terakhir · termasuk lagu yang diputar ulang"
@@ -847,7 +863,7 @@ private fun IslandDock(
     val reduced = LocalReducedMotion.current
     val tabs = listOf("Home", "Search", "Library")
     val track = state.current
-    val compactNow = compact && track != null && !expanded
+    val compactNow = compact && track != null
     var hovered by remember { mutableIntStateOf(-1) }
     val smooth = if (reduced) tween<Dp>(0)
         else spring<Dp>(dampingRatio = .89f, stiffness = Spring.StiffnessMediumLow)
@@ -856,8 +872,8 @@ private fun IslandDock(
         val width = maxWidth
         val navTarget = if (expanded || compactNow) 56.dp else (width - 8.dp) * .79f
         val searchTarget = when {
-            expanded -> width - 64.dp
             compactNow -> 56.dp
+            expanded -> width - 64.dp
             else -> width - navTarget - 8.dp
         }
         val centerTarget = if (compactNow) width - 128.dp else 0.dp
@@ -881,7 +897,9 @@ private fun IslandDock(
                 if (expanded || compactNow || navWidth < 165.dp) {
                     Tactile(Modifier.fillMaxSize(), {
                         focus.clearFocus()
-                        if (expanded) onSearchExpand() else onOpenNav()
+                        if (compactNow) onOpenNav()
+                        else if (expanded) onSearchExpand()
+                        else onOpenNav()
                     }) {
                         Icon(Icons.Rounded.Menu, "Buka menu navigasi",
                             Modifier.size(22.dp).align(Alignment.Center), tint = white)
@@ -1005,7 +1023,7 @@ private fun IslandDock(
                 backdropBlur = 38.dp,
                 backdropOpacity = .67f
             ) {
-                if (expanded) {
+                if (expanded && !compactNow) {
                     Row(Modifier.fillMaxSize().padding(start = 16.dp, end = 6.dp),
                         verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Rounded.Search, null, tint = lime,
