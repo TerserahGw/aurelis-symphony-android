@@ -316,7 +316,13 @@ fun AurelisScreen(state: AurelisState) {
                                 onPlaylist = { playlist ->
                                     tab = "Library"
                                     librarySegment = "Playlist"
-                                    pageScope.launch { state.youtube.playlistTracks(playlist) }
+                                    pageScope.launch {
+                                        val tracks = state.youtube.playlistTracks(playlist)
+                                        if (tracks.isNotEmpty()) {
+                                            state.playPlaylist(playlist.title, tracks)
+                                            expanded = true
+                                        }
+                                    }
                                 })
                             "Search" -> SearchPage(state, searchQuery, searchScrollState,
                                 onPlay = { state.play(it) }, onMenu = { menuSong = it })
@@ -326,7 +332,8 @@ fun AurelisScreen(state: AurelisState) {
                                 onPlay = { state.play(it) },
                                 onMenu = { menuSong = it },
                                 onCreate = { creatingPlaylist = true },
-                                onConnectYouTube = { showYouTubeLogin = true })
+                                onConnectYouTube = { showYouTubeLogin = true },
+                                onOpenPlayer = { expanded = true })
                         }
                     }
                 }
@@ -858,7 +865,8 @@ private fun LibraryPage(
     onPlay: (Song) -> Unit,
     onMenu: (Song) -> Unit,
     onCreate: () -> Unit,
-    onConnectYouTube: () -> Unit
+    onConnectYouTube: () -> Unit,
+    onOpenPlayer: () -> Unit
 ) {
     val scope = rememberCoroutineScope()
     var importUrl by rememberSaveable { mutableStateOf("") }
@@ -924,7 +932,12 @@ private fun LibraryPage(
                     Column {
                         Row(Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically) {
-                            Tactile(Modifier.weight(1f), { opened = !opened }) {
+                            Tactile(Modifier.weight(1f), {
+                                if (tracks.isNotEmpty()) {
+                                    state.playPlaylist(name, tracks)
+                                    onOpenPlayer()
+                                } else opened = !opened
+                            }) {
                                 Row(Modifier.fillMaxWidth().padding(vertical = 14.dp),
                                     verticalAlignment = Alignment.CenterVertically) {
                                     Icon(Icons.Rounded.LibraryMusic, null,
@@ -936,17 +949,21 @@ private fun LibraryPage(
                                         Text("${tracks.size} lagu · Aurelis",
                                             color = mist, fontSize = 11.sp)
                                     }
-                                    Icon(if (opened) Icons.Rounded.ExpandLess
-                                        else Icons.Rounded.ChevronRight, null,
-                                        tint = mist)
+                                    Icon(Icons.Rounded.PlayArrow, "Putar playlist",
+                                        tint = if (tracks.isNotEmpty()) lime else mist,
+                                        modifier = Modifier.size(23.dp))
                                 }
                             }
-                            IconButton(
-                                onClick = { state.playPlaylist(name, tracks) },
-                                enabled = tracks.isNotEmpty()
-                            ) {
-                                Icon(Icons.Rounded.PlayArrow, "Putar playlist",
-                                    tint = lime, modifier = Modifier.size(25.dp))
+                            IconButton(onClick = { opened = !opened }) {
+                                AnimatedContent(opened, label = "expandLocalPlaylist",
+                                    transitionSpec = {
+                                        fadeIn(tween(170)) togetherWith fadeOut(tween(130))
+                                    }) { isOpen ->
+                                    Icon(if (isOpen) Icons.Rounded.ExpandLess
+                                        else Icons.Rounded.ExpandMore,
+                                        if (isOpen) "Sembunyikan lagu" else "Lihat lagu",
+                                        tint = mist)
+                                }
                             }
                         }
                         AnimatedVisibility(
@@ -961,6 +978,7 @@ private fun LibraryPage(
                                     SongRow(song, state,
                                         onPlay = {
                                             state.playPlaylist(name, tracks, index)
+                                            onOpenPlayer()
                                         },
                                         onMenu = { onMenu(song) },
                                         localPlaylist = name)
