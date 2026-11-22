@@ -397,14 +397,14 @@ fun AurelisScreen(state: AurelisState) {
         menuSong?.let { song -> SongMenu(state, song, onClose = { menuSong = null }) }
         if (creatingPlaylist) AlertDialog(
             onDismissRequest = { creatingPlaylist = false },
-            title = { Text("Playlist baru", fontWeight = FontWeight.SemiBold) },
-            text = { OutlinedTextField(value = playlistName, onValueChange = { playlistName = it }, label = { Text("Nama playlist") }, singleLine = true) },
-            confirmButton = { TextButton(onClick = { state.addPlaylist(playlistName); playlistName = ""; creatingPlaylist = false }) { Text("Buat") } },
-            dismissButton = { TextButton(onClick = { creatingPlaylist = false }) { Text("Batal") } }
+            title = { Text(uiText("Playlist baru"), fontWeight = FontWeight.SemiBold) },
+            text = { OutlinedTextField(value = playlistName, onValueChange = { playlistName = it }, label = { Text(uiText("Nama playlist")) }, singleLine = true) },
+            confirmButton = { TextButton(onClick = { state.addPlaylist(playlistName); playlistName = ""; creatingPlaylist = false }) { Text(uiText("Buat")) } },
+            dismissButton = { TextButton(onClick = { creatingPlaylist = false }) { Text(uiText("Batal")) } }
         )
         state.error?.let { e -> AlertDialog(onDismissRequest = state::dismissError,
-            title = { Text("Aurelis") }, text = { Text(e) },
-            confirmButton = { TextButton(onClick = state::dismissError) { Text("Tutup") } }) }
+            title = { Text(uiText("Aurelis")) }, text = { Text(e) },
+            confirmButton = { TextButton(onClick = state::dismissError) { Text(uiText("Tutup")) } }) }
     }
     }
 }
@@ -436,7 +436,7 @@ private fun UpdateAnnouncement(updater: AurelisUpdater, modifier: Modifier = Mod
                         }
                         Spacer(Modifier.width(13.dp))
                         Column(Modifier.weight(1f)) {
-                            Text("Versi baru tersedia", color = white,
+                            Text(uiText("Versi baru tersedia"), color = white,
                                 fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
                             Spacer(Modifier.height(3.dp))
                             Text(release.tag, color = lime, fontSize = 12.sp)
@@ -447,7 +447,7 @@ private fun UpdateAnnouncement(updater: AurelisUpdater, modifier: Modifier = Mod
                         }
                     }
                     Spacer(Modifier.height(12.dp))
-                    Text("Unduh dari GitHub dan pasang dengan izin Android.",
+                    Text(uiText("Unduh dari GitHub dan pasang dengan izin Android."),
                         color = mist, fontSize = 12.sp, lineHeight = 18.sp)
                     if (updater.downloading || updater.downloaded) {
                         Spacer(Modifier.height(16.dp))
@@ -472,7 +472,7 @@ private fun UpdateAnnouncement(updater: AurelisUpdater, modifier: Modifier = Mod
                         Tactile(Modifier.weight(1f), { updater.dismiss() }) {
                             Glass(Modifier.fillMaxWidth().height(44.dp),
                                 RoundedCornerShape(19.dp), opacity = .48f) {
-                                Text("Nanti", Modifier.align(Alignment.Center),
+                                Text(uiText("Nanti"), Modifier.align(Alignment.Center),
                                     color = mist, fontSize = 13.sp)
                             }
                         }
@@ -514,7 +514,7 @@ private fun Header(tab: String, onSettings: () -> Unit, onLibrary: () -> Unit) {
         Text("✦", fontSize = 27.sp, color = lime)
         Spacer(Modifier.width(11.dp))
         Column {
-            Text("Aurelis", color = white, fontSize = 22.sp, fontWeight = FontWeight.SemiBold, letterSpacing = -.6.sp)
+            Text(uiText("Aurelis"), color = white, fontSize = 22.sp, fontWeight = FontWeight.SemiBold, letterSpacing = -.6.sp)
             Text("SYMPHONY", color = mist, letterSpacing = 2.3.sp, fontSize = 9.sp)
         }
         Spacer(Modifier.weight(1f))
@@ -583,14 +583,14 @@ private fun HomePage(
             Column {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text("AURELIS SYMPHONY", color = lime.copy(alpha = .81f),
+                        Text(uiText("AURELIS SYMPHONY"), color = lime.copy(alpha = .81f),
                             fontSize = 10.sp, letterSpacing = 1.9.sp,
                             fontWeight = FontWeight.SemiBold)
                         Spacer(Modifier.height(5.dp))
-                        Text("Musik untuk harimu.", color = white, fontSize = 30.sp,
+                        Text(uiText("Musik untuk harimu."), color = white, fontSize = 30.sp,
                             letterSpacing = (-.9).sp, fontWeight = FontWeight.SemiBold)
                         Spacer(Modifier.height(4.dp))
-                        Text("Temukan lagu, suasana, dan rekomendasi favorit.",
+                        Text(uiText("Temukan lagu, suasana, dan rekomendasi favorit."),
                             color = mist, fontSize = 12.sp)
                     }
                     if (state.youtube.isConnected) {
@@ -611,7 +611,7 @@ private fun HomePage(
                                 tint = if (filter == mood) state.ambientColor else groove,
                                 opacity = if (filter == mood) .74f else .38f
                             ) {
-                                Text(filter,
+                                Text(uiText(filter),
                                     Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
                                     fontSize = 12.sp,
                                     color = if (filter == mood) lime else mist,
@@ -642,10 +642,10 @@ private fun HomePage(
                             Modifier.size(24.dp), tint = lime)
                         Spacer(Modifier.width(13.dp))
                         Column(Modifier.weight(1f)) {
-                            Text("Hubungkan YouTube Music", color = white,
+                            Text(uiText("Hubungkan YouTube Music"), color = white,
                                 fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                             Spacer(Modifier.height(3.dp))
-                            Text("Rekomendasi, history, dan playlist dari akunmu",
+                            Text(uiText("Rekomendasi, history, dan playlist dari akunmu"),
                                 color = mist, fontSize = 10.sp)
                         }
                         Icon(Icons.Rounded.ChevronRight, null,
@@ -694,8 +694,7 @@ private fun HomePage(
                 )
             }
             item(key = "tracks-heading") {
-                SectionHeading("Lagu yang mungkin kamu suka",
-                    "Jelajahi dan masukkan ke antrean")
+                SectionHeading(uiText("Lagu yang mungkin kamu suka"), uiText("Jelajahi dan masukkan ke antrean"))
             }
             items(selectedSongs.take(12), key = { "home-song-${it.key}" }) { song ->
                 SongRow(song, state, onPlay = { onPlay(song) },
@@ -706,8 +705,7 @@ private fun HomePage(
         if (state.youtube.playlists.isNotEmpty()) {
             item(key = "yt-playlists") {
                 Column {
-                    SectionHeading("Playlist YouTube Music",
-                        "Koleksi tersinkron dari akun yang terhubung")
+                    SectionHeading(uiText("Playlist YouTube Music"), "Koleksi tersinkron dari akun yang terhubung")
                     Spacer(Modifier.height(11.dp))
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         items(state.youtube.playlists, key = { it.id }) { playlist ->
@@ -747,8 +745,7 @@ private fun HomePage(
         if (!state.loadingHome && state.home.isEmpty() &&
             state.youtube.shelves.isEmpty() && state.originals.isEmpty())
             item(key = "empty-home") {
-                EmptyPage("Belum ada musik",
-                    "Periksa internet atau hubungkan akun YouTube Music.")
+                EmptyPage(uiText("Belum ada musik"), "Periksa internet atau hubungkan akun YouTube Music.")
             }
     }
 }
@@ -816,14 +813,14 @@ private fun FeaturedSong(song: Song, state: AurelisState, onPlay: () -> Unit) {
                 contentScale = ContentScale.Crop)
             Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(listOf(Color(0xFF0F1A1B).copy(alpha = .94f), Color(0xFF0F1A1B).copy(alpha = .35f), Color.Transparent))))
             Column(Modifier.align(Alignment.BottomStart).padding(23.dp).fillMaxWidth(.75f)) {
-                Text("ON THE RADAR", color = lime, fontSize = 10.sp, letterSpacing = 1.7.sp)
+                Text(uiText("ON THE RADAR"), color = lime, fontSize = 10.sp, letterSpacing = 1.7.sp)
                 Spacer(Modifier.height(8.dp))
                 Text(song.title, color = white, fontSize = 23.sp, fontWeight = FontWeight.SemiBold, maxLines = 2, lineHeight = 27.sp, overflow = TextOverflow.Ellipsis)
                 Text(song.artist, color = mist, fontSize = 13.sp, maxLines = 1)
                 Spacer(Modifier.height(13.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.PlayArrow, null, tint = lime, modifier = Modifier.size(20.dp))
-                    Spacer(Modifier.width(5.dp)); Text("Putar sekarang", fontSize = 12.sp, color = white, fontWeight = FontWeight.Medium)
+                    Spacer(Modifier.width(5.dp)); Text(uiText("Putar sekarang"), fontSize = 12.sp, color = white, fontWeight = FontWeight.Medium)
                 }
             }
         }
@@ -844,7 +841,7 @@ private fun SearchPage(state: AurelisState, query: String,
     onPlay: (Song) -> Unit, onMenu: (Song) -> Unit) {
     LazyColumn(state = scrollState,
         contentPadding = PaddingValues(start = 21.dp, end = 21.dp, top = 18.dp, bottom = 180.dp), verticalArrangement = Arrangement.spacedBy(13.dp)) {
-        item { SectionHeading("Search", if (query.isBlank()) "Mulai cari dari Island Search di bawah" else "Hasil untuk “${query.take(60)}”") }
+        item { SectionHeading(uiText("Search"), if (query.isBlank()) "Mulai cari dari Island Search di bawah" else "Hasil untuk “${query.take(60)}”") }
         if (state.searching) item { LinearProgressIndicator(Modifier.fillMaxWidth(), color = lime) }
         if (query.isBlank()) item { EmptyPage("Temukan sesuatu yang baru", "Cari judul, artis, atau musik untuk didengarkan.") }
         else if (!state.searching && state.results.isEmpty()) item { EmptyPage("Belum ada hasil", "Coba kata kunci yang berbeda.") }
@@ -883,7 +880,7 @@ private fun LibraryPage(
         verticalArrangement = Arrangement.spacedBy(13.dp)
     ) {
         item(key = "library-head") {
-            SectionHeading("Your Library",
+            SectionHeading(uiText("Your Library"),
                 if (segment == "Riwayat")
                     "${list.size} pemutaran terakhir"
                 else "Playlist, lagu disukai, dan riwayat musikmu")
@@ -915,7 +912,7 @@ private fun LibraryPage(
                             verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Rounded.Add, null, tint = lime)
                             Spacer(Modifier.width(12.dp))
-                            Text("Buat playlist", color = white)
+                            Text(uiText("Buat playlist"), color = white)
                         }
                     }
                 }
@@ -975,7 +972,7 @@ private fun LibraryPage(
 
             item(key = "yt-playlists-heading") {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Playlist YouTube Music", Modifier.weight(1f),
+                    Text(uiText("Playlist YouTube Music"), Modifier.weight(1f),
                         color = white, fontSize = 18.sp,
                         fontWeight = FontWeight.SemiBold)
                     if (youtube.isConnected) IconButton(onClick = {
@@ -988,7 +985,7 @@ private fun LibraryPage(
             if (!youtube.isConnected) {
                 item(key = "yt-connect") {
                     TextButton(onClick = onConnectYouTube) {
-                        Text("Hubungkan akun untuk melihat playlist pribadi",
+                        Text(uiText("Hubungkan akun untuk melihat playlist pribadi"),
                             color = lime, fontSize = 12.sp)
                     }
                 }
@@ -1018,7 +1015,7 @@ private fun LibraryPage(
                                         fontSize = 13.sp, fontWeight = FontWeight.Medium,
                                         maxLines = 2, overflow = TextOverflow.Ellipsis)
                                     Spacer(Modifier.height(4.dp))
-                                    Text("YouTube", color = lime, fontSize = 10.sp)
+                                    Text(uiText("YouTube"), color = lime, fontSize = 10.sp)
                                 }
                             }
                         }
@@ -1030,7 +1027,7 @@ private fun LibraryPage(
 
             item(key = "import-yt-playlist") {
                 Column {
-                    Text("Buka playlist dari tautan YouTube",
+                    Text(uiText("Buka playlist dari tautan YouTube"),
                         color = white, fontSize = 13.sp)
                     Spacer(Modifier.height(8.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1107,13 +1104,12 @@ private fun LibraryPage(
         } else if (segment == "YouTube") {
             if (!youtube.isConnected) item(key = "yt-login") {
                 TextButton(onClick = onConnectYouTube) {
-                    Text("Hubungkan YouTube Music", color = lime)
+                    Text(uiText("Hubungkan YouTube Music"), color = lime)
                 }
             } else {
                 item(key = "yt-sync") {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        SectionHeading("Riwayat YouTube Music",
-                            "Lagu terbaru yang diputar lewat akun YouTube")
+                        SectionHeading(uiText("Riwayat YouTube Music"), uiText("Lagu terbaru yang diputar lewat akun YouTube"))
                         Spacer(Modifier.weight(1f))
                         IconButton(onClick = {
                             scope.launch { youtube.refresh(force = true) }
@@ -1142,7 +1138,7 @@ private fun LibraryPage(
             }
         } else if (list.isEmpty()) {
             item(key = "library-empty") {
-                EmptyPage("Belum ada lagu",
+                EmptyPage(uiText("Belum ada lagu"),
                     if (segment == "Disukai") "Ketuk ikon hati untuk menyimpan lagu."
                     else "Lagu yang kamu dengarkan akan muncul di sini.")
             }
@@ -1322,7 +1318,7 @@ private fun InlineGlassSongMenu(
                 if (lyricOffset) {
                     HorizontalDivider(Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
                         color = white.copy(alpha = .15f))
-                    Text("OFFSET LIRIK", Modifier.padding(start = 13.dp, bottom = 3.dp),
+                    Text(uiText("OFFSET LIRIK"), Modifier.padding(start = 13.dp, bottom = 3.dp),
                         color = mist, fontSize = 10.sp, letterSpacing = 1.3.sp)
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceEvenly) {
@@ -1344,7 +1340,7 @@ private fun InlineGlassSongMenu(
                             Icon(Icons.Rounded.Add, "Majukan lirik", tint = white)
                         }
                     }
-                    Text("Tekan waktu untuk reset", Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                    Text(uiText("Tekan waktu untuk reset"), Modifier.fillMaxWidth().padding(bottom = 8.dp),
                         color = mist.copy(alpha = .7f), fontSize = 10.sp,
                         textAlign = TextAlign.Center)
                 }
@@ -1540,7 +1536,7 @@ private fun IslandDock(
                                         Icon(icon, name, Modifier.size(19.dp).offset(y = 2.dp),
                                             tint = if (selected == index) white else mist)
                                         Spacer(Modifier.height(3.dp))
-                                        Text(name, fontSize = 10.sp,
+                                        Text(uiText(name), fontSize = 10.sp,
                                             color = if (selected == index) white else mist)
                                     }
                                 }
@@ -1623,7 +1619,7 @@ private fun IslandDock(
                             decorationBox = { inner ->
                                 Box {
                                     if (query.isEmpty())
-                                        Text("Lagu, artis, album…",
+                                        Text(uiText("Lagu, artis, album…"),
                                             color = mist, fontSize = 13.sp)
                                     inner()
                                 }
@@ -1720,7 +1716,7 @@ private fun FullPlayer(state: AurelisState, onClose: () -> Unit, onQueue: () -> 
                 CircleAction(Icons.Rounded.KeyboardArrowDown, "Tutup pemutar", onClose)
                 Spacer(Modifier.weight(1f))
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("NOW PLAYING", color = white.copy(alpha = .54f),
+                    Text(uiText("NOW PLAYING"), color = white.copy(alpha = .54f),
                         fontSize = 9.sp, letterSpacing = 2.2.sp)
                     Text("Aurelis Symphony", color = white, fontSize = 12.sp,
                         fontWeight = FontWeight.SemiBold)
@@ -1841,7 +1837,7 @@ private fun FullPlayer(state: AurelisState, onClose: () -> Unit, onQueue: () -> 
                     else -> {
                         Column(Modifier.fillMaxSize().padding(horizontal = 24.dp)) {
                             Spacer(Modifier.height(13.dp))
-                            Text("Up Next", color = white, fontSize = 27.sp,
+                            Text(uiText("Up Next"), color = white, fontSize = 27.sp,
                                 fontWeight = FontWeight.SemiBold)
                             Spacer(Modifier.height(4.dp))
                             Text(
@@ -1854,7 +1850,7 @@ private fun FullPlayer(state: AurelisState, onClose: () -> Unit, onQueue: () -> 
                                 Artwork(song, 49.dp, 12.dp)
                                 Spacer(Modifier.width(11.dp))
                                 Column {
-                                    Text("Sedang diputar", color = lime, fontSize = 10.sp)
+                                    Text(uiText("Sedang diputar"), color = lime, fontSize = 10.sp)
                                     Text(song.title, color = white, fontSize = 13.sp,
                                         maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 }
@@ -1946,7 +1942,7 @@ private fun PlayerModeIsland(selected: String, onSelect: (String) -> Unit,
                             Icon(icons[i], label, Modifier.size(18.dp),
                                 tint = if (i == highlight) white else mist)
                             Spacer(Modifier.width(5.dp))
-                            Text(label, fontSize = 11.sp,
+                            Text(uiText(label), fontSize = 11.sp,
                                 fontWeight = if (i == highlight) FontWeight.SemiBold else FontWeight.Medium,
                                 color = if (i == highlight) white else mist)
                         }
@@ -1983,10 +1979,10 @@ private fun LyricContent(
                 Icon(Icons.Rounded.GraphicEq, null, tint = lime.copy(alpha = .7f),
                     modifier = Modifier.size(30.dp))
                 Spacer(Modifier.height(13.dp))
-                Text("Lirik belum tersedia", color = white,
+                Text(uiText("Lirik belum tersedia"), color = white,
                     fontWeight = FontWeight.Medium, fontSize = 16.sp)
                 Spacer(Modifier.height(8.dp))
-                Text("Lirik akan mengikuti musik jika sumber menyediakan waktu sinkronisasi.",
+                Text(uiText("Lirik akan mengikuti musik jika sumber menyediakan waktu sinkronisasi."),
                     color = mist, fontSize = 12.sp, textAlign = TextAlign.Center,
                     lineHeight = 18.sp)
             }
@@ -2275,10 +2271,10 @@ private fun SettingsSheet(
                 Spacer(Modifier.height(8.dp))
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text("PREFERENSI", fontSize = 9.sp, letterSpacing = 2.sp,
+                        Text(uiText("PREFERENSI"), fontSize = 9.sp, letterSpacing = 2.sp,
                             color = lime.copy(alpha = .80f))
                         Spacer(Modifier.height(6.dp))
-                        Text("Pengaturan", color = white,
+                        Text(uiText("Pengaturan"), color = white,
                             fontSize = 29.sp, fontWeight = FontWeight.SemiBold,
                             letterSpacing = (-.8).sp)
                     }
@@ -2290,7 +2286,7 @@ private fun SettingsSheet(
                     }
                 }
                 Spacer(Modifier.height(11.dp))
-                Text("Ruang untuk musik, cahaya, dan gerakan.", color = mist, fontSize = 12.sp)
+                Text(uiText("Ruang untuk musik, cahaya, dan gerakan."), color = mist, fontSize = 12.sp)
                 Spacer(Modifier.height(22.dp))
 
                 Glass(Modifier.fillMaxWidth().height(94.dp), RoundedCornerShape(23.dp),
@@ -2306,18 +2302,18 @@ private fun SettingsSheet(
                         }
                         Spacer(Modifier.width(15.dp))
                         Column {
-                            Text("Glass Ambient", color = white,
+                            Text(uiText("Glass Ambient"), color = white,
                                 fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
                             Spacer(Modifier.height(5.dp))
-                            Text("Warna dan cahaya mengikuti artwork",
+                            Text(uiText("Warna dan cahaya mengikuti artwork"),
                                 color = mist, fontSize = 11.sp, lineHeight = 16.sp)
                         }
                     }
                 }
 
                 Spacer(Modifier.height(24.dp))
-                SettingsCategory("SUASANA", "Tampilan")
-                Text("Gaya visual", color = white, fontSize = 14.sp,
+                SettingsCategory(uiText("SUASANA"), uiText("Tampilan"))
+                Text(uiText("Gaya visual"), color = white, fontSize = 14.sp,
                     fontWeight = FontWeight.Medium)
                 Spacer(Modifier.height(9.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -2350,25 +2346,23 @@ private fun SettingsSheet(
                     else "Glass Ambient menggunakan lapisan frosted artwork.",
                     color = mist, fontSize = 11.sp)
                 Spacer(Modifier.height(12.dp))
-                SettingsSwitch("Ambient dari artwork",
-                    "Cahaya di belakang konten mengikuti musik",
+                SettingsSwitch(uiText("Ambient dari artwork"), uiText("Cahaya di belakang konten mengikuti musik"),
                     s.ambient, { state.update(s.copy(ambient = it)) })
-                SettingsSlider("Kekuatan cahaya", "Sesuaikan bloom dan atmosfer",
+                SettingsSlider(uiText("Kekuatan cahaya"), uiText("Sesuaikan bloom dan atmosfer"),
                     s.ambientIntensity, enabled = s.ambient,
                     onChange = { state.update(s.copy(ambientIntensity = it)) })
-                SettingsSlider("Transparansi glass", "Keseimbangan visual dan keterbacaan",
+                SettingsSlider(uiText("Transparansi glass"), uiText("Keseimbangan visual dan keterbacaan"),
                     s.glassOpacity,
                     enabled = s.visualStyle == VisualStyle.GLASS,
                     onChange = { state.update(s.copy(glassOpacity = it)) })
 
                 DividerSoft()
-                SettingsCategory("INTERAKSI", "Animasi")
-                SettingsSwitch("Motion & morph",
-                    "Transisi spring pada popup, island, dan pemutar",
+                SettingsCategory(uiText("INTERAKSI"), uiText("Animasi"))
+                SettingsSwitch(uiText("Motion & morph"), uiText("Transisi spring pada popup, island, dan pemutar"),
                     s.motion, { state.update(s.copy(motion = it)) })
 
                 DividerSoft()
-                SettingsCategory("PEMUTAR", "Sumber musik")
+                SettingsCategory(uiText("PEMUTAR"), uiText("Sumber musik"))
                 Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                     listOf(AudioMode.AUTO to "Auto", AudioMode.NEWPIPE to "NewPipe",
                         AudioMode.AURELIS to "Server").forEach { (mode, label) ->
@@ -2376,7 +2370,7 @@ private fun SettingsSheet(
                             Glass(tint = if (s.audioMode == mode) state.ambientColor
                                 else groove, opacity = if (s.audioMode == mode) .88f else .45f,
                                 shape = RoundedCornerShape(19.dp)) {
-                                Text(label, Modifier.padding(horizontal = 18.dp, vertical = 12.dp),
+                                Text(uiText(label), Modifier.padding(horizontal = 18.dp, vertical = 12.dp),
                                     color = if (s.audioMode == mode) white else mist,
                                     fontSize = 12.sp,
                                     fontWeight = if (s.audioMode == mode)
@@ -2386,11 +2380,11 @@ private fun SettingsSheet(
                     }
                 }
                 Spacer(Modifier.height(10.dp))
-                Text("Auto mencoba NewPipe, lalu server jika sumber gagal.",
+                Text(uiText("Auto mencoba NewPipe, lalu server jika sumber gagal."),
                     color = mist, fontSize = 11.sp, lineHeight = 17.sp)
 
                 DividerSoft()
-                SettingsCategory("AKUN", "YouTube Music")
+                SettingsCategory(uiText("AKUN"), "YouTube Music")
                 Text(if (state.youtube.isConnected)
                     "Terhubung. Rekomendasi, riwayat, dan playlist disegarkan saat aplikasi aktif."
                     else "Hubungkan akun agar Aurelis dapat membaca rekomendasi, riwayat, dan playlist YouTube Music.",
@@ -2423,7 +2417,7 @@ private fun SettingsSheet(
                         Icon(Icons.Rounded.Refresh, null, tint = lime,
                             modifier = Modifier.size(19.dp))
                         Spacer(Modifier.width(8.dp))
-                        Text("Segarkan dari YouTube Music", color = lime, fontSize = 12.sp)
+                        Text(uiText("Segarkan dari YouTube Music"), color = lime, fontSize = 12.sp)
                     }
                 }
                 state.youtube.status?.let {
@@ -2467,10 +2461,10 @@ private fun SettingsSheet(
                 Row(Modifier.fillMaxWidth().padding(vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text("Offset lirik", color = white, fontSize = 14.sp,
+                        Text(uiText("Offset lirik"), color = white, fontSize = 14.sp,
                             fontWeight = FontWeight.Medium)
                         Spacer(Modifier.height(5.dp))
-                        Text("Kalibrasi sinkronisasi karaoke",
+                        Text(uiText("Kalibrasi sinkronisasi karaoke"),
                             color = mist, fontSize = 11.sp)
                     }
                     IconButton(onClick = {
@@ -2486,9 +2480,8 @@ private fun SettingsSheet(
                 }
 
                 DividerSoft()
-                SettingsCategory("AURELIS", "Pembaruan")
-                SettingsSwitch("Periksa versi baru",
-                    "Cek GitHub Releases saat aplikasi dibuka",
+                SettingsCategory("AURELIS", uiText("Pembaruan"))
+                SettingsSwitch(uiText("Periksa versi baru"), uiText("Cek GitHub Releases saat aplikasi dibuka"),
                     s.checkUpdates, { state.update(s.copy(checkUpdates = it)) })
                 Tactile(Modifier.fillMaxWidth(), { updater.check(manual = true) }) {
                     Glass(Modifier.fillMaxWidth().height(56.dp),
@@ -2565,7 +2558,7 @@ private fun SettingsCategory(overline: String, title: String) {
 private fun SettingsSwitch(title: String, desc: String, checked: Boolean, onChange: (Boolean) -> Unit) {
     Row(Modifier.fillMaxWidth().padding(vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
-            Text(title, color = white, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+            Text(uiText(title), color = white, fontSize = 14.sp, fontWeight = FontWeight.Medium)
             Spacer(Modifier.height(4.dp)); Text(desc, color = mist, fontSize = 11.sp, lineHeight = 17.sp)
         }
         Switch(checked = checked, onCheckedChange = onChange,
@@ -2593,11 +2586,11 @@ private fun SettingsSlider(title: String, desc: String, value: Float, enabled: B
 private fun QueueSheet(state: AurelisState, onClose: () -> Unit) {
     ModalBottomSheet(onDismissRequest = onClose, containerColor = Color(0xFF111C1B), shape = RoundedCornerShape(topStart = 30.dp, topEnd = 30.dp)) {
         Column(Modifier.fillMaxWidth().fillMaxHeight(.68f).padding(horizontal = 21.dp)) {
-            Text("Up Next", color = white, fontSize = 24.sp, fontWeight = FontWeight.SemiBold)
+            Text(uiText("Up Next"), color = white, fontSize = 24.sp, fontWeight = FontWeight.SemiBold)
             Text(state.activePlaylist?.let { "Playlist · $it" }
                 ?: "Antrean berikutnya", color = mist, fontSize = 12.sp)
             Spacer(Modifier.height(22.dp))
-            if (state.queue.isEmpty()) EmptyPage("Antrean kosong", "Pemutar akan mencari rekomendasi setelah lagu selesai.")
+            if (state.queue.isEmpty()) EmptyPage(uiText("Antrean kosong"), "Pemutar akan mencari rekomendasi setelah lagu selesai.")
             else LazyColumn(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 items(state.queue.size, key = { i -> "queued-$i-${state.queue[i].key}" }) { i ->
                     val song = state.queue[i]
@@ -2633,7 +2626,7 @@ private fun SongMenu(state: AurelisState, song: Song, onClose: () -> Unit) {
             MenuLine(Icons.Default.QueueMusic, "Tambahkan ke antrean") { state.enqueue(song); onClose() }
             if (state.library.playlists.isNotEmpty()) {
                 DividerSoft()
-                Text("SIMPAN KE PLAYLIST", color = mist, fontSize = 10.sp, letterSpacing = 1.7.sp)
+                Text(uiText("SIMPAN KE PLAYLIST"), color = mist, fontSize = 10.sp, letterSpacing = 1.7.sp)
                 Spacer(Modifier.height(6.dp))
                 state.library.playlists.keys.forEach { name ->
                     MenuLine(Icons.Default.PlaylistAdd, name) { state.addToPlaylist(name, song); onClose() }
