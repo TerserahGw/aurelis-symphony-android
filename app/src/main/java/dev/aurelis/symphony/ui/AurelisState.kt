@@ -34,6 +34,12 @@ class AurelisState(context: Context) {
     private var playJob: Job? = null
     private var lyricJob: Job? = null
     private var searchJob: Job? = null
+    private var searchRevision = 0L
+    private var recommendationJob: Job? = null
+    private var nextJob: Job? = null
+    private var recommendationRevision = 0L
+    private val skippedRecommendations = mutableSetOf<String>()
+    private val queueTargetSize = 4
     private var lastResolveUsedNewPipe = false
     private var triedFallbackFor: String? = null
 
@@ -128,22 +134,56 @@ class AurelisState(context: Context) {
             loadingHome = false
         }
     }
-    fun search(q: String) {
+    /**
+     * Cancel right away on each keystroke, not only after debounce.
+     * Kotlin CancellationException is a control-flow signal, not a search error.
+     */
+    fun cancelSearch() {
+        searchRevision++
         searchJob?.cancel()
-        if (q.isBlank()) { results = emptyList(); searching = false; return }
+        searchJob = null
+        results = emptyList()
+        searching = false
+    }
+
+    fun search(q: String) {
+        searchRevision++
+        val revision = searchRevision
+        searchJob?.cancel()
+        if (q.isBlank()) {
+            searching = false
+            results = emptyList()
+            return
+        }
         searchJob = scope.launch {
             searching = true
-            results = runCatching { api.search(q.take(160)) }.getOrElse {
-                error = "Pencarian gagal: ${it.message}"
-                emptyList()
+            try {
+                val found = api.search(q.trim().take(160))
+                if (revision == searchRevision) results = found
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failure: Exception) {
+                if (revision == searchRevision) {
+                    results = emptyList()
+                    error = "Pencarian gagal: ${failure.message ?: "koneksi bermasalah"}"
+                }
+            } finally {
+                if (revision == searchRevision) searching = false
             }
-            searching = false
         }
     }
-    fun play(song: Song, addHistory: Boolean = true) {
+    fun play(song: Song, addHistory: Boolean = true, preserveQueue: Boolean = false) {
+        recommendationJob?.cancel()
+        nextJob?.cancel()
+        recommendationRevision++
+        if (!preserveQueue) {
+            queue = emptyList()
+            skippedRecommendations.clear()
+        }
         playJob?.cancel()
         playJob = scope.launch {
             current = song; preparing = true; progress = 0; lyrics = Lyrics("", emptyList()); romanized = emptyMap()
+            replenishQueue(song)
             error = null; triedFallbackFor = null
             if (addHistory) { library.addHistory(song); libraryStamp++ }
             refreshAmbient(song)
@@ -211,20 +251,92 @@ class AurelisState(context: Context) {
         controller?.let { if (it.isPlaying) it.pause() else it.play() }
     }
     fun seek(fraction: Float) { controller?.let { if (duration > 0) it.seekTo((duration * fraction.coerceIn(0f, 1f)).toLong()) } }
-    fun enqueue(song: Song) { queue = (queue + song).distinctBy { it.key } }
-    fun removeQueue(song: Song) { queue = queue.filterNot { it.key == song.key } }
-    fun next() {
-        val song = current ?: return
-        val next = queue.firstOrNull()
-        if (next != null) { queue = queue.drop(1); play(next); return }
-        scope.launch {
-            val picks = runCatching { api.recommendations(song) }.getOrDefault(emptyList())
-                .filter { it.key != song.key }.distinctBy { it.key }
-            if (picks.isEmpty()) { controller?.pause(); return@launch }
-            queue = picks.drop(1).take(4)
-            play(picks.first())
+    private fun makeRecommendationPool(seed: Song, remotelyRecommended: List<Song>): List<Song> {
+        // The server ranks candidates first; local signals improve relevance and
+        // diversify them. Use catalog/history fallback if the backend is offline.
+        return remotelyRecommended +
+            home.take(30) + originals.take(20) +
+            library.favorites.take(40) + library.history.take(100)
+    }
+
+    private fun rankQueue(seed: Song, remote: List<Song>, want: Int): List<Song> {
+        val excluded = (queue.map { it.key } +
+            skippedRecommendations + listOfNotNull(current?.key)).toSet()
+        return RecommendationRanker.pick(
+            seed = seed,
+            incoming = makeRecommendationPool(seed, remote),
+            favorites = library.favorites,
+            history = library.history,
+            excluded = excluded,
+            maxCount = want
+        )
+    }
+
+    private fun replenishQueue(seed: Song) {
+        if (queue.size >= queueTargetSize) return
+        recommendationJob?.cancel()
+        val revision = ++recommendationRevision
+        recommendationJob = scope.launch {
+            val candidates = try {
+                api.recommendations(seed)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                emptyList()
+            }
+            if (revision != recommendationRevision || current?.key != seed.key) return@launch
+            val needed = (queueTargetSize - queue.size).coerceAtLeast(0)
+            if (needed == 0) return@launch
+            val additions = rankQueue(seed, candidates, needed)
+            if (additions.isNotEmpty()) {
+                queue = (queue + additions).distinctBy { it.key }.take(10)
+            }
         }
     }
+
+    fun enqueue(song: Song) {
+        if (song.key != current?.key && queue.none { it.key == song.key }) {
+            skippedRecommendations.remove(song.key)
+            queue = (queue + song).take(20)
+        }
+    }
+
+    fun removeQueue(song: Song) {
+        skippedRecommendations.add(song.key)
+        queue = queue.filterNot { it.key == song.key }
+        current?.let(::replenishQueue)
+    }
+
+    fun next() {
+        val seed = current ?: return
+        nextJob?.cancel()
+        val ready = queue.firstOrNull()
+        if (ready != null) {
+            queue = queue.drop(1)
+            play(ready, preserveQueue = true)
+            return
+        }
+        // If the user presses Next before prefetch returns, fetch once and
+        // fall back gracefully instead of making an unrelated song choice.
+        nextJob = scope.launch {
+            val remote = try {
+                api.recommendations(seed)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                emptyList()
+            }
+            if (current?.key != seed.key) return@launch
+            val picked = queue.firstOrNull() ?: rankQueue(seed, remote, 1).firstOrNull()
+            if (picked == null) {
+                controller?.pause()
+                return@launch
+            }
+            queue = queue.filterNot { it.key == picked.key }
+            play(picked, preserveQueue = true)
+        }
+    }
+
     fun previous() {
         if (progress > 3500) { controller?.seekTo(0); return }
         val prev = library.history.firstOrNull { it.key != current?.key }
@@ -241,7 +353,8 @@ class AurelisState(context: Context) {
         }
     }
     fun close() {
-        playJob?.cancel(); lyricJob?.cancel(); searchJob?.cancel(); scope.cancel()
+        playJob?.cancel(); lyricJob?.cancel(); searchJob?.cancel()
+        recommendationJob?.cancel(); nextJob?.cancel(); scope.cancel()
         if (controllerFuture.isDone) runCatching { MediaController.releaseFuture(controllerFuture) }
     }
 }
