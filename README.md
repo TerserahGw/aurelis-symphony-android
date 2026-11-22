@@ -145,3 +145,25 @@ Keep the `.p12` and passwords backed up securely **outside the public GitHub rep
 - `versionCode` is **4**, `versionName` is **0.1.3-beta**. Signing uses the existing persistent keystore and encrypted Actions secrets, enabling direct updates from **v0.1.2 Beta release-signed** installations. This does not solve incompatible older debug-signing keys.
 
 Android direct-update limitations remain: matching signing certificate and increasing version code are required. The in-app updater still requests Android's install consent rather than silently installing APKs.
+
+
+## 1.0.0 Stable — the first permanent Android release
+
+The Android app is now version **1.0.0** (`versionCode = 5`). It retains the persistent release-signing keystore configured for v0.1.2/v0.1.3; installing the **signed** release APK on top of those signed betas should preserve local settings, favorites, history and playlists.
+
+### Home and music player
+
+- An album-tinted frosted mini-player and translucent navigation/search islands now allow moving Home content to be visible behind their surfaces. Lists have extra bottom padding so their last item remains reachable.
+- While the user **scrolls Home** and a song is playing, the dock transitions into a compact layout with three islands: a hamburger on the left, **mini-player in the center**, and Search on the right. The compact mini-player shows artwork, title/artist, and play/pause; tapping its body opens the full player. After **three seconds without scrolling**, the mini-player expands back above the dock and the hamburger smoothly unfolds into the Home/Search/Library navigation. The scroll-aware mode is limited to Home.
+- Overflow song menus morph from the top-right anchor using GPU scale/alpha animation rather than changing the popup window dimensions every animation frame. This avoids the previous window-position jitter.
+- Mini-player, navigation, and search surfaces use lower-density artwork-tinted glass.
+
+### Translation
+
+- The Translate button now sends an **explicit on-demand** request to the existing Aurelis server's `POST /api/v2/translate` endpoint, with batches of 16 lyric lines and an Indonesian (`id`) destination.
+- The server delegates translation to MyMemory. Translation is **best-effort**, subject to third-party service quotas and connectivity; unavailable lines stay in the original language and an error/partial-results message appears in the lyrics view.
+- No lyrics are sent to the translation provider until translation is requested by the user. Returned lines are aligned with their original lyric timestamps.
+
+### Shipping and verification
+
+GitHub Actions compiles a test APK, then builds and verifies the release-signed ARM64 APK using the repository's private signing secrets. Only the signed APK is attached to the public Stable Release. Android's package installer still obtains user consent during app updates. Real playback, UI animation, network translation, and device-specific behavior require testing on the target Android device.
