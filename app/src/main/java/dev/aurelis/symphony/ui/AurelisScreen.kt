@@ -962,7 +962,8 @@ private fun LibraryPage(
                                         onPlay = {
                                             state.playPlaylist(name, tracks, index)
                                         },
-                                        onMenu = { onMenu(song) })
+                                        onMenu = { onMenu(song) },
+                                        localPlaylist = name)
                                 }
                             }
                         }
@@ -1154,7 +1155,11 @@ private fun LibraryPage(
 }
 
 @Composable
-private fun SongRow(song: Song, state: AurelisState, onPlay: () -> Unit, onMenu: () -> Unit) {
+private fun SongRow(
+    song: Song, state: AurelisState,
+    onPlay: () -> Unit, onMenu: () -> Unit,
+    localPlaylist: String? = null
+) {
     var menuOpen by remember(song.key) { mutableStateOf(false) }
     val popupTransition = remember(song.key) {
         androidx.compose.animation.core.MutableTransitionState(false)
@@ -1183,7 +1188,7 @@ private fun SongRow(song: Song, state: AurelisState, onPlay: () -> Unit, onMenu:
                 }
             } else Spacer(Modifier.size(43.dp))
             InlineGlassSongMenu(state, song, menuOpen, { menuOpen = false },
-                transitionState = popupTransition)
+                transitionState = popupTransition, localPlaylist = localPlaylist)
         }
     }
 }
@@ -1252,7 +1257,8 @@ private fun OverflowMorphButton(open: Boolean, toggle: () -> Unit) {
 private fun InlineGlassSongMenu(
     state: AurelisState, song: Song, expanded: Boolean, onDismiss: () -> Unit,
     lyricOffset: Boolean = false,
-    transitionState: androidx.compose.animation.core.MutableTransitionState<Boolean>? = null
+    transitionState: androidx.compose.animation.core.MutableTransitionState<Boolean>? = null,
+    localPlaylist: String? = null
 ) {
     val isGlass = LocalVisualStyle.current == VisualStyle.GLASS
     val visibility = transitionState ?: remember {
@@ -1313,11 +1319,22 @@ private fun InlineGlassSongMenu(
                 GlassPopupItem(Icons.Rounded.QueueMusic, "Tambahkan ke antrean") {
                     state.enqueue(song); onDismiss()
                 }
-                state.library.playlists.keys.take(4).forEach { name ->
-                    GlassPopupItem(Icons.Rounded.PlaylistAdd, "Playlist · $name") {
-                        state.addToPlaylist(name, song); onDismiss()
+                // Inside an Aurelis playlist, the matching playlist gets
+                // a remove action instead of an ineffective "add again".
+                if (localPlaylist != null &&
+                    state.library.playlists[localPlaylist]?.any { it.key == song.key } == true) {
+                    GlassPopupItem(Icons.Rounded.RemoveCircleOutline,
+                        "Hapus dari playlist ini") {
+                        state.removeFromPlaylist(localPlaylist, song)
+                        onDismiss()
                     }
                 }
+                state.library.playlists.keys
+                    .filterNot { it == localPlaylist }.take(4).forEach { name ->
+                        GlassPopupItem(Icons.Rounded.PlaylistAdd, "Playlist · $name") {
+                            state.addToPlaylist(name, song); onDismiss()
+                        }
+                    }
                 if (lyricOffset) {
                     HorizontalDivider(Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
                         color = white.copy(alpha = .15f))
