@@ -82,3 +82,53 @@ Project code: GPL-3.0 (see LICENSE), consistent with the original Aurelis Sympho
 **YouTube playlist integration:** Public playlist URL import is technically feasible with NewPipeExtractor, but is **not yet implemented in this release**. Reading a user's private YouTube playlists requires a Google OAuth 2.0 sign-in and YouTube Data API credentials; those are not configured here. The app does not ask for Google login.
 
 **Build and testing:** CI should produce a debug-signed APK. YouTube stream extraction can fail independently of UI. Check actual performance on device.
+
+
+## v0.1.2 Beta — liquid-glass polish and secure updater
+
+- Lyric karaoke now renders **once**, with a smoothly animated green/white shader and no duplicated glyph layer.
+- The progress track is a fine Ambient Glass line with a bloom/glow around its filled portion. Play/pause and skip buttons are frosted.
+- Player overflow uses an anchored top-right morphing glass capsule with animated open/close. Home/Search overflow adapts upwards or downwards based on available space.
+- Cover mode prefers available YouTube max-resolution thumbnails, uses a soft blurred full-screen backdrop, and blends edges without hard horizontal seams. If no high-resolution thumbnail exists, source artwork quality is the limit.
+- Settings are a frosted artwork-tinted sheet with motion, audio, ambient, romanization, lyric offset, and update controls.
+- The app checks [this repo's GitHub Releases](https://github.com/TerserahGw/aurelis-symphony-android/releases) when opened, then approximately every six hours while running. An available newer version appears in a dismissible glass popup. Downloads stream to a private cache, show progress, verify package name/signature and GitHub SHA-256 when available, then open the **Android installer for explicit user consent**. There is no silent installation.
+
+### IMPORTANT: consistent signing is necessary for direct upgrades
+
+Prior beta APKs were debug builds. Each GitHub-hosted runner can create a different debug signing key. Android **cannot update** an existing installation with a different signing certificate, and increasing `versionCode` alone cannot fix that. Version `0.1.2-beta` uses `versionCode = 3`.
+
+To stop forcing a reinstall on **future** updates, this repository now **publishes stable release APKs only when four encrypted GitHub Actions secrets are set**. Without them, GitHub Actions still uploads a **debug test APK** under Artifacts, but it does not publish that debug build as the updatable release.
+
+One-time setup using Termux (no PC):
+
+```bash
+pkg install -y git gh openjdk-17 coreutils
+gh auth login
+mkdir -p ~/aurelis-private-signing
+keytool -genkeypair -v \
+  -keystore ~/aurelis-private-signing/aurelis-release.p12 \
+  -alias aurelis -keyalg RSA -keysize 3072 -validity 10000 \
+  -storetype PKCS12
+
+# Upload the KEYSTORE ONLY as an encrypted GitHub Actions secret:
+base64 -w0 ~/aurelis-private-signing/aurelis-release.p12 \
+  | gh secret set AURELIS_KEYSTORE_BASE64 \
+  -R TerserahGw/aurelis-symphony-android
+
+printf '%s' aurelis | gh secret set AURELIS_KEY_ALIAS \
+  -R TerserahGw/aurelis-symphony-android
+
+# The secret entry is hidden; type the password used in keytool:
+read -r -s -p 'Keystore password: ' AURELIS_PASS; echo
+printf '%s' "$AURELIS_PASS" | gh secret set AURELIS_KEYSTORE_PASSWORD \
+  -R TerserahGw/aurelis-symphony-android
+printf '%s' "$AURELIS_PASS" | gh secret set AURELIS_KEY_PASSWORD \
+  -R TerserahGw/aurelis-symphony-android
+unset AURELIS_PASS
+
+gh workflow run android-arm64.yml -R TerserahGw/aurelis-symphony-android
+```
+
+Keep the `.p12` and passwords backed up securely **outside the public GitHub repository**. Every future stable release must use exactly the same key and a higher `versionCode`. Do not lose this key: replacing it makes ordinary in-place updates impossible. Do not publish the keystore, password, or their base64 encoding.
+
+**Migration note:** users who installed the older debug-signed APK may need **one final reinstall** when switching to this new permanent release key. Local app data may be lost on uninstall; no backup/migration of old beta installations is guaranteed. The in-app updater warns of incompatible signatures rather than offering a broken install.
