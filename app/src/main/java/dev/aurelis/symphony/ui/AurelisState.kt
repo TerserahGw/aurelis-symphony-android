@@ -42,7 +42,11 @@ class AurelisState(context: Context) {
     private var nextJob: Job? = null
     private var recommendationRevision = 0L
     private val skippedRecommendations = mutableSetOf<String>()
-    private val queueTargetSize = 4
+    private val queueTargetSize = 5
+    private var playlistTracks: List<Song> = emptyList()
+    private var playlistIndex = -1
+    var activePlaylist by mutableStateOf<String?>(null)
+        private set
     private var lastResolveUsedNewPipe = false
     private var triedFallbackFor: String? = null
 
@@ -183,6 +187,11 @@ class AurelisState(context: Context) {
         }
     }
     fun play(song: Song, addHistory: Boolean = true, preserveQueue: Boolean = false) {
+        if (!preserveQueue) {
+            activePlaylist = null
+            playlistTracks = emptyList()
+            playlistIndex = -1
+        }
         recommendationJob?.cancel()
         nextJob?.cancel()
         recommendationRevision++
@@ -246,6 +255,39 @@ class AurelisState(context: Context) {
             startResolvedPlayback(song, stream)
         }
     }
+    /**
+     * A playlist is an ordered play context, not a radio seed. Up Next shows
+     * ONLY the remaining songs of this playlist, in their original order.
+     * Duplicate tracks are preserved. At the end, playback stops.
+     */
+    fun playPlaylist(name: String, tracks: List<Song>, index: Int = 0) {
+        if (tracks.isEmpty()) {
+            error = "Playlist tidak berisi lagu yang dapat diputar."
+            return
+        }
+        val safe = index.coerceIn(0, tracks.lastIndex)
+        playlistTracks = tracks.toList()
+        playlistIndex = safe
+        activePlaylist = name
+        queue = playlistTracks.drop(safe + 1)
+        skippedRecommendations.clear()
+        play(tracks[safe], preserveQueue = true)
+    }
+
+    /** Jump to an item in Up Next without destroying the remaining playlist. */
+    fun playFromQueue(song: Song, position: Int = queue.indexOfFirst { it.key == song.key }) {
+        val idx = if (position in queue.indices) position else return
+        val selected = queue[idx]
+        queue = queue.drop(idx + 1)
+        if (activePlaylist != null) {
+            val found = playlistTracks.indexOfFirst {
+                it.key == selected.key && playlistTracks.indexOf(it) > playlistIndex
+            }
+            playlistIndex = if (found >= 0) found else playlistIndex + idx + 1
+        }
+        play(selected, preserveQueue = true)
+    }
+
     private fun startResolvedPlayback(song: Song, stream: String) {
         val c = controller ?: run { error = "Pemutar belum siap. Coba ketuk lagi."; preparing = false; return }
         val meta = MediaMetadata.Builder().setTitle(song.title).setArtist(song.artist)
@@ -328,13 +370,16 @@ class AurelisState(context: Context) {
             incoming = makeRecommendationPool(seed, remote),
             favorites = library.favorites,
             history = library.history,
+            youtubeHistory = if (youtube.isConnected) youtube.history else emptyList(),
+            youtubeRecommendations = if (youtube.isConnected)
+                youtube.shelves.flatMap { it.tracks }.take(100) else emptyList(),
             excluded = excluded,
             maxCount = want
         )
     }
 
     private fun replenishQueue(seed: Song) {
-        if (queue.size >= queueTargetSize) return
+        if (activePlaylist != null || queue.size >= queueTargetSize) return
         recommendationJob?.cancel()
         val revision = ++recommendationRevision
         recommendationJob = scope.launch {
@@ -371,12 +416,24 @@ class AurelisState(context: Context) {
     fun removeQueue(song: Song) {
         skippedRecommendations.add(song.key)
         queue = queue.filterNot { it.key == song.key }
-        current?.let(::replenishQueue)
+        if (activePlaylist == null) current?.let(::replenishQueue)
     }
 
     fun next() {
         val seed = current ?: return
         nextJob?.cancel()
+        if (activePlaylist != null) {
+            val remaining = queue
+            if (remaining.isEmpty()) {
+                controller?.pause()
+                controller?.seekTo(0)
+                return
+            }
+            queue = remaining.drop(1)
+            playlistIndex = (playlistIndex + 1).coerceAtMost(playlistTracks.lastIndex)
+            play(remaining.first(), preserveQueue = true)
+            return
+        }
         val ready = queue.firstOrNull()
         if (ready != null) {
             queue = queue.drop(1)
@@ -408,6 +465,12 @@ class AurelisState(context: Context) {
 
     fun previous() {
         if (progress > 3500) { controller?.seekTo(0); return }
+        if (activePlaylist != null && playlistIndex > 0) {
+            playlistIndex--
+            queue = playlistTracks.drop(playlistIndex + 1)
+            play(playlistTracks[playlistIndex], preserveQueue = true)
+            return
+        }
         val prev = library.history.firstOrNull { it.key != current?.key }
         if (prev != null) play(prev) else controller?.seekTo(0)
     }
