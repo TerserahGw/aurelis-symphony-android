@@ -46,7 +46,7 @@ jobs:
       - name: Upload test APK (signing varies per runner)
         uses: actions/upload-artifact@v4
         with:
-          name: AurelisSymphony-ARM64-v1.0.0-TEST-DEBUG
+          name: AurelisSymphony-ARM64-v1.0.1-TEST-DEBUG
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 14
@@ -94,11 +94,11 @@ jobs:
         if: steps.signing.outputs.enabled == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: AurelisSymphony-ARM64-v1.0.0-SIGNED
+          name: AurelisSymphony-ARM64-v1.0.1-SIGNED
           path: app/build/outputs/apk/release/*.apk
           if-no-files-found: error
 
-      - name: Publish GitHub Release v1.0.0 Stable
+      - name: Publish GitHub Release v1.0.1 Stable
         if: steps.signing.outputs.enabled == 'true' && github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
@@ -106,11 +106,11 @@ jobs:
         run: |
           set -euo pipefail
           cp app/build/outputs/apk/release/app-release.apk \
-            AurelisSymphony-Android-arm64-v1.0.0.apk
-          if ! gh release view v1.0.0 >/dev/null 2>&1; then
-            gh release create v1.0.0 --target "$GITHUB_SHA" \
-              --title "Aurelis Symphony Android v1.0.0 Stable" \
-              --notes "Aurelis Symphony Android 1.0.0 Stable. Smooth non-jittering anchored overflow morph, opt-in Indonesian lyric translation through Aurelis /api/v2/translate, more transparent artwork glass, and scroll-responsive Home dock: mini player moves between hamburger and Search; returns to full navigation after 3 seconds idle. Retains persistent signing and versionCode 5 for in-place upgrades."
+            AurelisSymphony-Android-arm64-v1.0.1.apk
+          if ! gh release view v1.0.1 >/dev/null 2>&1; then
+            gh release create v1.0.1 --target "$GITHUB_SHA" \
+              --title "Aurelis Symphony Android v1.0.1 Stable" \
+              --notes "Aurelis Symphony Android 1.0.1 Stable Hotfix. Stronger artwork-frost blur on navigation, Search and mini-player capsules; compact mini-player scroll morph on Home, Search and Library with 3-second idle restore; repaired Settings sheet bottom coverage and fast-fling gesture stability; memoized Glass gradients, isolated fluid progress, debounced slider writes, and safe rapid-skip cancellation. Persistent signing and versionCode 6 for updates from signed v1.0.0."
           fi
-          gh release upload v1.0.0 \
-            AurelisSymphony-Android-arm64-v1.0.0.apk --clobber
+          gh release upload v1.0.1 \
+            AurelisSymphony-Android-arm64-v1.0.1.apk --clobber
