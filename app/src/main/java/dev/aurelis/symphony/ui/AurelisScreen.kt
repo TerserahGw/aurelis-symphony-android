@@ -869,6 +869,7 @@ private fun LibraryPage(
     onOpenPlayer: () -> Unit
 ) {
     val scope = rememberCoroutineScope()
+    var expandedYouTubeId by rememberSaveable { mutableStateOf<String?>(null) }
     var importUrl by rememberSaveable { mutableStateOf("") }
     var importError by remember { mutableStateOf<String?>(null) }
     val libraryStamp = state.libraryStamp
@@ -1010,36 +1011,100 @@ private fun LibraryPage(
                 }
             }
             if (youtube.playlists.isNotEmpty()) {
-                items(youtube.playlists, key = { "remote-${it.id}" }) { playlist ->
-                    Row(Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically) {
-                        Tactile(Modifier.weight(1f), {
-                            scope.launch { youtube.playlistTracks(playlist) }
-                        }) {
-                            Row(Modifier.fillMaxWidth().padding(vertical = 8.dp),
-                                verticalAlignment = Alignment.CenterVertically) {
-                                Glass(Modifier.size(55.dp),
-                                    RoundedCornerShape(14.dp),
-                                    tint = state.ambientColor, opacity = .45f) {
-                                    AsyncImage(
-                                        model = playlist.artwork.takeIf { it.isNotBlank() },
-                                        contentDescription = null,
-                                        contentScale = ContentScale.Crop,
-                                        modifier = Modifier.fillMaxSize()
-                                    )
+                // Parent LazyColumn owns scrolling. Expanding a remote playlist
+                // inserts individually lazy song rows directly beneath its card.
+                youtube.playlists.forEach { playlist ->
+                    item(key = "remote-${playlist.id}") {
+                        Row(Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically) {
+                            Tactile(Modifier.weight(1f), {
+                                scope.launch {
+                                    val tracks = youtube.playlistTracks(playlist)
+                                    if (tracks.isNotEmpty()) {
+                                        state.playPlaylist(playlist.title, tracks)
+                                        onOpenPlayer()
+                                    }
                                 }
-                                Spacer(Modifier.width(12.dp))
-                                Column(Modifier.weight(1f)) {
-                                    Text(playlist.title, color = white,
-                                        fontSize = 13.sp, fontWeight = FontWeight.Medium,
-                                        maxLines = 2, overflow = TextOverflow.Ellipsis)
-                                    Spacer(Modifier.height(4.dp))
-                                    Text(uiText("YouTube"), color = lime, fontSize = 10.sp)
+                            }) {
+                                Row(Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically) {
+                                    Glass(Modifier.size(55.dp),
+                                        RoundedCornerShape(14.dp),
+                                        tint = state.ambientColor, opacity = .45f) {
+                                        AsyncImage(
+                                            model = playlist.artwork.takeIf { it.isNotBlank() },
+                                            contentDescription = null,
+                                            contentScale = ContentScale.Crop,
+                                            modifier = Modifier.fillMaxSize()
+                                        )
+                                    }
+                                    Spacer(Modifier.width(12.dp))
+                                    Column(Modifier.weight(1f)) {
+                                        Text(playlist.title, color = white,
+                                            fontSize = 13.sp, fontWeight = FontWeight.Medium,
+                                            maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                        Spacer(Modifier.height(4.dp))
+                                        Text(uiText("YouTube"), color = lime, fontSize = 10.sp)
+                                    }
+                                    Icon(Icons.Rounded.PlayArrow, "Putar playlist",
+                                        tint = lime, modifier = Modifier.size(22.dp))
+                                }
+                            }
+                            IconButton(onClick = {
+                                if (expandedYouTubeId == playlist.id) {
+                                    expandedYouTubeId = null
+                                } else {
+                                    expandedYouTubeId = playlist.id
+                                    if (youtube.selectedPlaylist?.id != playlist.id) {
+                                        scope.launch { youtube.playlistTracks(playlist) }
+                                    }
+                                }
+                            }) {
+                                AnimatedContent(
+                                    targetState = expandedYouTubeId == playlist.id,
+                                    label = "youtubePlaylistExpand",
+                                    transitionSpec = {
+                                        fadeIn(tween(185)) togetherWith fadeOut(tween(135))
+                                    }
+                                ) { isExpanded ->
+                                    Icon(if (isExpanded) Icons.Rounded.ExpandLess
+                                        else Icons.Rounded.ExpandMore,
+                                        if (isExpanded) "Tutup daftar lagu" else "Lihat lagu YouTube",
+                                        tint = lime, modifier = Modifier.size(23.dp))
                                 }
                             }
                         }
-                        Icon(Icons.Rounded.ChevronRight, null,
-                            tint = mist, modifier = Modifier.size(19.dp))
+                    }
+                    if (expandedYouTubeId == playlist.id) {
+                        if (youtube.playlistLoading &&
+                            youtube.selectedPlaylist?.id == playlist.id) {
+                            item(key = "yt-spinner-${playlist.id}") {
+                                LinearProgressIndicator(Modifier.fillMaxWidth(),
+                                    color = lime, trackColor = white.copy(alpha = .10f))
+                            }
+                        }
+                        if (youtube.selectedPlaylist?.id == playlist.id &&
+                            !youtube.playlistLoading) {
+                            if (youtube.playlistTracks.isEmpty()) {
+                                item(key = "yt-empty-${playlist.id}") {
+                                    Text("Playlist kosong atau belum dapat dibaca.",
+                                        color = mist, fontSize = 12.sp,
+                                        modifier = Modifier.padding(vertical = 10.dp))
+                                }
+                            }
+                            items(youtube.playlistTracks.size, key = { i ->
+                                "yt-entry-${playlist.id}-$i-${youtube.playlistTracks[i].key}"
+                            }) { i ->
+                                val track = youtube.playlistTracks[i]
+                                SongRow(track, state,
+                                    onPlay = {
+                                        state.playPlaylist(playlist.title,
+                                            youtube.playlistTracks, i)
+                                        onOpenPlayer()
+                                    },
+                                    onMenu = { onMenu(track) })
+                            }
+                        }
                     }
                 }
             }
@@ -1082,7 +1147,11 @@ private fun LibraryPage(
                     }
                 }
             }
-            youtube.selectedPlaylist?.let { playlist ->
+            // Imported playlists have no card above; keep their detailed
+            // section below. Account playlists expand in-place under the card.
+            youtube.selectedPlaylist?.takeIf { selected ->
+                youtube.playlists.none { it.id == selected.id }
+            }?.let { playlist ->
                 item(key = "yt-current-playlist") {
                     Column {
                         DividerSoft()
@@ -1096,6 +1165,7 @@ private fun LibraryPage(
                             }
                             IconButton(onClick = {
                                 state.playPlaylist(playlist.title, youtube.playlistTracks)
+                                onOpenPlayer()
                             }, enabled = !youtube.playlistLoading &&
                                 youtube.playlistTracks.isNotEmpty()) {
                                 Icon(Icons.Rounded.PlayCircle, "Putar semua",
@@ -1116,6 +1186,7 @@ private fun LibraryPage(
                     SongRow(song, state,
                         onPlay = {
                             state.playPlaylist(playlist.title, youtube.playlistTracks, i)
+                            onOpenPlayer()
                         },
                         onMenu = { onMenu(song) })
                 }
