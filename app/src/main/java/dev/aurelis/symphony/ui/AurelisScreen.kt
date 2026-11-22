@@ -614,7 +614,7 @@ private fun FullPlayer(state: AurelisState, onClose: () -> Unit, onQueue: () -> 
             var playerMenu by remember { mutableStateOf(false) }
             Box {
                 CircleAction(if (playerMenu) Icons.Default.Close else Icons.Default.MoreHoriz,
-                    if (playerMenu) "Tutup opsi" else "Opsi lagu") { playerMenu = !playerMenu }
+                    if (playerMenu) "Tutup opsi" else "Opsi lagu", action = { playerMenu = !playerMenu })
                 DropdownMenu(expanded = playerMenu, onDismissRequest = { playerMenu = false },
                     modifier = Modifier.width(224.dp).background(Color(0xFF142520), RoundedCornerShape(20.dp))) {
                     DropdownMenuItem(text = { Text(if (state.isLiked(song)) "Hapus dari Disukai" else "Sukai lagu") },
