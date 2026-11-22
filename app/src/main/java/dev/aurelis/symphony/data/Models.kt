@@ -81,5 +81,6 @@ data class AppSettings(
     val ambientIntensity: Float = .58f,
     val motion: Boolean = true,
     val ambient: Boolean = true,
-    val romanize: Boolean = true
+    val romanize: Boolean = true,
+    val lyricOffsetMs: Int = 0
 )
