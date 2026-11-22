@@ -1081,7 +1081,11 @@ private fun KaraokeToken(word: String, target: Float) {
         Text(word, color = lime, fontSize = 23.sp, lineHeight = 34.sp,
             fontWeight = FontWeight.SemiBold,
             modifier = Modifier.drawWithContent {
-                clipRect(right = size.width * progress) { drawContent() }
+                val canvas = drawContext.canvas
+                canvas.save()
+                canvas.clipRect(0f, 0f, size.width * progress, size.height)
+                drawContent()
+                canvas.restore()
             },
             style = androidx.compose.ui.text.TextStyle(
                 shadow = Shadow(lime.copy(alpha = .77f), Offset.Zero, 11f)
