@@ -3,15 +3,15 @@
 **Native Android beta source project**, based on Aurelis Symphony Web 2.7.0 by TerserahGw.
 The web/server project remains unchanged: https://github.com/TerserahGw/aurelis-symphony
 
-> Status: **0.1.0 beta — source prepared, not compiled or device-tested here**. This ZIP is not an APK. GitHub Actions builds a debug APK; a successful CI build and device testing are needed before calling it stable.
+> Status: **v0.1.0 Beta**. GitHub Actions builds an ARM64 debug-signed APK and publishes the successful result as a prerelease. Build success does not replace testing on a physical device.
 
 ## Design
 
 - Native **Jetpack Compose** screens: Home / Search / Library, floating mini-player, fullscreen player, and Island Capsule search/menu with spring weight-morph transitions.
-- Restrained semi-transparent ambient glass with artwork-derived tint, layered edges, configurable glass density, and GPU-friendly gradients. *The glass is simulated with tinted translucency, not genuine background/backdrop blur.*
+- Frosted artwork blur on floating Island capsules and lyrics, dynamic artwork-derived Ambient Glass lighting, highlight gradients, and adjustable density. Artwork itself is GPU-blurred on Android 12+; this is **not** a capture of the live screen behind a widget.
 - Scrollbars are not rendered. Uses native lazy scrolling; no WebView, no API Docs screen.
-- Contextual song menus, queue, local favorites, history, playlists, and settings (Audio mode, Ambient Glass, motion, romanization).
-- Synchronized lyrics; word/character progress shown only for lyrics with real word timing metadata, avoiding fabricated karaoke for ordinary line-level lyrics.
+- Anchored mini popup menus (three dots morph to X), queue, local favorites, history, playlists, and settings (Audio mode, Ambient Glass, motion, romanization). The navigation highlight follows finger dragging before the selected tab changes.
+- Synchronized lyrics with word-level glow and a soft progress trail where true word timestamps exist, an active-line soft glass highlight, and corrected Latin spacing when a lyric provider returns unspaced word tokens.
 - Media3 + MediaSessionService for native playback and Android media controls (behavior depends on OS and permissions).
 
 ## Audio / NewPipeExtractor
@@ -34,7 +34,7 @@ The web/server project remains unchanged: https://github.com/TerserahGw/aurelis-
 
 1. Upload **the contents of this ZIP** to a GitHub repository (not the ZIP as a single file), keeping `.github/workflows/android-arm64.yml` intact. Do not overwrite your existing web/server repository unless you want both projects combined.
 2. In GitHub, open **Actions → Android ARM64 APK → Run workflow**. A push affecting the app also triggers the workflow.
-3. When the run **succeeds**, open the run's **Artifacts** section and download `AurelisSymphony-Android-ARM64-debug`. Unzip the artifact and install its `.apk` on your ARM64 Android phone.
+3. When the run **succeeds**, open the run's **Artifacts** and download `AurelisSymphony-Android-ARM64-v0.1.0-beta`, or open [Releases](https://github.com/TerserahGw/aurelis-symphony-android/releases) to download `AurelisSymphony-Android-arm64-v0.1.0-beta.apk` directly.
 4. A debug APK is signed with the CI runner's *debug* key. For future updates intended to install without uninstalling or losing local data, create a **release signing key** and configure a release signing workflow. Do **not** put a private signing key into a public repo.
 
 Build with Android Studio or a configured terminal with SDK 36 and Gradle 8.13:
@@ -59,9 +59,9 @@ No developer API documentation is exposed in the UI.
 
 ## Open issues / beta limitations
 
-- CI compilation and actual playback on a phone have **not yet been verified** in this preparation environment. Build fixes may be needed.
+- CI compilation and actual playback on a phone should be verified for each change. YouTube and device-specific playback can still fail.
 - Source URL availability from YouTube and Aurelis is external and cannot be guaranteed.
-- Native animations and surfaces approximate the web aesthetic rather than implementing a pixel-identical clone; heavyweight backdrop blur is intentionally avoided for smoother low-overhead rendering.
+- The frosted layer blurs cached artwork instead of recording or blurring the live view underneath, to keep the UI responsive; a pixel-identical browser replica is not the goal.
 - Offline music downloads, synchronized cloud Library, Android Auto, equalizer and advanced audio caching are not included in this beta.
 - Local data is stored with Android SharedPreferences. It is **not migrated automatically** from the browser's localStorage.
 
