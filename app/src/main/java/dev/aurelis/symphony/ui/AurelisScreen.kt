@@ -192,6 +192,11 @@ private fun Ambient(state: AurelisState) {
 
 @Composable
 fun AurelisScreen(state: AurelisState) {
+    val context = LocalContext.current
+    val updater = remember(context) { AurelisUpdater(context) }
+    LaunchedEffect(Unit) {
+        if (state.settings.checkUpdates) updater.check()
+    }
     var tab by rememberSaveable { mutableStateOf("Home") }
     var expanded by rememberSaveable { mutableStateOf(false) }
     var searchExpanded by rememberSaveable { mutableStateOf(false) }
@@ -256,8 +261,10 @@ fun AurelisScreen(state: AurelisState) {
             ) {
                 FullPlayer(state, onClose = { expanded = false }, onQueue = { showQueue = true }, onMenu = { state.current?.let { menuSong = it } })
             }
+            UpdateAnnouncement(updater, Modifier.align(Alignment.BottomCenter)
+                .padding(horizontal = 19.dp, vertical = 96.dp))
         }
-        if (showSettings) SettingsSheet(state, onClose = { showSettings = false })
+        if (showSettings) SettingsSheet(state, updater, onClose = { showSettings = false })
         if (showQueue) QueueSheet(state, onClose = { showQueue = false })
         menuSong?.let { song -> SongMenu(state, song, onClose = { menuSong = null }) }
         if (creatingPlaylist) AlertDialog(
@@ -1304,49 +1311,176 @@ private fun formatMs(ms: Long): String {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SettingsSheet(state: AurelisState, onClose: () -> Unit) {
-    ModalBottomSheet(onDismissRequest = onClose, containerColor = Color(0xFF111C1B), contentColor = white,
-        dragHandle = { Box(Modifier.padding(top = 12.dp, bottom = 15.dp).size(34.dp, 4.dp).clip(CircleShape).background(white.copy(alpha = .25f))) },
-        shape = RoundedCornerShape(topStart = 31.dp, topEnd = 31.dp)) {
-        val s = state.settings
-        Column(Modifier.fillMaxWidth().fillMaxHeight(.79f).verticalScroll(androidx.compose.foundation.rememberScrollState())
-            .padding(horizontal = 25.dp), verticalArrangement = Arrangement.spacedBy(0.dp)) {
-            Text("Pengaturan", fontWeight = FontWeight.SemiBold, fontSize = 26.sp, letterSpacing = -.7.sp)
-            Text("Sesuaikan pengalaman, bukan sekadar tampilan.", fontSize = 12.sp, color = mist)
-            Spacer(Modifier.height(29.dp))
-            SettingsCategory("TAMPILAN", "Glass Ambient")
-            SettingsSwitch("Ambient Artwork", "Warna latar mengikuti artwork lagu", s.ambient, { state.update(s.copy(ambient = it)) })
-            Spacer(Modifier.height(13.dp))
-            SettingsSlider("Intensitas ambient", "Pencahayaan yang halus di belakang konten", s.ambientIntensity,
-                enabled = s.ambient, onChange = { state.update(s.copy(ambientIntensity = it)) })
-            SettingsSlider("Kepadatan glass", "Menjaga teks tetap terbaca saat album berwarna cerah", s.glassOpacity,
-                onChange = { state.update(s.copy(glassOpacity = it)) })
-            DividerSoft()
-            SettingsCategory("GERAKAN", "Motion")
-            SettingsSwitch("Animasi halus", "Transisi capsule, lembar, dan lirik", s.motion, { state.update(s.copy(motion = it)) })
-            DividerSoft()
-            SettingsCategory("MUSIK", "Sumber Audio")
-            Text("Mode pemutaran", color = white, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-            Spacer(Modifier.height(9.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                listOf(AudioMode.AUTO to "Auto", AudioMode.NEWPIPE to "NewPipe", AudioMode.AURELIS to "Server").forEach { (mode, label) ->
-                    Tactile(action = { state.update(s.copy(audioMode = mode)) }) {
-                        Glass(tint = if (s.audioMode == mode) Color(0xFF527462) else Color(0xFF25332F), opacity = .85f) {
-                            Text(label, Modifier.padding(horizontal = 18.dp, vertical = 11.dp),
-                                color = if (s.audioMode == mode) white else mist, fontSize = 12.sp)
+private fun SettingsSheet(state: AurelisState, updater: AurelisUpdater, onClose: () -> Unit) {
+    val song = state.current
+    val s = state.settings
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ModalBottomSheet(
+        onDismissRequest = onClose,
+        sheetState = sheetState,
+        containerColor = Color.Transparent,
+        contentColor = white,
+        tonalElevation = 0.dp,
+        scrimColor = bg.copy(alpha = .73f),
+        dragHandle = null,
+        shape = RoundedCornerShape(topStart = 34.dp, topEnd = 34.dp)
+    ) {
+        Glass(
+            Modifier.fillMaxWidth().fillMaxHeight(.88f),
+            RoundedCornerShape(topStart = 34.dp, topEnd = 34.dp),
+            tint = state.ambientColor,
+            opacity = .83f,
+            backdrop = song?.artwork
+        ) {
+            Column(Modifier.fillMaxSize().verticalScroll(
+                androidx.compose.foundation.rememberScrollState()
+            ).padding(start = 23.dp, end = 23.dp, top = 12.dp, bottom = 26.dp)) {
+                Box(Modifier.align(Alignment.CenterHorizontally).width(34.dp).height(4.dp)
+                    .clip(CircleShape).background(white.copy(alpha = .28f)))
+                Spacer(Modifier.height(21.dp))
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("PREFERENSI", fontSize = 9.sp, letterSpacing = 2.sp,
+                            color = lime.copy(alpha = .80f))
+                        Spacer(Modifier.height(6.dp))
+                        Text("Pengaturan", color = white,
+                            fontSize = 29.sp, fontWeight = FontWeight.SemiBold,
+                            letterSpacing = (-.8).sp)
+                    }
+                    Tactile(action = onClose) {
+                        Glass(Modifier.size(42.dp), RoundedCornerShape(21.dp), opacity = .60f) {
+                            Icon(Icons.Rounded.Close, "Tutup pengaturan",
+                                Modifier.align(Alignment.Center).size(20.dp), tint = white)
                         }
                     }
                 }
+                Spacer(Modifier.height(11.dp))
+                Text("Ruang untuk musik, cahaya, dan gerakan.", color = mist, fontSize = 12.sp)
+                Spacer(Modifier.height(22.dp))
+
+                Glass(Modifier.fillMaxWidth().height(94.dp), RoundedCornerShape(23.dp),
+                    opacity = .46f, backdrop = song?.artwork, tint = state.ambientColor) {
+                    Row(Modifier.fillMaxSize().padding(18.dp),
+                        verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.size(55.dp).clip(RoundedCornerShape(17.dp))
+                            .background(Brush.radialGradient(listOf(
+                                state.ambientColor, Color(0xFF162B2A)
+                            ))), contentAlignment = Alignment.Center) {
+                            Icon(Icons.Rounded.AutoAwesome, null,
+                                Modifier.size(23.dp), tint = lime)
+                        }
+                        Spacer(Modifier.width(15.dp))
+                        Column {
+                            Text("Glass Ambient", color = white,
+                                fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                            Spacer(Modifier.height(5.dp))
+                            Text("Warna dan cahaya mengikuti artwork",
+                                color = mist, fontSize = 11.sp, lineHeight = 16.sp)
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(24.dp))
+                SettingsCategory("SUASANA", "Tampilan")
+                SettingsSwitch("Ambient dari artwork",
+                    "Cahaya di belakang konten mengikuti musik",
+                    s.ambient, { state.update(s.copy(ambient = it)) })
+                SettingsSlider("Kekuatan cahaya", "Sesuaikan bloom dan atmosfer",
+                    s.ambientIntensity, enabled = s.ambient,
+                    onChange = { state.update(s.copy(ambientIntensity = it)) })
+                SettingsSlider("Transparansi glass", "Keseimbangan visual dan keterbacaan",
+                    s.glassOpacity, onChange = { state.update(s.copy(glassOpacity = it)) })
+
+                DividerSoft()
+                SettingsCategory("INTERAKSI", "Animasi")
+                SettingsSwitch("Motion & morph",
+                    "Transisi spring pada popup, island, dan pemutar",
+                    s.motion, { state.update(s.copy(motion = it)) })
+
+                DividerSoft()
+                SettingsCategory("PEMUTAR", "Sumber musik")
+                Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                    listOf(AudioMode.AUTO to "Auto", AudioMode.NEWPIPE to "NewPipe",
+                        AudioMode.AURELIS to "Server").forEach { (mode, label) ->
+                        Tactile(action = { state.update(s.copy(audioMode = mode)) }) {
+                            Glass(tint = if (s.audioMode == mode) state.ambientColor
+                                else groove, opacity = if (s.audioMode == mode) .88f else .45f,
+                                shape = RoundedCornerShape(19.dp)) {
+                                Text(label, Modifier.padding(horizontal = 18.dp, vertical = 12.dp),
+                                    color = if (s.audioMode == mode) white else mist,
+                                    fontSize = 12.sp,
+                                    fontWeight = if (s.audioMode == mode)
+                                        FontWeight.SemiBold else FontWeight.Medium)
+                            }
+                        }
+                    }
+                }
+                Spacer(Modifier.height(10.dp))
+                Text("Auto mencoba NewPipe, lalu server jika sumber gagal.",
+                    color = mist, fontSize = 11.sp, lineHeight = 17.sp)
+
+                DividerSoft()
+                SettingsCategory("BAHASA", "Lirik")
+                SettingsSwitch("Romanisasi otomatis",
+                    "Jepang, Korea, dan Mandarin bila tersedia",
+                    s.romanize, { state.update(s.copy(romanize = it)) })
+                Row(Modifier.fillMaxWidth().padding(vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Offset lirik", color = white, fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium)
+                        Spacer(Modifier.height(5.dp))
+                        Text("Kalibrasi sinkronisasi karaoke",
+                            color = mist, fontSize = 11.sp)
+                    }
+                    IconButton(onClick = {
+                        state.update(s.copy(lyricOffsetMs =
+                            (s.lyricOffsetMs - 250).coerceAtLeast(-5000)))
+                    }) { Icon(Icons.Rounded.RemoveCircleOutline, null, tint = mist) }
+                    Text("%+.2fs".format(java.util.Locale.US, s.lyricOffsetMs / 1000.0),
+                        color = lime, fontSize = 12.sp)
+                    IconButton(onClick = {
+                        state.update(s.copy(lyricOffsetMs =
+                            (s.lyricOffsetMs + 250).coerceAtMost(5000)))
+                    }) { Icon(Icons.Rounded.AddCircleOutline, null, tint = mist) }
+                }
+
+                DividerSoft()
+                SettingsCategory("AURELIS", "Pembaruan")
+                SettingsSwitch("Periksa versi baru",
+                    "Cek GitHub Releases saat aplikasi dibuka",
+                    s.checkUpdates, { state.update(s.copy(checkUpdates = it)) })
+                Tactile(Modifier.fillMaxWidth(), { updater.check(manual = true) }) {
+                    Glass(Modifier.fillMaxWidth().height(56.dp),
+                        RoundedCornerShape(20.dp), opacity = .56f,
+                        tint = state.ambientColor, backdrop = song?.artwork) {
+                        Row(Modifier.fillMaxSize().padding(horizontal = 17.dp),
+                            verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Rounded.SystemUpdate, null, tint = lime,
+                                modifier = Modifier.size(21.dp))
+                            Spacer(Modifier.width(13.dp))
+                            Text(if (updater.checking) "Memeriksa…" else "Periksa pembaruan",
+                                Modifier.weight(1f), color = white, fontSize = 13.sp)
+                            if (updater.checking)
+                                CircularProgressIndicator(Modifier.size(18.dp),
+                                    strokeWidth = 2.dp, color = lime)
+                            else Icon(Icons.Rounded.ChevronRight, null,
+                                Modifier.size(18.dp), tint = mist)
+                        }
+                    }
+                }
+                updater.message?.let {
+                    Spacer(Modifier.height(11.dp))
+                    Text(it, color = lime, fontSize = 11.sp, lineHeight = 17.sp)
+                }
+                Spacer(Modifier.height(17.dp))
+                Text("AURELIS SYMPHONY  ·  ANDROID 0.1.2 BETA",
+                    color = mist.copy(alpha = .8f), fontSize = 10.sp,
+                    letterSpacing = 1.sp)
+                Text("APK dipasang melalui konfirmasi sistem Android.",
+                    color = mist.copy(alpha = .58f), fontSize = 10.sp)
+                Spacer(Modifier.height(25.dp))
             }
-            Spacer(Modifier.height(12.dp))
-            Text("Auto mencoba NewPipe terlebih dahulu, lalu Aurelis jika diperlukan. Sumber eksternal dapat berubah atau tidak tersedia.",
-                color = mist, fontSize = 11.sp, lineHeight = 17.sp)
-            DividerSoft()
-            SettingsCategory("LIRIK", "Bahasa")
-            SettingsSwitch("Romanisasi otomatis", "Untuk Jepang, Korea, dan Mandarin jika server mendukung", s.romanize, { state.update(s.copy(romanize = it)) })
-            Spacer(Modifier.height(28.dp))
-            Text("AURELIS SYMPHONY  ·  ANDROID 0.1.1 BETA", color = mist.copy(alpha = .65f), fontSize = 10.sp, letterSpacing = 1.sp)
-            Spacer(Modifier.height(31.dp))
         }
     }
 }
