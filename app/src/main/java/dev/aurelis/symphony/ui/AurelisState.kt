@@ -33,6 +33,7 @@ class AurelisState(context: Context) {
     private val imageClient = OkHttpClient.Builder().callTimeout(8, TimeUnit.SECONDS).build()
     private var playJob: Job? = null
     private var lyricJob: Job? = null
+    private var translationJob: Job? = null
     private var searchJob: Job? = null
     private var searchRevision = 0L
     private var recommendationJob: Job? = null
@@ -69,6 +70,13 @@ class AurelisState(context: Context) {
         private set
     var romanized by mutableStateOf<Map<Int, String>>(emptyMap())
         private set
+    var translated by mutableStateOf<Map<Int, String>>(emptyMap())
+        private set
+    var translating by mutableStateOf(false)
+        private set
+    var translationError by mutableStateOf<String?>(null)
+        private set
+    private var translatedForKey: String? = null
     var error by mutableStateOf<String?>(null)
         private set
     var loadingHome by mutableStateOf(true)
@@ -181,6 +189,11 @@ class AurelisState(context: Context) {
             skippedRecommendations.clear()
         }
         playJob?.cancel()
+        translationJob?.cancel()
+        translatedForKey = null
+        translated = emptyMap()
+        translating = false
+        translationError = null
         playJob = scope.launch {
             current = song; preparing = true; progress = 0; lyrics = Lyrics("", emptyList()); romanized = emptyMap()
             replenishQueue(song)
@@ -192,6 +205,9 @@ class AurelisState(context: Context) {
                 val fetched = runCatching { api.lyrics(song) }.getOrDefault(Lyrics("", emptyList()))
                 if (current?.key != song.key) return@launch
                 lyrics = fetched
+                translated = fetched.lines.mapIndexedNotNull { index, line ->
+                    line.translation.takeIf { it.isNotBlank() }?.let { index to it }
+                }.toMap()
                 if (settings.romanize && fetched.lines.isNotEmpty()) {
                     romanized = runCatching { api.romanize(fetched) }.getOrDefault(emptyMap())
                 }
@@ -247,6 +263,40 @@ class AurelisState(context: Context) {
             } }
         }
     }
+    /**
+     * Translations are never sent until the user explicitly taps Translate.
+     * The backend may return partial results because the anonymous provider
+     * rate-limits. Keep the original lyrics visible if translation fails.
+     */
+    fun loadTranslations() {
+        val key = current?.key ?: return
+        val captured = lyrics
+        if (captured.lines.isEmpty() || translating || translatedForKey == key) return
+        translationJob?.cancel()
+        translationJob = scope.launch {
+            translating = true
+            translationError = null
+            try {
+                val result = api.translateLyrics(captured, target = "id")
+                if (current?.key == key) {
+                    translated = result
+                    translatedForKey = key
+                    if (result.size < captured.lines.size) {
+                        translationError = "Sebagian baris belum dapat diterjemahkan."
+                    }
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (e: Exception) {
+                if (current?.key == key) {
+                    translationError = e.message ?: "Terjemahan tidak tersedia."
+                }
+            } finally {
+                if (current?.key == key) translating = false
+            }
+        }
+    }
+
     fun togglePlay() {
         controller?.let { if (it.isPlaying) it.pause() else it.play() }
     }
@@ -353,7 +403,7 @@ class AurelisState(context: Context) {
         }
     }
     fun close() {
-        playJob?.cancel(); lyricJob?.cancel(); searchJob?.cancel()
+        playJob?.cancel(); lyricJob?.cancel(); translationJob?.cancel(); searchJob?.cancel()
         recommendationJob?.cancel(); nextJob?.cancel(); scope.cancel()
         if (controllerFuture.isDone) runCatching { MediaController.releaseFuture(controllerFuture) }
     }
