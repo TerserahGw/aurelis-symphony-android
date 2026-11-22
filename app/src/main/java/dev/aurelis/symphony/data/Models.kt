@@ -75,11 +75,19 @@ data class Lyrics(val source: String, val lines: List<LyricLine>) {
 
 enum class AudioMode { AUTO, NEWPIPE, AURELIS }
 enum class VisualStyle { GLASS, AMBIENT }
+enum class AppLanguage(val code: String, val displayName: String) {
+    INDONESIAN("id", "Bahasa Indonesia"),
+    ENGLISH("en", "English"),
+    JAPANESE("ja", "日本語"),
+    SPANISH("es", "Español"),
+    KOREAN("ko", "한국어")
+}
 
 data class AppSettings(
     val audioMode: AudioMode = AudioMode.AUTO,
     val glassOpacity: Float = .68f,
     val visualStyle: VisualStyle = VisualStyle.GLASS,
+    val language: AppLanguage = AppLanguage.INDONESIAN,
     val ambientIntensity: Float = .58f,
     val motion: Boolean = true,
     val ambient: Boolean = true,
