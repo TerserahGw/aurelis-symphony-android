@@ -35,6 +35,7 @@ class AurelisState(context: Context) {
     private var lyricJob: Job? = null
     private var translationJob: Job? = null
     private var searchJob: Job? = null
+    private var settingsSaveJob: Job? = null
     private var searchRevision = 0L
     private var recommendationJob: Job? = null
     private var nextJob: Job? = null
@@ -225,15 +226,22 @@ class AurelisState(context: Context) {
                         val uri = newPipe.resolve(song)
                         lastResolveUsedNewPipe = true
                         uri
+                    } catch (cancelled: CancellationException) {
+                        throw cancelled
                     } catch (_: Exception) {
                         lastResolveUsedNewPipe = false; api.playback(song)
                     }
                 }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
             } catch (e: Exception) {
-                preparing = false
-                error = "Sumber audio tidak tersedia: ${e.message}"
+                if (current?.key == song.key) {
+                    preparing = false
+                    error = "Sumber audio tidak tersedia: ${e.message}"
+                }
                 return@launch
             }
+            if (current?.key != song.key) return@launch
             startResolvedPlayback(song, stream)
         }
     }
@@ -397,12 +405,31 @@ class AurelisState(context: Context) {
     fun addPlaylist(name: String) { library.newPlaylist(name); libraryStamp++ }
     fun addToPlaylist(name: String, song: Song) { library.addToPlaylist(name, song); libraryStamp++ }
     fun update(s: AppSettings) {
-        settings = s; library.updateSettings(s)
+        val previous = settings
+        if (previous == s) return
+        settings = s
+        settingsSaveJob?.cancel()
+        // Smooth 60 fps sliders shouldn't enqueue a disk write every frame.
+        // Toggles and other discrete settings are still persisted instantly.
+        val sliderOnly = s.copy(
+            glassOpacity = previous.glassOpacity,
+            ambientIntensity = previous.ambientIntensity
+        ) == previous
+        if (sliderOnly) {
+            settingsSaveJob = scope.launch {
+                delay(220L)
+                library.updateSettings(settings)
+            }
+        } else {
+            library.updateSettings(s)
+        }
         if (s.romanize && romanized.isEmpty() && lyrics.lines.isNotEmpty()) {
             scope.launch { romanized = runCatching { api.romanize(lyrics) }.getOrDefault(emptyMap()) }
         }
     }
     fun close() {
+        settingsSaveJob?.cancel()
+        library.updateSettings(settings)
         playJob?.cancel(); lyricJob?.cancel(); translationJob?.cancel(); searchJob?.cancel()
         recommendationJob?.cancel(); nextJob?.cancel(); scope.cancel()
         if (controllerFuture.isDone) runCatching { MediaController.releaseFuture(controllerFuture) }
