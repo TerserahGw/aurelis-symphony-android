@@ -237,14 +237,22 @@ class YouTubeMusicHub(context: Context) {
     }
 
     private fun playlistFromItem(item: JSONObject): YouTubePlaylist? {
-        val id = item.optJSONObject("navigationEndpoint")
-            ?.optJSONObject("browseEndpoint")?.optString("browseId")
-            ?: item.optJSONObject("title")?.optJSONArray("runs")?.optJSONObject(0)
-                ?.optJSONObject("navigationEndpoint")
-                ?.optJSONObject("browseEndpoint")?.optString("browseId")
-            ?: ""
-        if (!id.startsWith("VL") && !id.startsWith("PL")
-            && id != "VLLM") return null
+        val flex = item.optJSONArray("flexColumns")?.optJSONObject(0)
+            ?.optJSONObject("musicResponsiveListItemFlexColumnRenderer")
+            ?.optJSONObject("text")?.optJSONArray("runs")?.optJSONObject(0)
+        val cardTitle = item.optJSONObject("title")
+            ?.optJSONArray("runs")?.optJSONObject(0)
+        val ids = listOf(
+            item.optJSONObject("navigationEndpoint")?.optJSONObject("browseEndpoint")
+                ?.optString("browseId"),
+            flex?.optJSONObject("navigationEndpoint")?.optJSONObject("browseEndpoint")
+                ?.optString("browseId"),
+            cardTitle?.optJSONObject("navigationEndpoint")?.optJSONObject("browseEndpoint")
+                ?.optString("browseId")
+        )
+        val id = ids.firstOrNull {
+            it != null && (it.startsWith("VL") || it.startsWith("PL"))
+        } ?: return null
         val title = runs(item.optJSONObject("title")).ifBlank {
             titleAndArtist(item).first
         }
