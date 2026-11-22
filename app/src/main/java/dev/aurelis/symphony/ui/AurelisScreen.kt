@@ -464,30 +464,88 @@ private fun GlassPopupItem(icon: androidx.compose.ui.graphics.vector.ImageVector
     }
 }
 
+private class AdaptiveGlassMenuPosition(
+    private val preferDown: Boolean,
+    private val inset: Int
+) : PopupPositionProvider {
+    override fun calculatePosition(
+        anchorBounds: IntRect, windowSize: IntSize,
+        layoutDirection: LayoutDirection, popupContentSize: IntSize
+    ): IntOffset {
+        val width = popupContentSize.width
+        val height = popupContentSize.height
+        val above = anchorBounds.top - inset
+        val below = windowSize.height - anchorBounds.bottom - inset
+        val putBelow = preferDown || below >= height || below >= above
+        // Top-right stays fixed at the 3-dot capsule. Near screen bottom, morph upward.
+        val y = if (putBelow) anchorBounds.top - inset
+            else anchorBounds.bottom - height + inset
+        return IntOffset(
+            (anchorBounds.right - width + inset).coerceIn(inset,
+                max(inset, windowSize.width - width - inset)),
+            y.coerceIn(inset, max(inset, windowSize.height - height - inset))
+        )
+    }
+}
+
+@Composable
+private fun OverflowMorphButton(open: Boolean, toggle: () -> Unit) {
+    Tactile(action = toggle) {
+        Glass(Modifier.size(40.dp), RoundedCornerShape(20.dp),
+            opacity = .61f) {
+            AnimatedContent(open, label = "playerOverflowThreeDotsMorph",
+                modifier = Modifier.align(Alignment.Center), transitionSpec = {
+                    (fadeIn(tween(145)) + scaleIn(initialScale = .60f)) togetherWith
+                        (fadeOut(tween(125)) + scaleOut(targetScale = .65f))
+                }) { isOpen ->
+                Icon(if (isOpen) Icons.Rounded.Close else Icons.Rounded.MoreHoriz,
+                    if (isOpen) "Tutup menu" else "Menu pemutar",
+                    Modifier.size(19.dp), tint = if (isOpen) lime else white)
+            }
+        }
+    }
+}
+
 @Composable
 private fun InlineGlassSongMenu(
     state: AurelisState, song: Song, expanded: Boolean, onDismiss: () -> Unit,
     lyricOffset: Boolean = false
 ) {
-    if (!expanded) return
-    val density = LocalDensity.current
-    val anchorOffset = with(density) { IntOffset((-9).dp.roundToPx(), (-41).dp.roundToPx()) }
+    val visibility = remember { androidx.compose.animation.core.MutableTransitionState(false) }
+    visibility.targetState = expanded
+    if (!visibility.currentState && !visibility.targetState) return
+    val margin = with(LocalDensity.current) { 9.dp.roundToPx() }
+    val provider = remember(lyricOffset, margin) {
+        AdaptiveGlassMenuPosition(preferDown = lyricOffset, inset = margin)
+    }
     Popup(
-        alignment = Alignment.BottomEnd,
-        offset = anchorOffset,
+        popupPositionProvider = provider,
         onDismissRequest = onDismiss,
         properties = PopupProperties(focusable = true)
     ) {
+        AnimatedVisibility(
+            visibleState = visibility,
+            enter = expandIn(expandFrom = Alignment.TopEnd,
+                animationSpec = spring(dampingRatio = .82f,
+                    stiffness = Spring.StiffnessMediumLow)) + fadeIn(tween(185)),
+            exit = shrinkOut(shrinkTowards = Alignment.TopEnd,
+                animationSpec = tween(275)) + fadeOut(tween(185))
+        ) {
         Glass(
             Modifier.width(252.dp).shadow(20.dp, RoundedCornerShape(23.dp)),
             RoundedCornerShape(23.dp), tint = state.ambientColor, opacity = .89f,
             backdrop = song.artwork
         ) {
             Column(Modifier.fillMaxWidth().padding(7.dp)) {
-                Text(song.title, Modifier.fillMaxWidth().padding(start = 13.dp, end = 13.dp,
-                    top = 10.dp, bottom = 9.dp), color = white, fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold, maxLines = 1,
-                    overflow = TextOverflow.Ellipsis)
+                Row(Modifier.fillMaxWidth().padding(start = 13.dp, end = 4.dp, top = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    Text(song.title, Modifier.weight(1f), color = white, fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold, maxLines = 1,
+                        overflow = TextOverflow.Ellipsis)
+                    IconButton(onClick = onDismiss, modifier = Modifier.size(35.dp)) {
+                        Icon(Icons.Rounded.Close, "Tutup popup", Modifier.size(17.dp), tint = lime)
+                    }
+                }
                 GlassPopupItem(if (state.isLiked(song)) Icons.Rounded.Favorite
                     else Icons.Rounded.FavoriteBorder,
                     if (state.isLiked(song)) "Hapus dari Disukai" else "Sukai lagu") {
@@ -531,6 +589,7 @@ private fun InlineGlassSongMenu(
                         textAlign = TextAlign.Center)
                 }
             }
+        }
         }
     }
 }
@@ -748,9 +807,7 @@ private fun FullPlayer(state: AurelisState, onClose: () -> Unit, onQueue: () -> 
                 }
                 Spacer(Modifier.weight(1f))
                 Box {
-                    CircleAction(if (optionsOpen) Icons.Rounded.Close else Icons.Rounded.MoreHoriz,
-                        if (optionsOpen) "Tutup opsi" else "Opsi dan offset lirik",
-                        action = { optionsOpen = !optionsOpen })
+                    OverflowMorphButton(optionsOpen) { optionsOpen = !optionsOpen }
                     InlineGlassSongMenu(state, song, optionsOpen,
                         onDismiss = { optionsOpen = false }, lyricOffset = true)
                 }
