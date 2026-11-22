@@ -66,6 +66,15 @@ class LocalLibrary(context: Context) {
         playlists = playlists + (name to (songs + song).distinctBy { it.key })
         saveLists()
     }
+    /** Remove one song from one local playlist only; other playlists are untouched. */
+    fun removeFromPlaylist(name: String, song: Song): Boolean {
+        val tracks = playlists[name] ?: return false
+        if (tracks.none { it.key == song.key }) return false
+        playlists = playlists + (name to tracks.filterNot { it.key == song.key })
+        saveLists()
+        return true
+    }
+
     fun updateSettings(s: AppSettings) {
         settings = s
         prefs.edit().putString("audioMode", s.audioMode.name)
