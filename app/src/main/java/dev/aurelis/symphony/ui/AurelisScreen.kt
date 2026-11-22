@@ -754,6 +754,11 @@ private fun FullPlayer(state: AurelisState, onClose: () -> Unit, onQueue: () -> 
     var showTranslation by rememberSaveable { mutableStateOf(false) }
     var showRoman by rememberSaveable { mutableStateOf(state.settings.romanize) }
     val artwork = song.artwork.takeIf { it.startsWith("https://") }
+    val video = song.videoId.ifBlank { song.id.removePrefix("yt-") }
+    val hdEligible = video.matches(Regex("[A-Za-z0-9_-]{11}"))
+    var useMaxres by remember(song.key) { mutableStateOf(hdEligible) }
+    val coverUrl = if (useMaxres && hdEligible)
+        "https://i.ytimg.com/vi/$video/maxresdefault.jpg" else artwork
     val animateMs = if (state.settings.motion) 360 else 0
 
     Box(Modifier.fillMaxSize().background(bg)) {
@@ -761,22 +766,28 @@ private fun FullPlayer(state: AurelisState, onClose: () -> Unit, onQueue: () -> 
         // Full-bleed cover: clear center, soft/vignetted upper and lower edges.
         if (artwork != null) {
             if (pane == "Cover") {
-                AsyncImage(model = artwork, contentDescription = null,
-                    modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-                Box(Modifier.fillMaxWidth().height(150.dp).align(Alignment.TopCenter)) {
-                    AsyncImage(model = artwork, contentDescription = null,
-                        modifier = Modifier.fillMaxSize().blur(28.dp).graphicsLayer { alpha = .55f },
-                        contentScale = ContentScale.Crop)
-                }
-                Box(Modifier.fillMaxWidth().fillMaxHeight(.43f).align(Alignment.BottomCenter)) {
-                    AsyncImage(model = artwork, contentDescription = null,
-                        modifier = Modifier.fillMaxSize().blur(30.dp).graphicsLayer { alpha = .29f },
-                        contentScale = ContentScale.Crop)
-                }
+                // Blur a full-frame backdrop, then fit HD artwork into it.
+                // No chopped upper/lower image strips or visible seams.
+                AsyncImage(model = coverUrl, contentDescription = null,
+                    modifier = Modifier.fillMaxSize().blur(31.dp).graphicsLayer {
+                        scaleX = 1.10f; scaleY = 1.10f; alpha = .64f
+                    },
+                    contentScale = ContentScale.Crop,
+                    onError = { if (useMaxres) useMaxres = false })
+                AsyncImage(model = coverUrl, contentDescription = null,
+                    modifier = Modifier.fillMaxWidth().fillMaxHeight(.83f)
+                        .align(Alignment.Center),
+                    contentScale = ContentScale.Fit,
+                    onError = { if (useMaxres) useMaxres = false })
                 Box(Modifier.fillMaxSize().background(
-                    Brush.verticalGradient(listOf(
-                        bg.copy(alpha = .80f), bg.copy(alpha = .10f),
-                        bg.copy(alpha = .16f), bg.copy(alpha = .80f), bg.copy(alpha = .98f)
+                    Brush.verticalGradient(colorStops = arrayOf(
+                        0f to bg.copy(alpha = .81f),
+                        .13f to bg.copy(alpha = .29f),
+                        .29f to bg.copy(alpha = .08f),
+                        .59f to bg.copy(alpha = .02f),
+                        .77f to bg.copy(alpha = .43f),
+                        .92f to bg.copy(alpha = .90f),
+                        1f to bg.copy(alpha = .98f)
                     ))
                 ))
             } else {
