@@ -79,6 +79,7 @@ enum class VisualStyle { GLASS, AMBIENT }
 data class AppSettings(
     val audioMode: AudioMode = AudioMode.AUTO,
     val glassOpacity: Float = .68f,
+    val visualStyle: VisualStyle = VisualStyle.GLASS,
     val ambientIntensity: Float = .58f,
     val motion: Boolean = true,
     val ambient: Boolean = true,
