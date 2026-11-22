@@ -204,6 +204,8 @@ fun AurelisScreen(state: AurelisState) {
         }
     }
     var tab by rememberSaveable { mutableStateOf("Home") }
+    val homeScrollState = rememberLazyListState()
+    var compactHomeDock by remember { mutableStateOf(false) }
     var expanded by rememberSaveable { mutableStateOf(false) }
     var searchExpanded by rememberSaveable { mutableStateOf(false) }
     var searchQuery by rememberSaveable { mutableStateOf("") }
@@ -221,6 +223,23 @@ fun AurelisScreen(state: AurelisState) {
         }
     }
     LaunchedEffect(state.current) { if (state.current == null) expanded = false }
+    LaunchedEffect(tab, state.current?.key, homeScrollState) {
+        if (tab != "Home" || state.current == null) {
+            compactHomeDock = false
+            return@LaunchedEffect
+        }
+        snapshotFlow { homeScrollState.isScrollInProgress }
+            .distinctUntilChanged()
+            .collectLatest { scrolling ->
+                if (scrolling) {
+                    compactHomeDock = true
+                } else {
+                    // Only return after a full three seconds without scrolling.
+                    delay(3000)
+                    compactHomeDock = false
+                }
+            }
+    }
 
     CompositionLocalProvider(LocalGlassDensity provides state.settings.glassOpacity, LocalReducedMotion provides !state.settings.motion) {
     MaterialTheme(colorScheme = darkColorScheme(
@@ -239,27 +258,48 @@ fun AurelisScreen(state: AurelisState) {
                         ) togetherWith fadeOut(tween(if (state.settings.motion) 190 else 0))
                     }) { page ->
                         when (page) {
-                            "Home" -> HomePage(state, onPlay = { state.play(it) }, onMenu = { menuSong = it })
+                            "Home" -> HomePage(state, homeScrollState,
+                                onPlay = { state.play(it) }, onMenu = { menuSong = it })
                             "Search" -> SearchPage(state, searchQuery, onPlay = { state.play(it) }, onMenu = { menuSong = it })
                             else -> LibraryPage(state, onPlay = { state.play(it) }, onMenu = { menuSong = it }, onCreate = { creatingPlaylist = true })
                         }
                     }
                 }
-                Spacer(Modifier.height(if (state.current == null) 91.dp else 164.dp))
+                // Bottom capsules float over scrollable content. Each LazyColumn
+                // supplies its own bottom padding to keep the final row reachable.
             }
             Column(Modifier.align(Alignment.BottomCenter).imePadding().navigationBarsPadding().padding(horizontal = 15.dp).padding(bottom = 10.dp)) {
                 state.current?.let {
-                    AnimatedVisibility(visible = !expanded,
-                        enter = fadeIn(tween(220)) + slideInVertically { it / 2 },
-                        exit = fadeOut(tween(160)) + slideOutVertically { it / 2 }) {
+                    AnimatedVisibility(
+                        visible = !expanded && !compactHomeDock,
+                        enter = fadeIn(tween(if (state.settings.motion) 235 else 0)) +
+                            slideInVertically(tween(if (state.settings.motion) 320 else 0)) { it / 3 },
+                        exit = fadeOut(tween(if (state.settings.motion) 190 else 0)) +
+                            slideOutVertically(tween(if (state.settings.motion) 240 else 0)) { it / 3 }
+                    ) {
                         MiniPlayer(state, onExpand = { expanded = true })
                     }
                 }
-                Spacer(Modifier.height(10.dp))
-                IslandDock(tab, searchExpanded, searchQuery,
-                    onTab = { tab = it; searchExpanded = false },
-                    onSearchExpand = { tab = "Search"; searchExpanded = !searchExpanded },
-                    onQuery = { searchQuery = it }, artwork = state.current?.artwork.orEmpty())
+                val miniGap by animateDpAsState(
+                    targetValue = if (state.current != null && !expanded && !compactHomeDock) 10.dp else 0.dp,
+                    animationSpec = if (!state.settings.motion) tween(0)
+                        else spring(dampingRatio = .9f, stiffness = Spring.StiffnessMediumLow),
+                    label = "miniPlayerDockGap"
+                )
+                Spacer(Modifier.height(miniGap))
+                IslandDock(
+                    tab = tab, expanded = searchExpanded, query = searchQuery,
+                    onTab = { tab = it; searchExpanded = false; compactHomeDock = false },
+                    onSearchExpand = {
+                        tab = "Search"; searchExpanded = !searchExpanded; compactHomeDock = false
+                    },
+                    onQuery = { searchQuery = it },
+                    artwork = state.current?.artwork.orEmpty(),
+                    state = state,
+                    compact = compactHomeDock && tab == "Home" && !expanded && !searchExpanded,
+                    onOpenNav = { compactHomeDock = false },
+                    onExpandPlayer = { expanded = true }
+                )
             }
             AnimatedVisibility(visible = expanded && state.current != null,
                 enter = fadeIn(tween(if (state.settings.motion) 370 else 0)) +
@@ -420,8 +460,11 @@ private fun CircleAction(icon: androidx.compose.ui.graphics.vector.ImageVector, 
 }
 
 @Composable
-private fun HomePage(state: AurelisState, onPlay: (Song) -> Unit, onMenu: (Song) -> Unit) {
-    LazyColumn(contentPadding = PaddingValues(start = 21.dp, end = 21.dp, top = 22.dp, bottom = 18.dp), verticalArrangement = Arrangement.spacedBy(15.dp)) {
+private fun HomePage(state: AurelisState, scrollState: androidx.compose.foundation.lazy.LazyListState,
+    onPlay: (Song) -> Unit, onMenu: (Song) -> Unit) {
+    LazyColumn(state = scrollState,
+        contentPadding = PaddingValues(start = 21.dp, end = 21.dp, top = 22.dp, bottom = 180.dp),
+        verticalArrangement = Arrangement.spacedBy(15.dp)) {
         item {
             Text("CURATED FOR YOUR MOMENT", fontSize = 10.sp, letterSpacing = 2.sp, color = lime.copy(alpha = .83f), fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(9.dp))
@@ -479,7 +522,7 @@ private fun SectionHeading(title: String, subtitle: String) {
 
 @Composable
 private fun SearchPage(state: AurelisState, query: String, onPlay: (Song) -> Unit, onMenu: (Song) -> Unit) {
-    LazyColumn(contentPadding = PaddingValues(start = 21.dp, end = 21.dp, top = 18.dp, bottom = 14.dp), verticalArrangement = Arrangement.spacedBy(13.dp)) {
+    LazyColumn(contentPadding = PaddingValues(start = 21.dp, end = 21.dp, top = 18.dp, bottom = 180.dp), verticalArrangement = Arrangement.spacedBy(13.dp)) {
         item { SectionHeading("Search", if (query.isBlank()) "Mulai cari dari Island Search di bawah" else "Hasil untuk “${query.take(60)}”") }
         if (state.searching) item { LinearProgressIndicator(Modifier.fillMaxWidth(), color = lime) }
         if (query.isBlank()) item { EmptyPage("Temukan sesuatu yang baru", "Cari judul, artis, atau musik untuk didengarkan.") }
@@ -495,7 +538,8 @@ private fun LibraryPage(state: AurelisState, onPlay: (Song) -> Unit, onMenu: (So
     val list = remember(segment, libraryStamp) {
         when (segment) { "Disukai" -> state.library.favorites; "Riwayat" -> state.library.history; else -> emptyList() }
     }
-    LazyColumn(contentPadding = PaddingValues(horizontal = 21.dp, vertical = 18.dp), verticalArrangement = Arrangement.spacedBy(13.dp)) {
+    LazyColumn(contentPadding = PaddingValues(start = 21.dp, end = 21.dp, top = 18.dp, bottom = 180.dp),
+        verticalArrangement = Arrangement.spacedBy(13.dp)) {
         item { SectionHeading("Your Library",
             if (segment == "Riwayat") "${list.size} pemutaran terakhir · termasuk lagu yang diputar ulang"
             else "Satu ruang untuk semua musikmu") }
@@ -756,7 +800,7 @@ private fun MiniPlayer(state: AurelisState, onExpand: () -> Unit) {
     val song = state.current ?: return
     Tactile(Modifier.fillMaxWidth(), onExpand) {
         Glass(Modifier.fillMaxWidth().height(72.dp), RoundedCornerShape(25.dp),
-            tint = state.ambientColor.mix(Color(0xFF284037), .45f), opacity = .70f, backdrop = song.artwork) {
+            tint = state.ambientColor.mix(Color(0xFF284037), .45f), opacity = .33f, backdrop = song.artwork) {
             Column {
                 Row(Modifier.weight(1f).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Artwork(song, 55.dp, 17.dp)
