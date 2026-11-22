@@ -18,6 +18,9 @@ class LocalLibrary(context: Context) {
         visualStyle = runCatching {
             VisualStyle.valueOf(prefs.getString("visualStyle", "GLASS") ?: "GLASS")
         }.getOrDefault(VisualStyle.GLASS),
+        language = runCatching {
+            AppLanguage.valueOf(prefs.getString("language", "INDONESIAN") ?: "INDONESIAN")
+        }.getOrDefault(AppLanguage.INDONESIAN),
         ambientIntensity = prefs.getFloat("ambientIntensity", .58f),
         motion = prefs.getBoolean("motion", true), ambient = prefs.getBoolean("ambient", true),
         romanize = prefs.getBoolean("romanize", true),
@@ -68,6 +71,7 @@ class LocalLibrary(context: Context) {
         prefs.edit().putString("audioMode", s.audioMode.name)
             .putFloat("glassOpacity", s.glassOpacity).putFloat("ambientIntensity", s.ambientIntensity)
             .putString("visualStyle", s.visualStyle.name)
+            .putString("language", s.language.name)
             .putBoolean("motion", s.motion).putBoolean("ambient", s.ambient)
             .putBoolean("romanize", s.romanize)
             .putInt("lyricOffsetMs", s.lyricOffsetMs.coerceIn(-5000, 5000))
