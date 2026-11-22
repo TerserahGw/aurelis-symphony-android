@@ -67,6 +67,7 @@ class LocalLibrary(context: Context) {
         settings = s
         prefs.edit().putString("audioMode", s.audioMode.name)
             .putFloat("glassOpacity", s.glassOpacity).putFloat("ambientIntensity", s.ambientIntensity)
+            .putString("visualStyle", s.visualStyle.name)
             .putBoolean("motion", s.motion).putBoolean("ambient", s.ambient)
             .putBoolean("romanize", s.romanize)
             .putInt("lyricOffsetMs", s.lyricOffsetMs.coerceIn(-5000, 5000))
