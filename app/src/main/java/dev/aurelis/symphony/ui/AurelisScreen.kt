@@ -282,6 +282,105 @@ fun AurelisScreen(state: AurelisState) {
 }
 
 @Composable
+private fun UpdateAnnouncement(updater: AurelisUpdater, modifier: Modifier = Modifier) {
+    val release = updater.available
+    AnimatedVisibility(
+        visible = release != null,
+        modifier = modifier,
+        enter = fadeIn(tween(220)) + slideInVertically(
+            spring(dampingRatio = .86f, stiffness = Spring.StiffnessMediumLow)
+        ) { it / 2 } + scaleIn(initialScale = .90f),
+        exit = fadeOut(tween(160)) +
+            slideOutVertically(tween(210)) { it / 3 } + scaleOut(targetScale = .94f)
+    ) {
+        if (release != null) {
+            Glass(
+                Modifier.fillMaxWidth().shadow(22.dp, RoundedCornerShape(27.dp)),
+                RoundedCornerShape(27.dp), tint = Color(0xFF2B6553),
+                opacity = .88f
+            ) {
+                Column(Modifier.fillMaxWidth().padding(19.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Glass(Modifier.size(44.dp), RoundedCornerShape(15.dp),
+                            tint = Color(0xFF4D8674), opacity = .77f) {
+                            Icon(Icons.Rounded.SystemUpdate, null,
+                                Modifier.size(23.dp).align(Alignment.Center), tint = lime)
+                        }
+                        Spacer(Modifier.width(13.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text("Versi baru tersedia", color = white,
+                                fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                            Spacer(Modifier.height(3.dp))
+                            Text(release.tag, color = lime, fontSize = 12.sp)
+                        }
+                        IconButton(onClick = { updater.dismiss() }) {
+                            Icon(Icons.Rounded.Close, "Tutup pembaruan",
+                                Modifier.size(19.dp), tint = mist)
+                        }
+                    }
+                    Spacer(Modifier.height(12.dp))
+                    Text("Unduh dari GitHub dan pasang dengan izin Android.",
+                        color = mist, fontSize = 12.sp, lineHeight = 18.sp)
+                    if (updater.downloading || updater.downloaded) {
+                        Spacer(Modifier.height(16.dp))
+                        LinearProgressIndicator(
+                            progress = { updater.progress },
+                            modifier = Modifier.fillMaxWidth().height(5.dp)
+                                .clip(RoundedCornerShape(3.dp)),
+                            color = lime, trackColor = white.copy(alpha = .13f)
+                        )
+                        Spacer(Modifier.height(7.dp))
+                        Text(if (updater.downloaded) "APK selesai diunduh"
+                            else "${(updater.progress * 100).roundToInt()}% terunduh",
+                            color = lime, fontSize = 11.sp)
+                    }
+                    updater.message?.let { msg ->
+                        Spacer(Modifier.height(9.dp))
+                        Text(msg, color = white.copy(alpha = .88f),
+                            fontSize = 11.sp, lineHeight = 17.sp)
+                    }
+                    Spacer(Modifier.height(17.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Tactile(Modifier.weight(1f), { updater.dismiss() }) {
+                            Glass(Modifier.fillMaxWidth().height(44.dp),
+                                RoundedCornerShape(19.dp), opacity = .48f) {
+                                Text("Nanti", Modifier.align(Alignment.Center),
+                                    color = mist, fontSize = 13.sp)
+                            }
+                        }
+                        Tactile(Modifier.weight(1.35f), {
+                            if (updater.downloaded) updater.install() else updater.download()
+                        }) {
+                            Glass(Modifier.fillMaxWidth().height(44.dp),
+                                RoundedCornerShape(19.dp), tint = Color(0xFF659F88),
+                                opacity = if (updater.downloading) .38f else .87f) {
+                                Row(Modifier.align(Alignment.Center),
+                                    verticalAlignment = Alignment.CenterVertically) {
+                                    if (updater.downloading) {
+                                        CircularProgressIndicator(Modifier.size(17.dp),
+                                            strokeWidth = 2.dp, color = lime)
+                                    } else {
+                                        Icon(if (updater.downloaded) Icons.Rounded.InstallMobile
+                                            else Icons.Rounded.Download,
+                                            null, Modifier.size(18.dp), tint = white)
+                                    }
+                                    Spacer(Modifier.width(7.dp))
+                                    Text(if (updater.downloading) "Mengunduh"
+                                        else if (updater.downloaded) "Instal"
+                                        else "Unduh APK",
+                                        color = white, fontSize = 12.sp,
+                                        fontWeight = FontWeight.SemiBold)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun Header(tab: String, onSettings: () -> Unit, onLibrary: () -> Unit) {
     Row(Modifier.fillMaxWidth().padding(start = 23.dp, end = 20.dp, top = 16.dp, bottom = 11.dp), verticalAlignment = Alignment.CenterVertically) {
         Text("✦", fontSize = 27.sp, color = lime)
