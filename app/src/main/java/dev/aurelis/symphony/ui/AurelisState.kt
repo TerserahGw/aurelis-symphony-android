@@ -321,17 +321,19 @@ class AurelisState(context: Context) {
      */
     fun loadTranslations() {
         val key = current?.key ?: return
+        val target = settings.language.code
+        val identity = "$key|$target"
         val captured = lyrics
-        if (captured.lines.isEmpty() || translating || translatedForKey == key) return
+        if (captured.lines.isEmpty() || translating || translatedForKey == identity) return
         translationJob?.cancel()
         translationJob = scope.launch {
             translating = true
             translationError = null
             try {
-                val result = api.translateLyrics(captured, target = "id")
-                if (current?.key == key) {
+                val result = api.translateLyrics(captured, target = target)
+                if (current?.key == key && settings.language.code == target) {
                     translated = result
-                    translatedForKey = key
+                    translatedForKey = identity
                     if (result.size < captured.lines.size) {
                         translationError = "Sebagian baris belum dapat diterjemahkan."
                     }
@@ -339,11 +341,11 @@ class AurelisState(context: Context) {
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (e: Exception) {
-                if (current?.key == key) {
+                if (current?.key == key && settings.language.code == target) {
                     translationError = e.message ?: "Terjemahan tidak tersedia."
                 }
             } finally {
-                if (current?.key == key) translating = false
+                if (current?.key == key && settings.language.code == target) translating = false
             }
         }
     }
@@ -482,6 +484,13 @@ class AurelisState(context: Context) {
         val previous = settings
         if (previous == s) return
         settings = s
+        if (previous.language != s.language) {
+            translationJob?.cancel()
+            translatedForKey = null
+            translated = emptyMap()
+            translating = false
+            translationError = null
+        }
         settingsSaveJob?.cancel()
         // Smooth 60 fps sliders shouldn't enqueue a disk write every frame.
         // Toggles and other discrete settings are still persisted instantly.
