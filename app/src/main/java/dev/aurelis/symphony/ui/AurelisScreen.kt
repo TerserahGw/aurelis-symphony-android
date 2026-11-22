@@ -47,6 +47,8 @@ import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -893,6 +895,9 @@ private fun FullPlayer(state: AurelisState, onClose: () -> Unit, onQueue: () -> 
     overflowTransition.targetState = optionsOpen
     var showTranslation by rememberSaveable { mutableStateOf(false) }
     var showRoman by rememberSaveable { mutableStateOf(state.settings.romanize) }
+    LaunchedEffect(showTranslation, state.lyrics.lines.size, song.key) {
+        if (showTranslation && state.lyrics.lines.isNotEmpty()) state.loadTranslations()
+    }
     val artwork = song.artwork.takeIf { it.startsWith("https://") }
     val video = song.videoId.ifBlank { song.id.removePrefix("yt-") }
     val hdEligible = video.matches(Regex("[A-Za-z0-9_-]{11}"))
@@ -1032,22 +1037,34 @@ private fun FullPlayer(state: AurelisState, onClose: () -> Unit, onQueue: () -> 
                                     }
                                 }
                                 Spacer(Modifier.width(6.dp))
-                                IconButton(onClick = { showTranslation = !showTranslation },
-                                    modifier = Modifier.size(40.dp)) {
+                                IconButton(onClick = {
+                                    showTranslation = !showTranslation
+                                    if (showTranslation) state.loadTranslations()
+                                }, modifier = Modifier.size(40.dp)) {
                                     Glass(Modifier.fillMaxSize(), RoundedCornerShape(20.dp),
                                         opacity = if (showTranslation) .78f else .37f,
                                         tint = if (showTranslation) state.ambientColor else groove,
                                         backdrop = artwork) {
-                                        Icon(Icons.Rounded.Translate, "Terjemahan",
+                                        if (showTranslation && state.translating)
+                                            CircularProgressIndicator(
+                                                Modifier.size(18.dp).align(Alignment.Center),
+                                                strokeWidth = 1.8.dp, color = lime)
+                                        else Icon(Icons.Rounded.Translate, "Terjemahan",
                                             Modifier.size(18.dp).align(Alignment.Center),
                                             tint = if (showTranslation) lime else mist)
                                     }
                                 }
                             }
-                            if (showTranslation && state.lyrics.lines.none { it.translation.isNotBlank() }) {
-                                Text("Terjemahan belum tersedia dari sumber lirik.",
+                            if (showTranslation && (state.translating || state.translationError != null)) {
+                                Text(
+                                    when {
+                                        state.translating -> "Menerjemahkan lirik ke Bahasa Indonesia…"
+                                        else -> state.translationError.orEmpty()
+                                    },
                                     Modifier.padding(horizontal = 28.dp, vertical = 2.dp),
-                                    color = mist, fontSize = 11.sp)
+                                    color = if (state.translationError != null) Color(0xFFFFC5C5) else mist,
+                                    fontSize = 11.sp
+                                )
                             }
                             // There is deliberately NO separate glass lyric panel.
                             LyricContent(state, Modifier.fillMaxWidth().weight(1f),
@@ -1277,9 +1294,10 @@ private fun LyricContent(
                             fontSize = 13.sp, lineHeight = 19.sp)
                     }
                 }
-                if (showTranslation && line.translation.isNotBlank()) {
+                val translatedLine = state.translated[i].orEmpty().ifBlank { line.translation }
+                if (showTranslation && translatedLine.isNotBlank()) {
                     Spacer(Modifier.height(6.dp))
-                    Text(line.translation, color = if (focused) white.copy(alpha = .77f) else mist,
+                    Text(translatedLine, color = if (focused) white.copy(alpha = .77f) else mist,
                         fontSize = 12.sp, lineHeight = 18.sp)
                 }
             }
