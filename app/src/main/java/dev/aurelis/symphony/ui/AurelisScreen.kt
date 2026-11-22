@@ -220,6 +220,7 @@ private fun Ambient(state: AurelisState) {
 fun AurelisScreen(state: AurelisState) {
     val context = LocalContext.current
     val updater = remember(context) { AurelisUpdater(context) }
+    val pageScope = rememberCoroutineScope()
     LaunchedEffect(state.settings.checkUpdates) {
         while (state.settings.checkUpdates) {
             updater.check()
@@ -299,8 +300,14 @@ fun AurelisScreen(state: AurelisState) {
                     }) { page ->
                         when (page) {
                             "Home" -> HomePage(state, homeScrollState,
-                                onPlay = { state.play(it) }, onMenu = { menuSong = it },
-                                onConnect = { showYouTubeLogin = true })
+                                onPlay = { state.play(it) },
+                                onMenu = { menuSong = it },
+                                onConnect = { showYouTubeLogin = true },
+                                onPlaylist = { playlist ->
+                                    tab = "Library"
+                                    state.youtube.closePlaylist()
+                                    pageScope.launch { state.youtube.playlistTracks(playlist) }
+                                })
                             "Search" -> SearchPage(state, searchQuery, searchScrollState,
                                 onPlay = { state.play(it) }, onMenu = { menuSong = it })
                             else -> LibraryPage(state, libraryScrollState,
@@ -517,32 +524,272 @@ private fun CircleAction(icon: androidx.compose.ui.graphics.vector.ImageVector, 
 }
 
 @Composable
-private fun HomePage(state: AurelisState, scrollState: androidx.compose.foundation.lazy.LazyListState,
-    onPlay: (Song) -> Unit, onMenu: (Song) -> Unit) {
-    LazyColumn(state = scrollState,
-        contentPadding = PaddingValues(start = 21.dp, end = 21.dp, top = 22.dp, bottom = 180.dp),
-        verticalArrangement = Arrangement.spacedBy(15.dp)) {
-        item {
-            Text("CURATED FOR YOUR MOMENT", fontSize = 10.sp, letterSpacing = 2.sp, color = lime.copy(alpha = .83f), fontWeight = FontWeight.SemiBold)
-            Spacer(Modifier.height(9.dp))
-            Text("Find your\nfrequency.", fontSize = 42.sp, fontWeight = FontWeight.SemiBold,
-                lineHeight = 43.sp, letterSpacing = -1.8.sp, color = white)
-            Spacer(Modifier.height(8.dp))
-            Text("Musik yang mengikuti suasanamu.", color = mist, fontSize = 13.sp)
+private fun HomePage(
+    state: AurelisState,
+    scrollState: androidx.compose.foundation.lazy.LazyListState,
+    onPlay: (Song) -> Unit,
+    onMenu: (Song) -> Unit,
+    onConnect: () -> Unit,
+    onPlaylist: (YouTubePlaylist) -> Unit
+) {
+    var mood by rememberSaveable { mutableStateOf("Semua") }
+    val libraryStamp = state.libraryStamp
+    val recentlyPlayed = remember(libraryStamp, state.youtube.history) {
+        (state.library.history + state.youtube.history).distinctBy { it.key }.take(20)
+    }
+    val selectedSongs = remember(mood, state.home, state.youtube.shelves, libraryStamp) {
+        val pool = (state.youtube.shelves.flatMap { it.tracks } + state.home)
+            .distinctBy { it.key }
+        val filtered = when (mood) {
+            "Santai" -> pool.filter {
+                val label = (it.title + " " + it.artist).lowercase()
+                listOf("chill", "slowed", "lofi", "acoustic", "piano", "sleep")
+                    .any(label::contains)
+            }
+            "Energi" -> pool.filter {
+                val label = (it.title + " " + it.artist).lowercase()
+                listOf("remix", "rock", "dance", "hardstyle", "phonk", "sped")
+                    .any(label::contains)
+            }
+            "Disukai" -> state.library.favorites
+            "Baru" -> pool.asReversed()
+            else -> pool
         }
-        if (state.loadingHome) item { LinearProgressIndicator(Modifier.fillMaxWidth().padding(vertical = 20.dp), color = lime) }
-        state.home.firstOrNull()?.let { song ->
-            item { FeaturedSong(song, state, onPlay = { onPlay(song) }) }
+        filtered.ifEmpty { if (mood == "Disukai") emptyList() else pool }.take(40)
+    }
+
+    LazyColumn(
+        state = scrollState,
+        contentPadding = PaddingValues(
+            start = 21.dp, end = 21.dp, top = 17.dp, bottom = 184.dp
+        ),
+        verticalArrangement = Arrangement.spacedBy(19.dp)
+    ) {
+        item(key = "welcome") {
+            Column {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("AURELIS SYMPHONY", color = lime.copy(alpha = .81f),
+                            fontSize = 10.sp, letterSpacing = 1.9.sp,
+                            fontWeight = FontWeight.SemiBold)
+                        Spacer(Modifier.height(5.dp))
+                        Text("Musik untuk harimu.", color = white, fontSize = 30.sp,
+                            letterSpacing = (-.9).sp, fontWeight = FontWeight.SemiBold)
+                        Spacer(Modifier.height(4.dp))
+                        Text("Temukan lagu, suasana, dan rekomendasi favorit.",
+                            color = mist, fontSize = 12.sp)
+                    }
+                    if (state.youtube.isConnected) {
+                        Glass(Modifier.size(42.dp), RoundedCornerShape(20.dp),
+                            tint = state.ambientColor, opacity = .52f) {
+                            Icon(Icons.Rounded.CheckCircle, "YouTube Music terhubung",
+                                tint = lime, modifier = Modifier.size(21.dp)
+                                    .align(Alignment.Center))
+                        }
+                    }
+                }
+                Spacer(Modifier.height(18.dp))
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(listOf("Semua", "Santai", "Energi", "Disukai", "Baru")) { filter ->
+                        Tactile(action = { mood = filter }) {
+                            Glass(
+                                shape = RoundedCornerShape(23.dp),
+                                tint = if (filter == mood) state.ambientColor else groove,
+                                opacity = if (filter == mood) .74f else .38f
+                            ) {
+                                Text(filter,
+                                    Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                                    fontSize = 12.sp,
+                                    color = if (filter == mood) lime else mist,
+                                    fontWeight = if (filter == mood)
+                                        FontWeight.SemiBold else FontWeight.Medium)
+                            }
+                        }
+                    }
+                }
+            }
         }
-        if (state.home.isNotEmpty()) {
-            item { SectionHeading("Dibuat untukmu", "Pilihan berdasarkan suasana dan kebiasaan") }
-            items(state.home.drop(1).take(18), key = { "home-${it.key}" }) { song -> SongRow(song, state, onPlay = { onPlay(song) }, onMenu = { onMenu(song) }) }
+
+        if (state.loadingHome) item(key = "home-loading") {
+            LinearProgressIndicator(
+                Modifier.fillMaxWidth().padding(vertical = 10.dp),
+                color = lime
+            )
         }
-        if (state.originals.isNotEmpty()) {
-            item { Spacer(Modifier.height(12.dp)); SectionHeading("Aurelis Originals", "Musik orisinal dari perpustakaan") }
-            items(state.originals, key = { "original-${it.key}" }) { song -> SongRow(song, state, onPlay = { onPlay(song) }, onMenu = { onMenu(song) }) }
+
+        if (!state.youtube.isConnected) item(key = "youtube-connect") {
+            Tactile(Modifier.fillMaxWidth(), onConnect) {
+                Glass(Modifier.fillMaxWidth().height(71.dp),
+                    RoundedCornerShape(23.dp), tint = state.ambientColor,
+                    opacity = .48f) {
+                    Row(Modifier.fillMaxSize().padding(horizontal = 16.dp),
+                        verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Rounded.LibraryMusic, null,
+                            Modifier.size(24.dp), tint = lime)
+                        Spacer(Modifier.width(13.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text("Hubungkan YouTube Music", color = white,
+                                fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                            Spacer(Modifier.height(3.dp))
+                            Text("Rekomendasi, history, dan playlist dari akunmu",
+                                color = mist, fontSize = 10.sp)
+                        }
+                        Icon(Icons.Rounded.ChevronRight, null,
+                            Modifier.size(21.dp), tint = mist)
+                    }
+                }
+            }
         }
-        if (!state.loadingHome && state.home.isEmpty() && state.originals.isEmpty()) item { EmptyPage("Belum ada musik", "Periksa koneksi atau server Aurelis lalu buka kembali Home.") }
+
+        val feature = selectedSongs.firstOrNull() ?: state.home.firstOrNull()
+        feature?.let { song ->
+            item(key = "feature") {
+                FeaturedSong(song, state, onPlay = { onPlay(song) })
+            }
+        }
+
+        if (recentlyPlayed.isNotEmpty()) {
+            item(key = "listen-again") {
+                HomeSongCarousel(
+                    "Dengarkan lagi",
+                    "Kembali ke lagu yang kamu putar",
+                    recentlyPlayed,
+                    onPlay
+                )
+            }
+        }
+
+        if (state.youtube.shelves.isNotEmpty()) {
+            items(state.youtube.shelves.take(6), key = { "yt-shelf-${it.title}" }) { shelf ->
+                HomeSongCarousel(
+                    shelf.title,
+                    "Dari YouTube Music · diperbarui saat terhubung",
+                    shelf.tracks,
+                    onPlay
+                )
+            }
+        }
+
+        if (selectedSongs.isNotEmpty()) {
+            item(key = "made-for-you") {
+                HomeSongCarousel(
+                    if (mood == "Semua") "Mix untukmu" else "Pilihan $mood",
+                    "Musik pilihan dengan rekomendasi Aurelis",
+                    selectedSongs,
+                    onPlay
+                )
+            }
+            item(key = "tracks-heading") {
+                SectionHeading("Lagu yang mungkin kamu suka",
+                    "Jelajahi dan masukkan ke antrean")
+            }
+            items(selectedSongs.take(12), key = { "home-song-${it.key}" }) { song ->
+                SongRow(song, state, onPlay = { onPlay(song) },
+                    onMenu = { onMenu(song) })
+            }
+        }
+
+        if (state.youtube.playlists.isNotEmpty()) {
+            item(key = "yt-playlists") {
+                Column {
+                    SectionHeading("Playlist YouTube Music",
+                        "Koleksi tersinkron dari akun yang terhubung")
+                    Spacer(Modifier.height(11.dp))
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        items(state.youtube.playlists, key = { it.id }) { playlist ->
+                            Tactile(Modifier.width(149.dp), { onPlaylist(playlist) }) {
+                                Column {
+                                    Glass(Modifier.size(149.dp), RoundedCornerShape(20.dp),
+                                        tint = state.ambientColor, opacity = .44f,
+                                        backdrop = playlist.artwork) {
+                                        AsyncImage(
+                                            model = playlist.artwork.takeIf { it.isNotBlank() },
+                                            contentDescription = null,
+                                            modifier = Modifier.fillMaxSize(),
+                                            contentScale = ContentScale.Crop
+                                        )
+                                    }
+                                    Spacer(Modifier.height(8.dp))
+                                    Text(playlist.title, color = white, fontSize = 12.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if (state.originals.isNotEmpty()) item(key = "originals") {
+            HomeSongCarousel(
+                "Aurelis Originals",
+                "Dengarkan musik orisinal dari perpustakaan",
+                state.originals,
+                onPlay
+            )
+        }
+
+        if (!state.loadingHome && state.home.isEmpty() &&
+            state.youtube.shelves.isEmpty() && state.originals.isEmpty())
+            item(key = "empty-home") {
+                EmptyPage("Belum ada musik",
+                    "Periksa internet atau hubungkan akun YouTube Music.")
+            }
+    }
+}
+
+@Composable
+private fun HomeSongCarousel(
+    title: String, subtitle: String,
+    songs: List<Song>,
+    onPlay: (Song) -> Unit
+) {
+    Column {
+        SectionHeading(title, subtitle)
+        Spacer(Modifier.height(11.dp))
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(13.dp)) {
+            items(songs.take(20), key = { it.key }) { song ->
+                Tactile(Modifier.width(153.dp), { onPlay(song) }) {
+                    Column {
+                        Glass(
+                            Modifier.size(153.dp),
+                            RoundedCornerShape(23.dp),
+                            opacity = .37f,
+                            backdrop = song.artwork
+                        ) {
+                            AsyncImage(
+                                model = song.artwork.takeIf { it.isNotBlank() },
+                                contentDescription = null,
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop
+                            )
+                            Box(Modifier.fillMaxSize().background(
+                                Brush.verticalGradient(listOf(
+                                    Color.Transparent,
+                                    bg.copy(alpha = .23f)
+                                ))
+                            ))
+                            Icon(
+                                Icons.Rounded.PlayArrow, "Putar",
+                                Modifier.align(Alignment.BottomEnd)
+                                    .padding(10.dp).size(25.dp),
+                                tint = white
+                            )
+                        }
+                        Spacer(Modifier.height(9.dp))
+                        Text(song.title, maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            color = white, fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold)
+                        Spacer(Modifier.height(4.dp))
+                        Text(song.artist, maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            color = mist, fontSize = 11.sp)
+                    }
+                }
+            }
+        }
     }
 }
 
