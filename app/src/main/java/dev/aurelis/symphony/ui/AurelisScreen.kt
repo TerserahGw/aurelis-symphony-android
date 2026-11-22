@@ -9,8 +9,13 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
@@ -43,12 +48,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupProperties
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
@@ -209,7 +221,13 @@ fun AurelisScreen(state: AurelisState) {
                 Spacer(Modifier.height(if (state.current == null) 91.dp else 164.dp))
             }
             Column(Modifier.align(Alignment.BottomCenter).imePadding().navigationBarsPadding().padding(horizontal = 15.dp).padding(bottom = 10.dp)) {
-                state.current?.let { MiniPlayer(state, onExpand = { expanded = true }) }
+                state.current?.let {
+                    AnimatedVisibility(visible = !expanded,
+                        enter = fadeIn(tween(220)) + slideInVertically { it / 2 },
+                        exit = fadeOut(tween(160)) + slideOutVertically { it / 2 }) {
+                        MiniPlayer(state, onExpand = { expanded = true })
+                    }
+                }
                 Spacer(Modifier.height(10.dp))
                 IslandDock(tab, searchExpanded, searchQuery,
                     onTab = { tab = it; searchExpanded = false },
@@ -217,8 +235,12 @@ fun AurelisScreen(state: AurelisState) {
                     onQuery = { searchQuery = it }, artwork = state.current?.artwork.orEmpty())
             }
             AnimatedVisibility(visible = expanded && state.current != null,
-                enter = fadeIn(tween(240)) + slideInVertically(tween(420)) { it / 6 },
-                exit = fadeOut(tween(200)) + slideOutVertically(tween(310)) { it / 8 }
+                enter = fadeIn(tween(if (state.settings.motion) 370 else 0)) +
+                    scaleIn(initialScale = .935f, animationSpec = spring(dampingRatio = .88f, stiffness = Spring.StiffnessLow)) +
+                    slideInVertically(animationSpec = spring(dampingRatio = .92f, stiffness = Spring.StiffnessLow)) { it / 8 },
+                exit = fadeOut(tween(if (state.settings.motion) 240 else 0)) +
+                    scaleOut(targetScale = .95f, animationSpec = tween(300)) +
+                    slideOutVertically(tween(300)) { it / 7 }
             ) {
                 FullPlayer(state, onClose = { expanded = false }, onQueue = { showQueue = true }, onMenu = { state.current?.let { menuSong = it } })
             }
@@ -395,48 +417,106 @@ private fun SongRow(song: Song, state: AurelisState, onPlay: () -> Unit, onMenu:
                         color = if (state.current?.key == song.key) lime else white,
                         fontSize = 14.sp, fontWeight = FontWeight.Medium)
                     Spacer(Modifier.height(5.dp))
-                    Text(song.artist, maxLines = 1, overflow = TextOverflow.Ellipsis, color = mist, fontSize = 12.sp)
+                    Text(song.artist, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        color = mist, fontSize = 12.sp)
                 }
             }
         }
-        // Anchored mini menu. The trigger morphs to X, and swipe/scroll stays on the list.
         Box {
             IconButton(onClick = { menuOpen = !menuOpen }, modifier = Modifier.size(43.dp)) {
-                AnimatedContent(targetState = menuOpen, label = "moreToClose", transitionSpec = {
-                    fadeIn(tween(110)) togetherWith fadeOut(tween(100))
+                AnimatedContent(targetState = menuOpen, label = "moreX", transitionSpec = {
+                    (fadeIn(tween(145)) + scaleIn(initialScale = .70f)) togetherWith
+                        (fadeOut(tween(120)) + scaleOut(targetScale = .75f))
                 }) { open ->
-                    Icon(if (open) Icons.Default.Close else Icons.Default.MoreVert,
-                        if (open) "Tutup opsi" else "Opsi lagu", tint = if (open) lime else mist,
-                        modifier = Modifier.size(21.dp))
+                    Icon(if (open) Icons.Rounded.Close else Icons.Rounded.MoreVert,
+                        if (open) "Tutup opsi" else "Opsi lagu",
+                        tint = if (open) lime else mist, modifier = Modifier.size(21.dp))
                 }
             }
-            DropdownMenu(
-                expanded = menuOpen,
-                onDismissRequest = { menuOpen = false },
-                offset = DpOffset((-187).dp, (-194).dp),
-                modifier = Modifier.width(238.dp)
-                    .background(Color(0xFF152723), RoundedCornerShape(20.dp))
-            ) {
-                Text(song.title, Modifier.padding(start = 18.dp, end = 18.dp, top = 10.dp, bottom = 6.dp),
-                    color = white, fontWeight = FontWeight.SemiBold, fontSize = 12.sp,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis)
-                DropdownMenuItem(
-                    text = { Text(if (state.isLiked(song)) "Hapus dari Disukai" else "Sukai lagu", fontSize = 13.sp) },
-                    leadingIcon = { Icon(if (state.isLiked(song)) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                        null, Modifier.size(19.dp), tint = lime) },
-                    onClick = { state.like(song); menuOpen = false }
-                )
-                DropdownMenuItem(
-                    text = { Text("Tambahkan ke antrean", fontSize = 13.sp) },
-                    leadingIcon = { Icon(Icons.Default.QueueMusic, null, Modifier.size(19.dp), tint = lime) },
-                    onClick = { state.enqueue(song); menuOpen = false }
-                )
-                state.library.playlists.keys.take(5).forEach { name ->
-                    DropdownMenuItem(
-                        text = { Text("Playlist · $name", maxLines = 1, fontSize = 13.sp) },
-                        leadingIcon = { Icon(Icons.Default.PlaylistAdd, null, Modifier.size(19.dp), tint = lime) },
-                        onClick = { state.addToPlaylist(name, song); menuOpen = false }
-                    )
+            InlineGlassSongMenu(state, song, menuOpen, { menuOpen = false })
+        }
+    }
+}
+
+@Composable
+private fun GlassPopupItem(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String,
+    action: () -> Unit) {
+    Tactile(Modifier.fillMaxWidth(), action) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 13.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically) {
+            Icon(icon, null, Modifier.size(19.dp), tint = lime)
+            Spacer(Modifier.width(13.dp))
+            Text(label, color = white, fontSize = 13.sp, maxLines = 1,
+                overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.Medium)
+        }
+    }
+}
+
+@Composable
+private fun InlineGlassSongMenu(
+    state: AurelisState, song: Song, expanded: Boolean, onDismiss: () -> Unit,
+    lyricOffset: Boolean = false
+) {
+    if (!expanded) return
+    val density = LocalDensity.current
+    val anchorOffset = with(density) { IntOffset((-9).dp.roundToPx(), (-41).dp.roundToPx()) }
+    Popup(
+        alignment = Alignment.BottomEnd,
+        offset = anchorOffset,
+        onDismissRequest = onDismiss,
+        properties = PopupProperties(focusable = true)
+    ) {
+        Glass(
+            Modifier.width(252.dp).shadow(20.dp, RoundedCornerShape(23.dp)),
+            RoundedCornerShape(23.dp), tint = state.ambientColor, opacity = .89f,
+            backdrop = song.artwork
+        ) {
+            Column(Modifier.fillMaxWidth().padding(7.dp)) {
+                Text(song.title, Modifier.fillMaxWidth().padding(start = 13.dp, end = 13.dp,
+                    top = 10.dp, bottom = 9.dp), color = white, fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold, maxLines = 1,
+                    overflow = TextOverflow.Ellipsis)
+                GlassPopupItem(if (state.isLiked(song)) Icons.Rounded.Favorite
+                    else Icons.Rounded.FavoriteBorder,
+                    if (state.isLiked(song)) "Hapus dari Disukai" else "Sukai lagu") {
+                    state.like(song); onDismiss()
+                }
+                GlassPopupItem(Icons.Rounded.QueueMusic, "Tambahkan ke antrean") {
+                    state.enqueue(song); onDismiss()
+                }
+                state.library.playlists.keys.take(4).forEach { name ->
+                    GlassPopupItem(Icons.Rounded.PlaylistAdd, "Playlist · $name") {
+                        state.addToPlaylist(name, song); onDismiss()
+                    }
+                }
+                if (lyricOffset) {
+                    HorizontalDivider(Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                        color = white.copy(alpha = .15f))
+                    Text("OFFSET LIRIK", Modifier.padding(start = 13.dp, bottom = 3.dp),
+                        color = mist, fontSize = 10.sp, letterSpacing = 1.3.sp)
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceEvenly) {
+                        IconButton(onClick = {
+                            state.update(state.settings.copy(
+                                lyricOffsetMs = (state.settings.lyricOffsetMs - 250).coerceAtLeast(-5000)))
+                        }) {
+                            Icon(Icons.Rounded.Remove, "Mundurkan lirik", tint = white)
+                        }
+                        Tactile(action = { state.update(state.settings.copy(lyricOffsetMs = 0)) }) {
+                            Text("%+.2f s".format(java.util.Locale.US,
+                                state.settings.lyricOffsetMs / 1000.0),
+                                color = lime, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                        }
+                        IconButton(onClick = {
+                            state.update(state.settings.copy(
+                                lyricOffsetMs = (state.settings.lyricOffsetMs + 250).coerceAtMost(5000)))
+                        }) {
+                            Icon(Icons.Rounded.Add, "Majukan lirik", tint = white)
+                        }
+                    }
+                    Text("Tekan waktu untuk reset", Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                        color = mist.copy(alpha = .7f), fontSize = 10.sp,
+                        textAlign = TextAlign.Center)
                 }
             }
         }
@@ -465,7 +545,7 @@ private fun MiniPlayer(state: AurelisState, onExpand: () -> Unit) {
     val song = state.current ?: return
     Tactile(Modifier.fillMaxWidth(), onExpand) {
         Glass(Modifier.fillMaxWidth().height(72.dp), RoundedCornerShape(25.dp),
-            tint = state.ambientColor.mix(Color(0xFF284037), .45f), opacity = .87f) {
+            tint = state.ambientColor.mix(Color(0xFF284037), .45f), opacity = .70f, backdrop = song.artwork) {
             Column {
                 Row(Modifier.weight(1f).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Artwork(song, 55.dp, 17.dp)
