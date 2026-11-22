@@ -98,7 +98,7 @@ jobs:
           path: app/build/outputs/apk/release/*.apk
           if-no-files-found: error
 
-      - name: Publish GitHub Release v1.1.0-beta Stable
+      - name: Publish GitHub Release v1.1.0 Beta
         if: steps.signing.outputs.enabled == 'true' && github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
@@ -109,8 +109,8 @@ jobs:
             AurelisSymphony-Android-arm64-v1.1.0-beta.apk
           if ! gh release view v1.1.0-beta >/dev/null 2>&1; then
             gh release create v1.1.0-beta --target "$GITHUB_SHA" \
-              --title "Aurelis Symphony Android v1.1.0-beta Stable" \
-              --notes "Aurelis Symphony Android v1.1.0 Beta. Experimental YouTube Music integration inspired by BitChord: opt-in Google WebView login with Android Keystore encrypted local session; browse personalized shelves, recent history and account playlists via unofficial InnerTube with periodic refresh; radio recommendations blended into Up Next. Faster on-demand lyric translation through batched lightweight Google translation, with existing Aurelis fallback. New Spotify/YouTube Music-inspired Home discovery, lowered navigation icons, swipe-down Settings handle and Ambient style without Glass. YouTube Music cloud writeback and push-realtime are not provided. versionCode 7, signed with persistent key." \\
+              --title "Aurelis Symphony Android v1.1.0 Beta" \
+              --notes "Aurelis Symphony Android v1.1.0 Beta. Experimental YouTube Music integration inspired by BitChord: opt-in Google WebView login with Android Keystore encrypted local session; browse personalized shelves, recent history and account playlists via unofficial InnerTube with periodic refresh; radio recommendations blended into Up Next. Faster on-demand lyric translation through batched lightweight Google translation, with existing Aurelis fallback. New Spotify/YouTube Music-inspired Home discovery, lowered navigation icons, swipe-down Settings handle and Ambient style without Glass. YouTube Music cloud writeback and push-realtime are not provided. versionCode 7, signed with persistent key." \
               --prerelease
           fi
           gh release upload v1.1.0-beta \
