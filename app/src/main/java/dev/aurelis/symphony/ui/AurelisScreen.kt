@@ -825,104 +825,215 @@ private fun MiniPlayer(state: AurelisState, onExpand: () -> Unit) {
 }
 
 @Composable
-private fun IslandDock(tab: String, expanded: Boolean, query: String,
-    onTab: (String) -> Unit, onSearchExpand: () -> Unit, onQuery: (String) -> Unit,
-    artwork: String = "") {
+private fun IslandDock(
+    tab: String,
+    expanded: Boolean,
+    query: String,
+    onTab: (String) -> Unit,
+    onSearchExpand: () -> Unit,
+    onQuery: (String) -> Unit,
+    artwork: String = "",
+    state: AurelisState,
+    compact: Boolean,
+    onOpenNav: () -> Unit,
+    onExpandPlayer: () -> Unit
+) {
     val focus = LocalFocusManager.current
-    val reduce = LocalReducedMotion.current
+    val reduced = LocalReducedMotion.current
     val tabs = listOf("Home", "Search", "Library")
+    val track = state.current
+    val compactNow = compact && track != null && !expanded
     var hovered by remember { mutableIntStateOf(-1) }
-    val navWeight by animateFloatAsState(
-        targetValue = if (expanded) .16f else .79f,
-        animationSpec = if (reduce) tween(0) else spring(dampingRatio = .82f, stiffness = Spring.StiffnessMediumLow),
-        label = "islandMorph"
-    )
-    Row(Modifier.fillMaxWidth().height(59.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Glass(
-            Modifier.weight(navWeight).fillMaxHeight(), RoundedCornerShape(32.dp),
-            opacity = .53f, backdrop = artwork
-        ) {
-            if (expanded) {
-                Tactile(Modifier.fillMaxSize(), { focus.clearFocus(); onSearchExpand() }) {
-                    Icon(Icons.Default.Menu, "Tampilkan navigasi", tint = white,
-                        modifier = Modifier.size(22.dp).align(Alignment.Center))
-                }
-            } else {
-                BoxWithConstraints(Modifier.fillMaxSize().padding(5.dp).pointerInput(tab) {
-                    detectDragGestures(
-                        onDragStart = { p -> hovered = ((p.x / size.width) * 3f).toInt().coerceIn(0, 2) },
-                        onDrag = { change, _ ->
-                            hovered = ((change.position.x / size.width) * 3f).toInt().coerceIn(0, 2)
-                            change.consume()
-                        },
-                        onDragEnd = { val selected = hovered; hovered = -1; if (selected in 0..2) onTab(tabs[selected]) },
-                        onDragCancel = { hovered = -1 }
-                    )
-                }) {
-                    val segment = maxWidth / 3
-                    val selection = if (hovered in 0..2) hovered else tabs.indexOf(tab).coerceAtLeast(0)
-                    val indicator by animateDpAsState(
-                        targetValue = segment * selection,
-                        animationSpec = if (reduce) tween(0) else spring(dampingRatio = .80f, stiffness = Spring.StiffnessMediumLow),
-                        label = "islandSelection"
-                    )
-                    Box(
-                        Modifier.offset(x = indicator).width(segment).fillMaxHeight()
-                            .clip(RoundedCornerShape(25.dp))
+    val smooth = if (reduced) tween<Dp>(0)
+        else spring<Dp>(dampingRatio = .89f, stiffness = Spring.StiffnessMediumLow)
+
+    BoxWithConstraints(Modifier.fillMaxWidth().height(59.dp)) {
+        val width = maxWidth
+        val navTarget = if (expanded || compactNow) 56.dp else (width - 8.dp) * .79f
+        val searchTarget = when {
+            expanded -> width - 64.dp
+            compactNow -> 56.dp
+            else -> width - navTarget - 8.dp
+        }
+        val centerTarget = if (compactNow) width - 128.dp else 0.dp
+        val navWidth by animateDpAsState(navTarget, smooth, label = "dockNavWidth")
+        val searchWidth by animateDpAsState(searchTarget, smooth, label = "dockSearchWidth")
+        val centerWidth by animateDpAsState(centerTarget, smooth, label = "dockMiniWidth")
+        val miniAlpha by animateFloatAsState(
+            targetValue = if (compactNow) 1f else 0f,
+            animationSpec = tween(if (reduced) 0 else 230),
+            label = "dockMiniOpacity"
+        )
+        Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween) {
+            Glass(
+                Modifier.width(navWidth).fillMaxHeight(),
+                RoundedCornerShape(32.dp),
+                tint = state.ambientColor,
+                opacity = .31f, backdrop = artwork
+            ) {
+                if (expanded || compactNow || navWidth < 165.dp) {
+                    Tactile(Modifier.fillMaxSize(), {
+                        focus.clearFocus()
+                        if (expanded) onSearchExpand() else onOpenNav()
+                    }) {
+                        Icon(Icons.Rounded.Menu, "Buka menu navigasi",
+                            Modifier.size(22.dp).align(Alignment.Center), tint = white)
+                    }
+                } else {
+                    BoxWithConstraints(Modifier.fillMaxSize().padding(5.dp).pointerInput(tab) {
+                        detectDragGestures(
+                            onDragStart = { point ->
+                                hovered = ((point.x / size.width) * 3f)
+                                    .toInt().coerceIn(0, 2)
+                            },
+                            onDrag = { change, _ ->
+                                hovered = ((change.position.x / size.width) * 3f)
+                                    .toInt().coerceIn(0, 2)
+                                change.consume()
+                            },
+                            onDragEnd = {
+                                val chosen = hovered
+                                hovered = -1
+                                if (chosen in 0..2) onTab(tabs[chosen])
+                            },
+                            onDragCancel = { hovered = -1 }
+                        )
+                    }) {
+                        val segment = maxWidth / 3
+                        val selected = if (hovered in 0..2) hovered
+                            else tabs.indexOf(tab).coerceAtLeast(0)
+                        val x by animateDpAsState(
+                            segment * selected,
+                            animationSpec = if (reduced) tween(0)
+                                else spring(dampingRatio = .84f,
+                                    stiffness = Spring.StiffnessMediumLow),
+                            label = "dockSelection"
+                        )
+                        Box(Modifier.offset(x = x).width(segment).fillMaxHeight()
+                            .clip(RoundedCornerShape(26.dp))
                             .background(Brush.verticalGradient(listOf(
-                                lime.copy(alpha = .34f), Color(0xFF547C69).copy(alpha = .31f)
+                                lime.copy(alpha = .28f),
+                                Color(0xFF547C69).copy(alpha = .19f)
                             )))
-                            .border(1.dp, lime.copy(alpha = .22f), RoundedCornerShape(25.dp))
-                    )
-                    Row(Modifier.fillMaxSize()) {
-                        tabs.forEachIndexed { index, name ->
-                            val icon = when (name) {
-                                "Home" -> Icons.Rounded.Home
-                                "Search" -> Icons.Rounded.Search
-                                else -> Icons.Rounded.LibraryMusic
-                            }
-                            Tactile(Modifier.weight(1f).fillMaxHeight(), { hovered = -1; onTab(name) }) {
-                                Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.Center) {
-                                    Icon(icon, name, Modifier.size(20.dp),
-                                        tint = if (selection == index) white else mist)
-                                    Spacer(Modifier.height(2.dp))
-                                    Text(name, color = if (selection == index) white else mist, fontSize = 10.sp)
+                            .border(1.dp, lime.copy(alpha = .18f),
+                                RoundedCornerShape(26.dp)))
+                        Row(Modifier.fillMaxSize()) {
+                            tabs.forEachIndexed { index, name ->
+                                val icon = when (name) {
+                                    "Home" -> Icons.Rounded.Home
+                                    "Search" -> Icons.Rounded.Search
+                                    else -> Icons.Rounded.LibraryMusic
+                                }
+                                Tactile(Modifier.weight(1f).fillMaxHeight(), {
+                                    hovered = -1
+                                    onTab(name)
+                                }) {
+                                    Column(Modifier.fillMaxSize(),
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.Center) {
+                                        Icon(icon, name, Modifier.size(19.dp),
+                                            tint = if (selected == index) white else mist)
+                                        Spacer(Modifier.height(3.dp))
+                                        Text(name, fontSize = 10.sp,
+                                            color = if (selected == index) white else mist)
+                                    }
                                 }
                             }
                         }
                     }
                 }
             }
-        }
-        Glass(
-            Modifier.weight(1f - navWeight).fillMaxHeight(), RoundedCornerShape(32.dp),
-            opacity = .55f, backdrop = artwork
-        ) {
-            if (expanded) {
-                Row(Modifier.fillMaxSize().padding(start = 16.dp, end = 7.dp),
-                    verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Rounded.Search, null, tint = lime, modifier = Modifier.size(20.dp))
-                    Spacer(Modifier.width(10.dp))
-                    BasicTextField(value = query, onValueChange = onQuery,
-                        modifier = Modifier.weight(1f), cursorBrush = SolidColor(lime), singleLine = true,
-                        textStyle = LocalTextStyle.current.copy(color = white, fontSize = 14.sp),
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                        keyboardActions = KeyboardActions(onSearch = { focus.clearFocus() }),
-                        decorationBox = { inner -> Box {
-                            if (query.isEmpty()) Text("Lagu, artis, album…", color = mist, fontSize = 13.sp)
-                            inner()
-                        } })
-                    IconButton(onClick = {
-                        if (query.isNotEmpty()) onQuery("") else { focus.clearFocus(); onSearchExpand() }
-                    }, modifier = Modifier.size(36.dp)) {
-                        Icon(Icons.Rounded.Close, "Hapus atau tutup", tint = mist, modifier = Modifier.size(19.dp))
+
+            if (track != null) {
+                Box(Modifier.width(centerWidth).fillMaxHeight()
+                    .graphicsLayer { alpha = miniAlpha }) {
+                    if (centerWidth > 22.dp) {
+                        Glass(
+                            Modifier.fillMaxSize(),
+                            RoundedCornerShape(31.dp),
+                            tint = state.ambientColor,
+                            opacity = .36f,
+                            backdrop = artwork
+                        ) {
+                            Tactile(Modifier.fillMaxSize(), onExpandPlayer) {
+                                Row(
+                                    Modifier.fillMaxSize().padding(horizontal = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Artwork(track, 37.dp, 12.dp)
+                                    Spacer(Modifier.width(8.dp))
+                                    Column(Modifier.weight(1f)) {
+                                        Text(track.title, maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            color = white, fontSize = 11.sp,
+                                            fontWeight = FontWeight.SemiBold)
+                                        Text(track.artist, maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            color = mist, fontSize = 9.sp)
+                                    }
+                                    IconButton(
+                                        onClick = state::togglePlay,
+                                        enabled = !state.preparing,
+                                        modifier = Modifier.size(34.dp)
+                                    ) {
+                                        Icon(if (state.isPlaying) Icons.Rounded.Pause
+                                            else Icons.Rounded.PlayArrow, "Putar atau jeda",
+                                            Modifier.size(21.dp), tint = lime)
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
-            } else {
-                Tactile(Modifier.fillMaxSize(), onSearchExpand) {
-                    Icon(Icons.Rounded.Search, "Cari lagu", tint = white,
-                        modifier = Modifier.size(22.dp).align(Alignment.Center))
+            }
+
+            Glass(
+                Modifier.width(searchWidth).fillMaxHeight(),
+                RoundedCornerShape(32.dp),
+                tint = state.ambientColor,
+                opacity = .32f,
+                backdrop = artwork
+            ) {
+                if (expanded) {
+                    Row(Modifier.fillMaxSize().padding(start = 16.dp, end = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Rounded.Search, null, tint = lime,
+                            modifier = Modifier.size(20.dp))
+                        Spacer(Modifier.width(10.dp))
+                        BasicTextField(
+                            value = query, onValueChange = onQuery,
+                            modifier = Modifier.weight(1f),
+                            cursorBrush = SolidColor(lime),
+                            singleLine = true,
+                            textStyle = LocalTextStyle.current.copy(
+                                color = white, fontSize = 14.sp),
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                            keyboardActions = KeyboardActions(
+                                onSearch = { focus.clearFocus() }),
+                            decorationBox = { inner ->
+                                Box {
+                                    if (query.isEmpty())
+                                        Text("Lagu, artis, album…",
+                                            color = mist, fontSize = 13.sp)
+                                    inner()
+                                }
+                            }
+                        )
+                        IconButton(onClick = {
+                            if (query.isNotEmpty()) onQuery("")
+                            else { focus.clearFocus(); onSearchExpand() }
+                        }, modifier = Modifier.size(36.dp)) {
+                            Icon(Icons.Rounded.Close, "Hapus atau tutup",
+                                tint = mist, modifier = Modifier.size(19.dp))
+                        }
+                    }
+                } else {
+                    Tactile(Modifier.fillMaxSize(), onSearchExpand) {
+                        Icon(Icons.Rounded.Search, "Cari lagu",
+                            Modifier.size(22.dp).align(Alignment.Center),
+                            tint = white)
+                    }
                 }
             }
         }
