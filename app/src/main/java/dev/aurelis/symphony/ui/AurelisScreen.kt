@@ -537,6 +537,10 @@ private fun LibraryPage(state: AurelisState, onPlay: (Song) -> Unit, onMenu: (So
 @Composable
 private fun SongRow(song: Song, state: AurelisState, onPlay: () -> Unit, onMenu: () -> Unit) {
     var menuOpen by remember(song.key) { mutableStateOf(false) }
+    val popupTransition = remember(song.key) {
+        androidx.compose.animation.core.MutableTransitionState(false)
+    }
+    popupTransition.targetState = menuOpen
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Tactile(Modifier.weight(1f), onPlay) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -553,17 +557,14 @@ private fun SongRow(song: Song, state: AurelisState, onPlay: () -> Unit, onMenu:
             }
         }
         Box {
-            IconButton(onClick = { menuOpen = !menuOpen }, modifier = Modifier.size(43.dp)) {
-                AnimatedContent(targetState = menuOpen, label = "moreX", transitionSpec = {
-                    (fadeIn(tween(145)) + scaleIn(initialScale = .70f)) togetherWith
-                        (fadeOut(tween(120)) + scaleOut(targetScale = .75f))
-                }) { open ->
-                    Icon(if (open) Icons.Rounded.Close else Icons.Rounded.MoreVert,
-                        if (open) "Tutup opsi" else "Opsi lagu",
-                        tint = if (open) lime else mist, modifier = Modifier.size(21.dp))
+            // The same location becomes the menu rather than showing a second button underneath it.
+            if (!popupTransition.currentState && !popupTransition.targetState) {
+                IconButton(onClick = { menuOpen = true }, modifier = Modifier.size(43.dp)) {
+                    Icon(Icons.Rounded.MoreVert, "Opsi lagu", tint = mist, modifier = Modifier.size(21.dp))
                 }
-            }
-            InlineGlassSongMenu(state, song, menuOpen, { menuOpen = false })
+            } else Spacer(Modifier.size(43.dp))
+            InlineGlassSongMenu(state, song, menuOpen, { menuOpen = false },
+                transitionState = popupTransition)
         }
     }
 }
@@ -594,12 +595,16 @@ private class AdaptiveGlassMenuPosition(
         val height = popupContentSize.height
         val above = anchorBounds.top - inset
         val below = windowSize.height - anchorBounds.bottom - inset
-        val putBelow = preferDown || below >= height || below >= above
-        // Top-right stays fixed at the 3-dot capsule. Near screen bottom, morph upward.
-        val y = if (putBelow) anchorBounds.top - inset
-            else anchorBounds.bottom - height + inset
+        val putBelow = when {
+            below >= height -> true
+            above >= height -> false
+            else -> below >= above
+        }
+        // Anchor the glass to the SAME top-right corner as the three-dot capsule.
+        // This does not move the popup off-screen when a row is near the edges.
+        val y = if (putBelow) anchorBounds.top else anchorBounds.bottom - height
         return IntOffset(
-            (anchorBounds.right - width + inset).coerceIn(inset,
+            (anchorBounds.right - width).coerceIn(inset,
                 max(inset, windowSize.width - width - inset)),
             y.coerceIn(inset, max(inset, windowSize.height - height - inset))
         )
@@ -627,12 +632,17 @@ private fun OverflowMorphButton(open: Boolean, toggle: () -> Unit) {
 @Composable
 private fun InlineGlassSongMenu(
     state: AurelisState, song: Song, expanded: Boolean, onDismiss: () -> Unit,
-    lyricOffset: Boolean = false
+    lyricOffset: Boolean = false,
+    transitionState: androidx.compose.animation.core.MutableTransitionState<Boolean>? = null
 ) {
-    val visibility = remember { androidx.compose.animation.core.MutableTransitionState(false) }
+    val visibility = transitionState ?: remember {
+        androidx.compose.animation.core.MutableTransitionState(false)
+    }
     visibility.targetState = expanded
     if (!visibility.currentState && !visibility.targetState) return
-    val margin = with(LocalDensity.current) { 9.dp.roundToPx() }
+    val density = LocalDensity.current
+    val margin = with(density) { 9.dp.roundToPx() }
+    val closedSize = with(density) { 40.dp.roundToPx() }
     val provider = remember(lyricOffset, margin) {
         AdaptiveGlassMenuPosition(preferDown = lyricOffset, inset = margin)
     }
@@ -643,15 +653,23 @@ private fun InlineGlassSongMenu(
     ) {
         AnimatedVisibility(
             visibleState = visibility,
-            enter = expandIn(expandFrom = Alignment.TopEnd,
-                animationSpec = spring(dampingRatio = .82f,
-                    stiffness = Spring.StiffnessMediumLow)) + fadeIn(tween(185)),
-            exit = shrinkOut(shrinkTowards = Alignment.TopEnd,
-                animationSpec = tween(275)) + fadeOut(tween(185))
+            enter = expandIn(
+                expandFrom = Alignment.TopEnd,
+                initialSize = { IntSize(closedSize, closedSize) },
+                animationSpec = spring(dampingRatio = .86f,
+                    stiffness = Spring.StiffnessLow)
+            ) + fadeIn(tween(190)),
+            exit = shrinkOut(
+                shrinkTowards = Alignment.TopEnd,
+                targetSize = { IntSize(closedSize, closedSize) },
+                animationSpec = tween(330)
+            ) + fadeOut(tween(210))
         ) {
         Glass(
-            Modifier.width(252.dp).shadow(20.dp, RoundedCornerShape(23.dp)),
-            RoundedCornerShape(23.dp), tint = state.ambientColor, opacity = .89f,
+            Modifier.width(252.dp).shadow(15.dp, RoundedCornerShape(23.dp)),
+            RoundedCornerShape(topStart = 25.dp, topEnd = 20.dp,
+                bottomStart = 25.dp, bottomEnd = 25.dp),
+            tint = state.ambientColor, opacity = .83f,
             backdrop = song.artwork
         ) {
             Column(Modifier.fillMaxWidth().padding(7.dp)) {
@@ -869,6 +887,10 @@ private fun FullPlayer(state: AurelisState, onClose: () -> Unit, onQueue: () -> 
     val stamp = state.libraryStamp
     var pane by rememberSaveable { mutableStateOf("Lirik") }
     var optionsOpen by remember { mutableStateOf(false) }
+    val overflowTransition = remember {
+        androidx.compose.animation.core.MutableTransitionState(false)
+    }
+    overflowTransition.targetState = optionsOpen
     var showTranslation by rememberSaveable { mutableStateOf(false) }
     var showRoman by rememberSaveable { mutableStateOf(state.settings.romanize) }
     val artwork = song.artwork.takeIf { it.startsWith("https://") }
@@ -933,9 +955,12 @@ private fun FullPlayer(state: AurelisState, onClose: () -> Unit, onQueue: () -> 
                 }
                 Spacer(Modifier.weight(1f))
                 Box {
-                    OverflowMorphButton(optionsOpen) { optionsOpen = !optionsOpen }
+                    if (!overflowTransition.currentState && !overflowTransition.targetState)
+                        OverflowMorphButton(false) { optionsOpen = true }
+                    else Spacer(Modifier.size(40.dp))
                     InlineGlassSongMenu(state, song, optionsOpen,
-                        onDismiss = { optionsOpen = false }, lyricOffset = true)
+                        onDismiss = { optionsOpen = false },
+                        lyricOffset = true, transitionState = overflowTransition)
                 }
             }
 
