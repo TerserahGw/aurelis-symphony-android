@@ -231,3 +231,36 @@ Fixed by invoking `Cipher.init(Cipher.ENCRYPT_MODE, keystoreKey)` without a GCM 
 - **Login encryption:** Android Keystore AES-GCM generates its own IV, preserving the v1.1.1 login fix.
 
 **Known limitations:** YouTube Music access relies on unofficial InnerTube / WebView authentication. Not every YouTube playlist is public or resolvable, embedded login may be blocked by Google, and some video streams may be unavailable to NewPipe/Aurelis. Personal YouTube Music listening history is read-only and periodically refreshed; Aurelis playback does not write history or playlist edits to the Google account. Build success is separate from physical-device testing.
+
+
+## v1.2.1 Stable Hotfix — update storage
+
+The in-app updater saves downloaded installation packages under its own private
+`cacheDir/updates` directory. In older builds those APKs were never removed,
+so successive ~56 MB downloads could accumulate to hundreds of megabytes.
+
+This release introduces narrowly scoped cleanup:
+
+- On app startup, delete APKs of **already-installed** versions and any expired
+  update package from the updater's cache directory.
+- Keep a single not-yet-installed candidate; other APKs are removed when a new
+  download completes. Downloaded APKs expire after **24 hours**.
+- Schedule a one-time Android JobScheduler cleanup for approximately 24–36 hours
+  later even if the music app has been closed (actual execution depends on
+  Android power management).
+- Delete failed/interrupted temporary downloads (immediately on failure, and
+  after a short grace period if the process was interrupted).
+- If the user declines a downloaded update before opening the installer,
+  remove that unused APK. **Do not delete immediately after launching Android's
+  package installer**, because it needs the FileProvider URI to stay valid.
+- Settings → Pembaruan displays the number of MB in update packages and offers
+  **Bersihkan file update sekarang**.
+
+**Scope:** Only Aurelis updater-owned APKs and partial downloads inside
+`cacheDir/updates` are touched. Music playback, local playlists, history,
+translation caches, settings, account data, and other artwork caches are never
+cleared by this feature. If Android Settings reports a much larger storage
+total, that total can also include other application caches/data.
+
+The app is `1.2.1` (`versionCode = 10`), signed with the existing release
+keystore for in-place updates from v1.2.0 Stable.
