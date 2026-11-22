@@ -94,6 +94,7 @@ import androidx.compose.ui.text.input.ImeAction
 import coil.compose.AsyncImage
 import dev.aurelis.symphony.data.*
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 import kotlin.math.max
 import kotlin.math.min
@@ -1708,12 +1709,25 @@ private fun formatMs(ms: Long): String {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SettingsSheet(state: AurelisState, updater: AurelisUpdater, onClose: () -> Unit) {
+private fun SettingsSheet(
+    state: AurelisState,
+    updater: AurelisUpdater,
+    onClose: () -> Unit,
+    onConnectYouTube: () -> Unit
+) {
     val song = state.current
     val s = state.settings
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val sheetScope = rememberCoroutineScope()
+    val closeSheet: () -> Unit = {
+        sheetScope.launch {
+            sheetState.hide()
+            onClose()
+        }
+        Unit
+    }
     ModalBottomSheet(
-        onDismissRequest = onClose,
+        onDismissRequest = closeSheet,
         sheetState = sheetState,
         sheetGesturesEnabled = false,
         containerColor = Color(0xFF0D191E),
@@ -1731,11 +1745,10 @@ private fun SettingsSheet(state: AurelisState, updater: AurelisUpdater, onClose:
             backdrop = song?.artwork
         ) {
             val settingsScroll = androidx.compose.foundation.rememberScrollState()
-            Column(Modifier.fillMaxSize().verticalScroll(settingsScroll)
-                .padding(start = 23.dp, end = 23.dp, top = 12.dp, bottom = 42.dp)) {
-                Box(Modifier.align(Alignment.CenterHorizontally).width(34.dp).height(4.dp)
-                    .clip(CircleShape).background(white.copy(alpha = .28f)))
-                Spacer(Modifier.height(21.dp))
+            Column(Modifier.fillMaxSize().padding(top = 38.dp)
+                .verticalScroll(settingsScroll)
+                .padding(start = 23.dp, end = 23.dp, bottom = 42.dp)) {
+                Spacer(Modifier.height(8.dp))
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text("PREFERENSI", fontSize = 9.sp, letterSpacing = 2.sp,
@@ -1745,7 +1758,7 @@ private fun SettingsSheet(state: AurelisState, updater: AurelisUpdater, onClose:
                             fontSize = 29.sp, fontWeight = FontWeight.SemiBold,
                             letterSpacing = (-.8).sp)
                     }
-                    Tactile(action = onClose) {
+                    Tactile(action = closeSheet) {
                         Glass(Modifier.size(42.dp), RoundedCornerShape(21.dp), opacity = .60f) {
                             Icon(Icons.Rounded.Close, "Tutup pengaturan",
                                 Modifier.align(Alignment.Center).size(20.dp), tint = white)
@@ -1780,6 +1793,39 @@ private fun SettingsSheet(state: AurelisState, updater: AurelisUpdater, onClose:
 
                 Spacer(Modifier.height(24.dp))
                 SettingsCategory("SUASANA", "Tampilan")
+                Text("Gaya visual", color = white, fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium)
+                Spacer(Modifier.height(9.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    listOf(
+                        VisualStyle.GLASS to "Glass Ambient",
+                        VisualStyle.AMBIENT to "Ambient"
+                    ).forEach { (style, title) ->
+                        Tactile(Modifier.weight(1f), {
+                            state.update(s.copy(visualStyle = style))
+                        }) {
+                            Glass(
+                                Modifier.fillMaxWidth().height(48.dp),
+                                RoundedCornerShape(21.dp),
+                                tint = if (s.visualStyle == style) state.ambientColor else groove,
+                                opacity = if (s.visualStyle == style) .8f else .42f,
+                                backdrop = if (style == VisualStyle.GLASS) song?.artwork else null
+                            ) {
+                                Text(title, Modifier.align(Alignment.Center),
+                                    fontSize = 12.sp,
+                                    color = if (s.visualStyle == style) lime else mist,
+                                    fontWeight = if (s.visualStyle == style)
+                                        FontWeight.SemiBold else FontWeight.Medium)
+                            }
+                        }
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+                Text(if (s.visualStyle == VisualStyle.AMBIENT)
+                    "Ambient mempertahankan cahaya artwork tanpa blur Glass."
+                    else "Glass Ambient menggunakan lapisan frosted artwork.",
+                    color = mist, fontSize = 11.sp)
+                Spacer(Modifier.height(12.dp))
                 SettingsSwitch("Ambient dari artwork",
                     "Cahaya di belakang konten mengikuti musik",
                     s.ambient, { state.update(s.copy(ambient = it)) })
@@ -1787,7 +1833,9 @@ private fun SettingsSheet(state: AurelisState, updater: AurelisUpdater, onClose:
                     s.ambientIntensity, enabled = s.ambient,
                     onChange = { state.update(s.copy(ambientIntensity = it)) })
                 SettingsSlider("Transparansi glass", "Keseimbangan visual dan keterbacaan",
-                    s.glassOpacity, onChange = { state.update(s.copy(glassOpacity = it)) })
+                    s.glassOpacity,
+                    enabled = s.visualStyle == VisualStyle.GLASS,
+                    onChange = { state.update(s.copy(glassOpacity = it)) })
 
                 DividerSoft()
                 SettingsCategory("INTERAKSI", "Animasi")
@@ -1816,6 +1864,47 @@ private fun SettingsSheet(state: AurelisState, updater: AurelisUpdater, onClose:
                 Spacer(Modifier.height(10.dp))
                 Text("Auto mencoba NewPipe, lalu server jika sumber gagal.",
                     color = mist, fontSize = 11.sp, lineHeight = 17.sp)
+
+                DividerSoft()
+                SettingsCategory("AKUN", "YouTube Music")
+                Text(if (state.youtube.isConnected)
+                    "Terhubung. Rekomendasi, riwayat, dan playlist disegarkan saat aplikasi aktif."
+                    else "Hubungkan akun agar Aurelis dapat membaca rekomendasi, riwayat, dan playlist YouTube Music.",
+                    color = mist, fontSize = 12.sp, lineHeight = 18.sp)
+                Spacer(Modifier.height(10.dp))
+                Tactile(Modifier.fillMaxWidth(), {
+                    if (state.youtube.isConnected) state.youtube.disconnect()
+                    else onConnectYouTube()
+                }) {
+                    Glass(Modifier.fillMaxWidth().height(52.dp),
+                        RoundedCornerShape(20.dp),
+                        tint = state.ambientColor, opacity = .54f,
+                        backdrop = song?.artwork) {
+                        Row(Modifier.fillMaxSize().padding(horizontal = 16.dp),
+                            verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Rounded.LibraryMusic, null, tint = lime,
+                                modifier = Modifier.size(20.dp))
+                            Spacer(Modifier.width(12.dp))
+                            Text(if (state.youtube.isConnected) "Putuskan akun YouTube Music"
+                                else "Hubungkan YouTube Music", color = white,
+                                fontSize = 13.sp)
+                        }
+                    }
+                }
+                if (state.youtube.isConnected) {
+                    Spacer(Modifier.height(8.dp))
+                    TextButton(onClick = {
+                        sheetScope.launch { state.youtube.refresh(force = true) }
+                    }, enabled = !state.youtube.refreshing) {
+                        Icon(Icons.Rounded.Refresh, null, tint = lime,
+                            modifier = Modifier.size(19.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("Segarkan dari YouTube Music", color = lime, fontSize = 12.sp)
+                    }
+                }
+                state.youtube.status?.let {
+                    Text(it, color = Color(0xFFFFC8C1), fontSize = 11.sp)
+                }
 
                 DividerSoft()
                 SettingsCategory("BAHASA", "Lirik")
@@ -1872,12 +1961,37 @@ private fun SettingsSheet(state: AurelisState, updater: AurelisUpdater, onClose:
                     Text(it, color = lime, fontSize = 11.sp, lineHeight = 17.sp)
                 }
                 Spacer(Modifier.height(17.dp))
-                Text("AURELIS SYMPHONY  ·  ANDROID 1.0.1 STABLE",
+                Text("AURELIS SYMPHONY  ·  ANDROID 1.1.0 BETA",
                     color = mist.copy(alpha = .8f), fontSize = 10.sp,
                     letterSpacing = 1.sp)
                 Text("APK dipasang melalui konfirmasi sistem Android.",
                     color = mist.copy(alpha = .58f), fontSize = 10.sp)
                 Spacer(Modifier.height(25.dp))
+            }
+            // Dedicated large handle hit-zone. Fast swipes inside content
+            // remain scroll gestures, while a downward pull from the strip
+            // closes the sheet with its built-in dismissal animation.
+            Box(
+                Modifier.fillMaxWidth().height(40.dp).align(Alignment.TopCenter)
+                    .pointerInput(Unit) {
+                        var total = 0f
+                        detectVerticalDragGestures(
+                            onDragStart = { total = 0f },
+                            onVerticalDrag = { change, dy ->
+                                if (dy > 0) total += dy
+                                else total = (total + dy).coerceAtLeast(0f)
+                                change.consume()
+                            },
+                            onDragCancel = { total = 0f },
+                            onDragEnd = {
+                                if (total >= 78.dp.toPx()) closeSheet()
+                                total = 0f
+                            }
+                        )
+                    }, contentAlignment = Alignment.Center
+            ) {
+                Box(Modifier.width(43.dp).height(5.dp)
+                    .clip(CircleShape).background(white.copy(alpha = .42f)))
             }
         }
     }
