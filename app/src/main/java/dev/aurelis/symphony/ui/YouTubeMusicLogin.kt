@@ -135,7 +135,7 @@ fun YouTubeMusicLogin(
                     """.trimIndent()) { raw ->
                         try {
                             val decoded = if (raw.startsWith("\""))
-                                JSONArray("[$raw").getString(0) else raw
+                                JSONArray("[$raw]").getString(0) else raw
                             val config = JSONObject(decoded)
                             if (!config.optBoolean("loggedIn")) error(
                                 "Selesaikan login dan pilih profil di YouTube Music."
