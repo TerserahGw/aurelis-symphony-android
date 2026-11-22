@@ -14,6 +14,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -56,6 +57,50 @@ class AurelisUpdater(context: Context) {
     var message by mutableStateOf<String?>(null)
         private set
     private var apk: File? = null
+    private var installHandedOff = false
+
+    var cachedApkBytes by mutableStateOf(0L)
+        private set
+
+    // On the first launch after an update, remove already-installed APKs
+    // immediately. The cleanup does not touch any other app cache.
+    private val initialCleanup: Job = scope.launch(Dispatchers.IO) {
+        UpdateCacheCleaner.prune(app)
+        val bytes = UpdateCacheCleaner.bytes(app)
+        withContext(Dispatchers.Main) { cachedApkBytes = bytes }
+    }
+
+    private fun refreshCacheSize() {
+        scope.launch(Dispatchers.IO) {
+            val bytes = UpdateCacheCleaner.bytes(app)
+            withContext(Dispatchers.Main) { cachedApkBytes = bytes }
+        }
+    }
+
+    fun clearDownloadedUpdates() {
+        if (downloading) {
+            message = "Unduhan masih berjalan. Selesaikan terlebih dahulu."
+            return
+        }
+        if (installHandedOff) {
+            message = "Installer Android sedang menggunakan APK. Buka kembali Aurelis setelah instalasi selesai untuk pembersihan otomatis."
+            return
+        }
+        scope.launch(Dispatchers.IO) {
+            initialCleanup.join()
+            val freed = UpdateCacheCleaner.prune(app, forceAll = true)
+            val remaining = UpdateCacheCleaner.bytes(app)
+            withContext(Dispatchers.Main) {
+                apk = null
+                downloaded = false
+                progress = 0f
+                cachedApkBytes = remaining
+                message = if (freed > 0)
+                    "File pembaruan dibersihkan: %.1f MB".format(java.util.Locale.US, freed / 1048576.0)
+                else "Tidak ada file pembaruan yang perlu dibersihkan."
+            }
+        }
+    }
 
     private fun versionParts(tag: String): List<Int> {
         val match = Regex("""(\d+)\.(\d+)\.(\d+)""").find(tag) ?: return emptyList()
@@ -138,6 +183,10 @@ class AurelisUpdater(context: Context) {
         available?.tag?.let { preferences.edit().putString("dismissed_tag", it).apply() }
         available = null
         message = null
+        if (downloaded && !installHandedOff) {
+            // "Nanti" after downloading means the installer is not using it.
+            clearDownloadedUpdates()
+        }
     }
 
     fun clearMessage() { message = null }
@@ -148,9 +197,12 @@ class AurelisUpdater(context: Context) {
         scope.launch {
             downloading = true
             downloaded = false
+            installHandedOff = false
+            apk = null
             progress = 0f
             message = null
             val result = runCatching {
+                initialCleanup.join()
                 withContext(Dispatchers.IO) {
                     val directory = File(app.cacheDir, "updates").apply { mkdirs() }
                     val file = File(directory, "Aurelis-${release.tag.replace(Regex("[^A-Za-z0-9._-]"), "")}.apk")
@@ -204,6 +256,11 @@ class AurelisUpdater(context: Context) {
                             }
                             if (file.exists()) file.delete()
                             if (!temp.renameTo(file)) error("Gagal menyimpan APK")
+                            // Retain only the current candidate APK, even if several
+                            // other betas were downloaded within the last 24 hours.
+                            UpdateCacheCleaner.prune(app, keep = file)
+                            // The OS can remove it while the app is closed, as well.
+                            runCatching { UpdateCacheCleaner.schedule(app) }
                             file
                         }
                     } finally {
@@ -215,8 +272,12 @@ class AurelisUpdater(context: Context) {
                 apk = it
                 downloaded = true
                 progress = 1f
-                message = "APK siap. Android akan meminta persetujuan instalasi."
-            }.onFailure { message = "Gagal memperbarui: ${it.message}" }
+                cachedApkBytes = it.length()
+                message = "APK siap. Android akan meminta persetujuan instalasi. File ini dihapus otomatis maksimal sekitar 24–36 jam atau saat versi baru dibuka."
+            }.onFailure {
+                message = "Gagal memperbarui: ${it.message}"
+                refreshCacheSize()
+            }
             downloading = false
         }
     }
@@ -238,6 +299,9 @@ class AurelisUpdater(context: Context) {
                 app.startActivity(Intent(Intent.ACTION_VIEW)
                     .setDataAndType(uri, "application/vnd.android.package-archive")
                     .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK))
+                // Do NOT delete the APK immediately: the Android package installer
+                // still needs access to the FileProvider URI.
+                installHandedOff = true
             }
         }.onFailure { message = "Tidak dapat membuka installer: ${it.message}" }
     }
