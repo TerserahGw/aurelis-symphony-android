@@ -3,7 +3,7 @@
 **Native Android beta source project**, based on Aurelis Symphony Web 2.7.0 by TerserahGw.
 The web/server project remains unchanged: https://github.com/TerserahGw/aurelis-symphony
 
-> Status: **v0.1.0 Beta**. GitHub Actions builds an ARM64 debug-signed APK and publishes the successful result as a prerelease. Build success does not replace testing on a physical device.
+> Status: **v0.1.1 Beta**. GitHub Actions builds an ARM64 debug-signed APK and publishes the successful result as a prerelease. Build success does not replace testing on a physical device.
 
 ## Design
 
@@ -34,7 +34,7 @@ The web/server project remains unchanged: https://github.com/TerserahGw/aurelis-
 
 1. Upload **the contents of this ZIP** to a GitHub repository (not the ZIP as a single file), keeping `.github/workflows/android-arm64.yml` intact. Do not overwrite your existing web/server repository unless you want both projects combined.
 2. In GitHub, open **Actions → Android ARM64 APK → Run workflow**. A push affecting the app also triggers the workflow.
-3. When the run **succeeds**, open the run's **Artifacts** and download `AurelisSymphony-Android-ARM64-v0.1.0-beta`, or open [Releases](https://github.com/TerserahGw/aurelis-symphony-android/releases) to download `AurelisSymphony-Android-arm64-v0.1.0-beta.apk` directly.
+3. When the run **succeeds**, open the run's **Artifacts** and download `AurelisSymphony-Android-ARM64-v0.1.1-beta`, or open [Releases](https://github.com/TerserahGw/aurelis-symphony-android/releases) to download `AurelisSymphony-Android-arm64-v0.1.1-beta.apk` directly.
 4. A debug APK is signed with the CI runner's *debug* key. For future updates intended to install without uninstalling or losing local data, create a **release signing key** and configure a release signing workflow. Do **not** put a private signing key into a public repo.
 
 Build with Android Studio or a configured terminal with SDK 36 and Gradle 8.13:
@@ -68,3 +68,17 @@ No developer API documentation is exposed in the UI.
 ## Copyright & license
 
 Project code: GPL-3.0 (see LICENSE), consistent with the original Aurelis Symphony repository and NewPipeExtractor's licensing. Third-party libraries, album artwork, search metadata, audio and lyrics remain subject to their respective licenses/terms.
+
+## v0.1.1 Beta — visual and player redesign
+
+- Full-bleed Cover mode with softly blurred top/bottom artwork edges and readable title overlay.
+- Lyrics directly on artwork-derived Ambient Glass background — no opaque, separate lyrics rectangle.
+- Animated word-accurate karaoke reveal with soft glow; smooth 65 ms playback sampling and smoothed scrubber. Line-level lyrics are not given fabricated word timestamps.
+- 3-way frosted, morphing bottom island for Cover / Lirik / Up Next, where queue is visible inside the player.
+- Per-song options and lyric timing calibration popup, ±250 ms taps, persistent global offset capped to ±5 seconds.
+- Toggle romanization and translations next to the lyric title; translations are visible only when data exists.
+- Album-tinted frosted overflow popups near the three-dot trigger, with dots morphing to a close icon, and mini/full player spring transitions.
+
+**YouTube playlist integration:** Public playlist URL import is technically feasible with NewPipeExtractor, but is **not yet implemented in this release**. Reading a user's private YouTube playlists requires a Google OAuth 2.0 sign-in and YouTube Data API credentials; those are not configured here. The app does not ask for Google login.
+
+**Build and testing:** CI should produce a debug-signed APK. YouTube stream extraction can fail independently of UI. Check actual performance on device.
