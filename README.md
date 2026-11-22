@@ -178,3 +178,33 @@ GitHub Actions compiles a test APK, then builds and verifies the release-signed 
 - **Version:** `1.0.1`, `versionCode = 6`, **Stable**, using the same release-signing secrets as v1.0.0 for in-place Android updates.
 
 Release APKs are built and signature-verified by GitHub Actions, but animation smoothness and interaction on each physical Android device still require device testing.
+
+
+## v1.1.0 Beta — YouTube Music integration and new Aurelis Home
+
+This is an **experimental beta**, not a replacement for the previous v1.0.1 Stable release. It uses the same Android package and persistent signing key, with `versionCode = 7` for direct upgrade testing.
+
+### What was learned from BitChord
+
+The open-source [BitChord](https://github.com/kushagrasinghx/BitChord) Android music client uses the YouTube Music WEB_REMIX / InnerTube browse and next endpoints for personalized shelves and radio recommendations. Its account login opens Google's real pages in a WebView, captures an explicitly confirmed signed-in session, and uses Google session-bound authentication for history and personal playlists. Its lyric translator batches bounded text requests with careful original-line mapping and caching. We inspected BitChord's `YtMusicRepository.kt`, `Innertube.kt`, `PlaybackTracker.kt`, login flow, and `docs/LYRICS_TRANSLATION.md` as technical references; Aurelis's new implementation is separate and substantially smaller.
+
+### Implemented in Aurelis
+
+- **Optional YouTube Music account linking.** The login page is Google's own WebView page. Aurelis does not ask for or inspect your Google password. Only after you explicitly tap **Hubungkan akun** does it capture the YouTube Music session; the session is AES-256-GCM encrypted under Android Keystore and stored under the app's no-backup directory. Disconnect deletes the stored session.
+- **YouTube Music browse.** Experimental InnerTube WEB_REMIX requests retrieve personalized Home shelves, account history, and playlist metadata. The app refreshes while open (roughly one minute between refresh attempts), with a manual refresh button. These are *periodic pull refreshes*, not true realtime push; server restrictions or Google changes may cause empty or unavailable data.
+- **YouTube Music Library tab.** View remote playlists, load their first page of tracks, and inspect remote listening history. Local Aurelis playlists, favorites, and 500-entry history remain separate and intact. *Remote playlist editing, full pagination, remote history writeback and account playback tracking are not implemented in this beta.*
+- **Up Next radio:** for YouTube tracks, the client tries YouTube Music's own `next`/radio candidates in parallel with the existing Aurelis backend; the local recommendation ranker still reduces repeats and uses local listening behavior. Nothing bypasses DRM or authentication.
+- **Faster lyric translation:** limited parallel requests to Google's lightweight web translation service with strict line-index markers and in-memory caching. It falls back to the existing Aurelis/MyMemory endpoint when responses are invalid or unavailable. Translation is on demand; translated lines are never substituted at incorrect lyric timestamps.
+- **Refreshed Home:** music-first visual discovery with horizontal artwork shelves, recently played, mood filters, personalized YouTube Music shelves, playlists, and Aurelis Originals, while keeping the palette and capsule motion design.
+- **Display choice:** Settings includes **Glass Ambient** and **Ambient**. Ambient keeps album-art-derived background lighting, but renders panels without frosted blur effects. Navigation icons sit slightly lower for optical alignment.
+- **Settings handle:** swipe **down from the top drag strip** to dismiss the sheet with animation. Regular fast scrolling inside Settings remains independent.
+
+### Security and caveats
+
+This uses an **unofficial Google protocol** rather than an officially supported YouTube Music integration. Google may reject embedded browser sign-in, change request formats, rate-limit requests, or invalidate sessions. YouTube cookies must remain on the user's phone: do **not** paste them into a support chat, commit them to Git, or send them to the Aurelis server. Logging out in the app deletes the encrypted session file. The live Google account history feed is read-only in this beta; listening to audio in Aurelis does not register a play against the remote Google history.
+
+Google's lightweight web translation endpoint is also not a versioned public translation API. Results and uptime may vary; requests are made only after choosing Translate.
+
+The user-facing client remains GPL-3.0. BitChord is [GPLv3](https://github.com/kushagrasinghx/BitChord/blob/main/LICENSE); the implementation here was written independently after reviewing its architecture and includes attribution in documentation.
+
+**Testing:** CI compilation and APK signature verification are necessary but do not establish live Google login compatibility, remote playback, animation smoothness, or real-device UX. These are areas for hands-on beta testing.
