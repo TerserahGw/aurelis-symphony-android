@@ -6,6 +6,7 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -14,6 +15,7 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -38,10 +40,16 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.SpanStyle
@@ -50,6 +58,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -81,14 +90,35 @@ private fun Glass(
     shape: RoundedCornerShape = RoundedCornerShape(26.dp),
     tint: Color = Color(0xFF213A32),
     opacity: Float = .68f,
+    backdrop: String? = null,
     content: @Composable BoxScope.() -> Unit
 ) {
     val density = LocalGlassDensity.current
-    val actualOpacity = (opacity * (.45f + density * .82f)).coerceIn(.18f, .94f)
-    val edge = Brush.linearGradient(listOf(white.copy(alpha = .23f), white.copy(alpha = .055f), white.copy(alpha = .12f)))
-    val fill = Brush.linearGradient(listOf(tint.mix(Color(0xFF1A2429), .40f).copy(alpha = actualOpacity),
-        Color(0xFF142224).copy(alpha = (actualOpacity + .08f).coerceAtMost(.97f))))
-    Box(modifier.clip(shape).background(fill, shape).border(BorderStroke(1.dp, edge), shape), content = content)
+    val strength = (opacity * (.46f + density * .69f)).coerceIn(.16f, .88f)
+    val edge = Brush.linearGradient(
+        listOf(white.copy(alpha = .32f), white.copy(alpha = .06f), lime.copy(alpha = .15f))
+    )
+    val fill = Brush.linearGradient(
+        listOf(
+            tint.mix(Color(0xFF0D1C20), .55f).copy(alpha = strength * .67f),
+            Color(0xFF101B1E).copy(alpha = strength * .77f),
+            tint.copy(alpha = strength * .48f)
+        )
+    )
+    Box(modifier.clip(shape)) {
+        // Real GPU blur is limited to the artwork layer, never the text/icons above it.
+        if (backdrop?.startsWith("https://") == true) {
+            AsyncImage(
+                model = backdrop,
+                contentDescription = null,
+                modifier = Modifier.matchParentSize().blur(24.dp).graphicsLayer { alpha = .47f },
+                contentScale = ContentScale.Crop
+            )
+        }
+        Box(Modifier.matchParentSize().background(fill, shape))
+        Box(Modifier.matchParentSize().border(BorderStroke(1.dp, edge), shape))
+        content()
+    }
 }
 
 @Composable
@@ -103,14 +133,34 @@ private fun Tactile(modifier: Modifier = Modifier, action: () -> Unit, content: 
 @Composable
 private fun Ambient(state: AurelisState) {
     val settings = state.settings
-    val c by animateColorAsState(state.ambientColor, animationSpec = tween(if (settings.motion) 920 else 0), label = "ambientTint")
-    val a = if (settings.ambient) settings.ambientIntensity else 0f
+    val c by animateColorAsState(
+        state.ambientColor, animationSpec = tween(if (settings.motion) 1200 else 0),
+        label = "ambientPalette"
+    )
+    val strength = if (settings.ambient) settings.ambientIntensity else 0f
     Box(Modifier.fillMaxSize().background(bg)) {
-        Box(Modifier.fillMaxWidth().height(390.dp).align(Alignment.TopCenter).background(
-            Brush.verticalGradient(listOf(c.copy(alpha = .31f * a), c.copy(alpha = .07f * a), Color.Transparent))
-        ))
-        Box(Modifier.fillMaxWidth(.9f).height(400.dp).align(Alignment.BottomEnd).background(
-            Brush.radialGradient(listOf(c.mix(Color(0xFF32665D), .28f).copy(alpha = .18f * a), Color.Transparent))
+        Box(
+            Modifier.fillMaxWidth().fillMaxHeight(.57f).align(Alignment.TopCenter)
+                .background(Brush.verticalGradient(listOf(
+                    c.mix(Color(0xFF4C8A79), .20f).copy(alpha = .67f * strength),
+                    c.copy(alpha = .24f * strength), Color.Transparent
+                )))
+        )
+        Box(
+            Modifier.fillMaxWidth().fillMaxHeight(.61f).align(Alignment.BottomEnd)
+                .background(Brush.radialGradient(listOf(
+                    c.mix(Color(0xFF477B78), .27f).copy(alpha = .50f * strength),
+                    c.copy(alpha = .13f * strength), Color.Transparent
+                )))
+        )
+        Box(
+            Modifier.fillMaxWidth(.81f).fillMaxHeight(.40f).align(Alignment.CenterStart)
+                .background(Brush.radialGradient(listOf(
+                    Color(0xFF3A7775).copy(alpha = .22f * strength), Color.Transparent
+                )))
+        )
+        Box(Modifier.fillMaxSize().background(
+            Brush.verticalGradient(listOf(Color.Transparent, bg.copy(alpha = .18f), bg.copy(alpha = .48f)))
         ))
     }
 }
@@ -143,7 +193,10 @@ fun AurelisScreen(state: AurelisState) {
                 Header(tab, onSettings = { showSettings = true }, onLibrary = { tab = "Library" })
                 Box(Modifier.weight(1f)) {
                     AnimatedContent(targetState = tab, label = "page", transitionSpec = {
-                        fadeIn(tween(if (state.settings.motion) 230 else 0)) togetherWith fadeOut(tween(if (state.settings.motion) 170 else 0))
+                        (
+                            fadeIn(tween(if (state.settings.motion) 270 else 0)) +
+                                slideInVertically(tween(if (state.settings.motion) 320 else 0)) { it / 20 }
+                        ) togetherWith fadeOut(tween(if (state.settings.motion) 190 else 0))
                     }) { page ->
                         when (page) {
                             "Home" -> HomePage(state, onPlay = { state.play(it) }, onMenu = { menuSong = it })
@@ -160,7 +213,7 @@ fun AurelisScreen(state: AurelisState) {
                 IslandDock(tab, searchExpanded, searchQuery,
                     onTab = { tab = it; searchExpanded = false },
                     onSearchExpand = { tab = "Search"; searchExpanded = !searchExpanded },
-                    onQuery = { searchQuery = it })
+                    onQuery = { searchQuery = it }, artwork = state.current?.artwork.orEmpty())
             }
             AnimatedVisibility(visible = expanded && state.current != null,
                 enter = fadeIn(tween(240)) + slideInVertically(tween(420)) { it / 6 },
@@ -330,6 +383,7 @@ private fun LibraryPage(state: AurelisState, onPlay: (Song) -> Unit, onMenu: (So
 
 @Composable
 private fun SongRow(song: Song, state: AurelisState, onPlay: () -> Unit, onMenu: () -> Unit) {
+    var menuOpen by remember(song.key) { mutableStateOf(false) }
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Tactile(Modifier.weight(1f), onPlay) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -344,7 +398,47 @@ private fun SongRow(song: Song, state: AurelisState, onPlay: () -> Unit, onMenu:
                 }
             }
         }
-        IconButton(onClick = onMenu) { Icon(Icons.Default.MoreVert, "Opsi lagu", tint = mist) }
+        // Anchored mini menu. The trigger morphs to X, and swipe/scroll stays on the list.
+        Box {
+            IconButton(onClick = { menuOpen = !menuOpen }, modifier = Modifier.size(43.dp)) {
+                AnimatedContent(targetState = menuOpen, label = "moreToClose", transitionSpec = {
+                    fadeIn(tween(110)) togetherWith fadeOut(tween(100))
+                }) { open ->
+                    Icon(if (open) Icons.Default.Close else Icons.Default.MoreVert,
+                        if (open) "Tutup opsi" else "Opsi lagu", tint = if (open) lime else mist,
+                        modifier = Modifier.size(21.dp))
+                }
+            }
+            DropdownMenu(
+                expanded = menuOpen,
+                onDismissRequest = { menuOpen = false },
+                offset = DpOffset((-187).dp, (-194).dp),
+                modifier = Modifier.width(238.dp)
+                    .background(Color(0xFF152723), RoundedCornerShape(20.dp))
+            ) {
+                Text(song.title, Modifier.padding(start = 18.dp, end = 18.dp, top = 10.dp, bottom = 6.dp),
+                    color = white, fontWeight = FontWeight.SemiBold, fontSize = 12.sp,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+                DropdownMenuItem(
+                    text = { Text(if (state.isLiked(song)) "Hapus dari Disukai" else "Sukai lagu", fontSize = 13.sp) },
+                    leadingIcon = { Icon(if (state.isLiked(song)) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                        null, Modifier.size(19.dp), tint = lime) },
+                    onClick = { state.like(song); menuOpen = false }
+                )
+                DropdownMenuItem(
+                    text = { Text("Tambahkan ke antrean", fontSize = 13.sp) },
+                    leadingIcon = { Icon(Icons.Default.QueueMusic, null, Modifier.size(19.dp), tint = lime) },
+                    onClick = { state.enqueue(song); menuOpen = false }
+                )
+                state.library.playlists.keys.take(5).forEach { name ->
+                    DropdownMenuItem(
+                        text = { Text("Playlist · $name", maxLines = 1, fontSize = 13.sp) },
+                        leadingIcon = { Icon(Icons.Default.PlaylistAdd, null, Modifier.size(19.dp), tint = lime) },
+                        onClick = { state.addToPlaylist(name, song); menuOpen = false }
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -387,7 +481,7 @@ private fun MiniPlayer(state: AurelisState, onExpand: () -> Unit) {
                 }
                 Box(Modifier.fillMaxWidth().height(2.dp).background(white.copy(alpha = .12f))) {
                     Box(Modifier.fillMaxWidth(if (state.duration > 0) (state.progress.toFloat() / state.duration).coerceIn(0f, 1f) else 0f)
-                        .fillMaxHeight().background(lime))
+                        .fillMaxHeight().background(Brush.horizontalGradient(listOf(lime.copy(alpha = .63f), lime))))
                 }
             }
         }
@@ -396,31 +490,68 @@ private fun MiniPlayer(state: AurelisState, onExpand: () -> Unit) {
 
 @Composable
 private fun IslandDock(tab: String, expanded: Boolean, query: String,
-    onTab: (String) -> Unit, onSearchExpand: () -> Unit, onQuery: (String) -> Unit) {
+    onTab: (String) -> Unit, onSearchExpand: () -> Unit, onQuery: (String) -> Unit,
+    artwork: String = "") {
     val focus = LocalFocusManager.current
     val reduce = LocalReducedMotion.current
+    val tabs = listOf("Home", "Search", "Library")
+    var hovered by remember { mutableIntStateOf(-1) }
     val navWeight by animateFloatAsState(
         targetValue = if (expanded) .16f else .79f,
-        animationSpec = if (reduce) tween(0) else spring(dampingRatio = .87f, stiffness = Spring.StiffnessLow),
+        animationSpec = if (reduce) tween(0) else spring(dampingRatio = .82f, stiffness = Spring.StiffnessMediumLow),
         label = "islandMorph"
     )
-    Row(Modifier.fillMaxWidth().height(58.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Glass(Modifier.weight(navWeight).fillMaxHeight(),
-            RoundedCornerShape(32.dp), opacity = .84f) {
+    Row(Modifier.fillMaxWidth().height(59.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Glass(
+            Modifier.weight(navWeight).fillMaxHeight(), RoundedCornerShape(32.dp),
+            opacity = .53f, backdrop = artwork
+        ) {
             if (expanded) {
                 Tactile(Modifier.fillMaxSize(), { focus.clearFocus(); onSearchExpand() }) {
-                    Icon(Icons.Default.Menu, "Tampilkan menu", tint = white, modifier = Modifier.align(Alignment.Center))
+                    Icon(Icons.Default.Menu, "Tampilkan navigasi", tint = white,
+                        modifier = Modifier.size(22.dp).align(Alignment.Center))
                 }
             } else {
-                Row(Modifier.fillMaxSize().padding(5.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
-                    listOf(Triple("Home", Icons.Default.Home, "Beranda"), Triple("Search", Icons.Default.Search, "Cari"), Triple("Library", Icons.Default.LibraryMusic, "Koleksi")).forEach { (name, icon, label) ->
-                        Tactile(Modifier.weight(1f).fillMaxHeight(), { onTab(name) }) {
-                            Box(Modifier.fillMaxSize().clip(RoundedCornerShape(24.dp))
-                                .background(if (tab == name) Color(0xFF527665).copy(alpha = .56f) else Color.Transparent),
-                                contentAlignment = Alignment.Center) {
-                                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                                    Icon(icon, label, Modifier.size(19.dp), tint = if (tab == name) white else mist)
-                                    Spacer(Modifier.height(2.dp)); Text(name, color = if (tab == name) white else mist, fontSize = 9.sp)
+                BoxWithConstraints(Modifier.fillMaxSize().padding(5.dp).pointerInput(tab) {
+                    detectDragGestures(
+                        onDragStart = { p -> hovered = ((p.x / size.width) * 3f).toInt().coerceIn(0, 2) },
+                        onDrag = { change, _ ->
+                            hovered = ((change.position.x / size.width) * 3f).toInt().coerceIn(0, 2)
+                            change.consume()
+                        },
+                        onDragEnd = { val selected = hovered; hovered = -1; if (selected in 0..2) onTab(tabs[selected]) },
+                        onDragCancel = { hovered = -1 }
+                    )
+                }) {
+                    val segment = maxWidth / 3
+                    val selection = if (hovered in 0..2) hovered else tabs.indexOf(tab).coerceAtLeast(0)
+                    val indicator by animateDpAsState(
+                        targetValue = segment * selection,
+                        animationSpec = if (reduce) tween(0) else spring(dampingRatio = .80f, stiffness = Spring.StiffnessMediumLow),
+                        label = "islandSelection"
+                    )
+                    Box(
+                        Modifier.offset(x = indicator).width(segment).fillMaxHeight()
+                            .clip(RoundedCornerShape(25.dp))
+                            .background(Brush.verticalGradient(listOf(
+                                lime.copy(alpha = .34f), Color(0xFF547C69).copy(alpha = .31f)
+                            )))
+                            .border(1.dp, lime.copy(alpha = .22f), RoundedCornerShape(25.dp))
+                    )
+                    Row(Modifier.fillMaxSize()) {
+                        tabs.forEachIndexed { index, name ->
+                            val icon = when (name) {
+                                "Home" -> Icons.Rounded.Home
+                                "Search" -> Icons.Rounded.Search
+                                else -> Icons.Rounded.LibraryMusic
+                            }
+                            Tactile(Modifier.weight(1f).fillMaxHeight(), { hovered = -1; onTab(name) }) {
+                                Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.Center) {
+                                    Icon(icon, name, Modifier.size(20.dp),
+                                        tint = if (selection == index) white else mist)
+                                    Spacer(Modifier.height(2.dp))
+                                    Text(name, color = if (selection == index) white else mist, fontSize = 10.sp)
                                 }
                             }
                         }
@@ -428,11 +559,14 @@ private fun IslandDock(tab: String, expanded: Boolean, query: String,
                 }
             }
         }
-        Glass(Modifier.weight(1f - navWeight).fillMaxHeight(),
-            RoundedCornerShape(32.dp), opacity = .85f) {
+        Glass(
+            Modifier.weight(1f - navWeight).fillMaxHeight(), RoundedCornerShape(32.dp),
+            opacity = .55f, backdrop = artwork
+        ) {
             if (expanded) {
-                Row(Modifier.fillMaxSize().padding(start = 16.dp, end = 7.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Search, null, tint = lime, modifier = Modifier.size(20.dp))
+                Row(Modifier.fillMaxSize().padding(start = 16.dp, end = 7.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Rounded.Search, null, tint = lime, modifier = Modifier.size(20.dp))
                     Spacer(Modifier.width(10.dp))
                     BasicTextField(value = query, onValueChange = onQuery,
                         modifier = Modifier.weight(1f), cursorBrush = SolidColor(lime), singleLine = true,
@@ -443,13 +577,16 @@ private fun IslandDock(tab: String, expanded: Boolean, query: String,
                             if (query.isEmpty()) Text("Lagu, artis, album…", color = mist, fontSize = 13.sp)
                             inner()
                         } })
-                    IconButton(onClick = { if (query.isNotEmpty()) onQuery("") else { focus.clearFocus(); onSearchExpand() } }, modifier = Modifier.size(36.dp)) {
-                        Icon(Icons.Default.Close, "Hapus atau tutup", tint = mist, modifier = Modifier.size(19.dp))
+                    IconButton(onClick = {
+                        if (query.isNotEmpty()) onQuery("") else { focus.clearFocus(); onSearchExpand() }
+                    }, modifier = Modifier.size(36.dp)) {
+                        Icon(Icons.Rounded.Close, "Hapus atau tutup", tint = mist, modifier = Modifier.size(19.dp))
                     }
                 }
             } else {
                 Tactile(Modifier.fillMaxSize(), onSearchExpand) {
-                    Icon(Icons.Default.Search, "Cari lagu", tint = white, modifier = Modifier.size(23.dp).align(Alignment.Center))
+                    Icon(Icons.Rounded.Search, "Cari lagu", tint = white,
+                        modifier = Modifier.size(22.dp).align(Alignment.Center))
                 }
             }
         }
@@ -461,8 +598,10 @@ private fun FullPlayer(state: AurelisState, onClose: () -> Unit, onQueue: () -> 
     val song = state.current ?: return
     val stamp = state.libraryStamp // observe local like/playlist changes
     var pane by rememberSaveable { mutableStateOf("Lirik") }
-    Column(Modifier.fillMaxSize().background(bg).statusBarsPadding().navigationBarsPadding()) {
-        Box(Modifier.fillMaxWidth().height(5.dp).background(Brush.horizontalGradient(listOf(state.ambientColor, Color(0xFF182827)))))
+    Box(Modifier.fillMaxSize().background(bg)) {
+    Ambient(state)
+    Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
+        Box(Modifier.fillMaxWidth().height(3.dp).background(Brush.horizontalGradient(listOf(state.ambientColor, Color.Transparent))))
         Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
             CircleAction(Icons.Default.KeyboardArrowDown, "Tutup pemutar", onClose)
             Spacer(Modifier.weight(1f))
@@ -471,7 +610,25 @@ private fun FullPlayer(state: AurelisState, onClose: () -> Unit, onQueue: () -> 
                 Text("Aurelis Symphony", color = white, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
             }
             Spacer(Modifier.weight(1f))
-            CircleAction(Icons.Default.MoreHoriz, "Opsi lagu", onMenu)
+            var playerMenu by remember { mutableStateOf(false) }
+            Box {
+                CircleAction(if (playerMenu) Icons.Default.Close else Icons.Default.MoreHoriz,
+                    if (playerMenu) "Tutup opsi" else "Opsi lagu") { playerMenu = !playerMenu }
+                DropdownMenu(expanded = playerMenu, onDismissRequest = { playerMenu = false },
+                    modifier = Modifier.width(224.dp).background(Color(0xFF142520), RoundedCornerShape(20.dp))) {
+                    DropdownMenuItem(text = { Text(if (state.isLiked(song)) "Hapus dari Disukai" else "Sukai lagu") },
+                        leadingIcon = { Icon(Icons.Default.FavoriteBorder, null, tint = lime) },
+                        onClick = { state.like(song); playerMenu = false })
+                    DropdownMenuItem(text = { Text("Tambahkan ke antrean") },
+                        leadingIcon = { Icon(Icons.Default.QueueMusic, null, tint = lime) },
+                        onClick = { state.enqueue(song); playerMenu = false })
+                    state.library.playlists.keys.take(5).forEach { name ->
+                        DropdownMenuItem(text = { Text("Playlist · $name", maxLines = 1) },
+                            leadingIcon = { Icon(Icons.Default.PlaylistAdd, null, tint = lime) },
+                            onClick = { state.addToPlaylist(name, song); playerMenu = false })
+                    }
+                }
+            }
         }
         AnimatedContent(targetState = pane, modifier = Modifier.weight(1f), label = "playerPane", transitionSpec = {
             fadeIn(tween(if (state.settings.motion) 250 else 0)) togetherWith fadeOut(tween(if (state.settings.motion) 140 else 0))
@@ -489,7 +646,11 @@ private fun FullPlayer(state: AurelisState, onClose: () -> Unit, onQueue: () -> 
                             Icon(if (state.isLiked(song)) Icons.Default.Favorite else Icons.Default.FavoriteBorder, "Sukai lagu", tint = if (state.isLiked(song)) lime else mist)
                         }
                     }
-                    LyricContent(state, Modifier.fillMaxWidth().weight(1f))
+                    Glass(Modifier.fillMaxWidth().weight(1f).padding(horizontal = 12.dp),
+                        RoundedCornerShape(29.dp), tint = state.ambientColor, opacity = .45f,
+                        backdrop = song.artwork) {
+                        LyricContent(state, Modifier.fillMaxSize())
+                    }
                 }
             } else {
                 Column(Modifier.fillMaxSize().padding(horizontal = 27.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -510,6 +671,7 @@ private fun FullPlayer(state: AurelisState, onClose: () -> Unit, onQueue: () -> 
             }
             TextButton(onClick = onQueue) { Icon(Icons.Default.QueueMusic, null, Modifier.size(18.dp)); Spacer(Modifier.width(7.dp)); Text("Up Next", fontSize = 12.sp) }
         }
+    }
     }
 }
 
@@ -540,25 +702,49 @@ private fun LyricContent(state: AurelisState, modifier: Modifier = Modifier) {
         items(lines.size, key = { "lyric-$it" }) { i ->
             val line = lines[i]
             val selected = if (active >= 0) i == active else true
-            Column(Modifier.fillMaxWidth().clickable(enabled = line.time != null) { line.time?.let { state.seek((it * 1000 / state.duration.coerceAtLeast(1)).toFloat()) } }) {
+            Column(
+                Modifier.fillMaxWidth()
+                    .clip(RoundedCornerShape(19.dp))
+                    .background(if (selected) Brush.horizontalGradient(listOf(
+                        lime.copy(alpha = .12f), lime.copy(alpha = .045f), Color.Transparent
+                    )) else Brush.horizontalGradient(listOf(Color.Transparent, Color.Transparent)))
+                    .clickable(enabled = line.time != null) {
+                        line.time?.let { state.seek((it * 1000 / state.duration.coerceAtLeast(1)).toFloat()) }
+                    }
+                    .padding(horizontal = 14.dp, vertical = 11.dp)
+            ) {
                 val color by animateColorAsState(if (selected) white else mist.copy(alpha = .54f), label = "lyricColor")
                 val formatted = remember(line, currentSec, selected) {
                     if (line.words.isEmpty()) null else buildAnnotatedString {
-                        line.words.forEach { w ->
-                            // Animate only genuine word timestamps; never invent karaoke on plain LRC.
-                            val ratio = if (w.end > w.start) ((currentSec - w.start) / (w.end - w.start)).coerceIn(0.0, 1.0) else if (currentSec >= w.start) 1.0 else 0.0
-                            val sung = (w.text.length * ratio).roundToInt().coerceIn(0, w.text.length)
-                            withStyle(SpanStyle(color = lime, fontWeight = FontWeight.SemiBold)) {
-                                append(w.text.take(sung))
+                        line.words.forEachIndexed { index, w ->
+                            // Respect real timestamps. Preserve a space between Latin tokens
+                            // even when the source returns word strings without whitespace.
+                            val previous = line.words.getOrNull(index - 1)?.text.orEmpty()
+                            val a = previous.lastOrNull()
+                            val b = w.text.firstOrNull()
+                            val latinBoundary = a != null && b != null &&
+                                (a in 'a'..'z' || a in 'A'..'Z' || a in '0'..'9') &&
+                                (b in 'a'..'z' || b in 'A'..'Z' || b in '0'..'9')
+                            val token = if (latinBoundary && !previous.endsWith(" ") && !w.text.startsWith(" ")) " " + w.text else w.text
+                            val ratio = if (w.end > w.start)
+                                ((currentSec - w.start) / (w.end - w.start)).coerceIn(0.0, 1.0)
+                            else if (currentSec >= w.start) 1.0 else 0.0
+                            val sung = (token.length * ratio).roundToInt().coerceIn(0, token.length)
+                            withStyle(SpanStyle(color = lime, fontWeight = FontWeight.SemiBold,
+                                shadow = if (selected) Shadow(lime.copy(alpha = .82f), Offset.Zero, 13f) else null)) {
+                                append(token.take(sung))
                             }
-                            withStyle(SpanStyle(color = mist.copy(alpha = if (selected) .88f else .50f), fontWeight = FontWeight.Medium)) {
-                                append(w.text.drop(sung))
-                            }
+                            withStyle(SpanStyle(color = mist.copy(alpha = if (selected) .82f else .45f),
+                                fontWeight = FontWeight.Medium)) { append(token.drop(sung)) }
                         }
                     }
                 }
                 if (formatted != null) Text(formatted, fontSize = 24.sp, lineHeight = 33.sp, fontWeight = FontWeight.Medium)
-                else Text(line.text, color = color, fontSize = 24.sp, lineHeight = 33.sp, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium)
+                else Text(line.text, color = color, fontSize = 23.sp, lineHeight = 33.sp,
+                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+                    style = androidx.compose.ui.text.TextStyle(
+                        shadow = if (selected) Shadow(lime.copy(alpha = .43f), Offset.Zero, 9f) else null
+                    ))
                 state.romanized[i]?.takeIf { state.settings.romanize && it != line.text }?.let {
                     Spacer(Modifier.height(6.dp)); Text(it, color = if (selected) lime.copy(alpha = .86f) else mist.copy(alpha = .45f), fontSize = 13.sp, lineHeight = 19.sp)
                 }
@@ -575,10 +761,25 @@ private fun PlayerControls(state: AurelisState) {
     val fraction = if (state.duration > 0) (state.progress.toFloat() / state.duration).coerceIn(0f, 1f) else 0f
     var scrub by remember { mutableFloatStateOf(-1f) }
     Column(Modifier.padding(horizontal = 26.dp)) {
-        Slider(value = if (scrub >= 0) scrub else fraction, onValueChange = { scrub = it },
-            onValueChangeFinished = { if (scrub >= 0) state.seek(scrub); scrub = -1f },
-            colors = SliderDefaults.colors(thumbColor = lime, activeTrackColor = lime, inactiveTrackColor = white.copy(alpha = .14f)),
-            modifier = Modifier.fillMaxWidth())
+        Box(Modifier.fillMaxWidth()) {
+            val progressFraction = if (scrub >= 0) scrub else fraction
+            Box(Modifier.fillMaxWidth().height(44.dp).align(Alignment.Center).drawBehind {
+                val x = size.width * progressFraction
+                val y = size.height / 2
+                if (x > 0f) {
+                    drawLine(
+                        brush = Brush.horizontalGradient(listOf(Color.Transparent, lime.copy(alpha = .58f), lime)),
+                        start = Offset(0f, y), end = Offset(x, y), strokeWidth = 12.dp.toPx()
+                    )
+                    drawCircle(color = lime, radius = 18.dp.toPx(), center = Offset(x, y), alpha = .19f)
+                    drawCircle(color = lime, radius = 9.dp.toPx(), center = Offset(x, y), alpha = .27f)
+                }
+            })
+            Slider(value = progressFraction, onValueChange = { scrub = it },
+                onValueChangeFinished = { if (scrub >= 0) state.seek(scrub); scrub = -1f },
+                colors = SliderDefaults.colors(thumbColor = lime, activeTrackColor = lime,
+                    inactiveTrackColor = white.copy(alpha = .13f)), modifier = Modifier.fillMaxWidth())
+        }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text(formatMs(state.progress), color = mist, fontSize = 11.sp)
             Text(formatMs(state.duration), color = mist, fontSize = 11.sp)
