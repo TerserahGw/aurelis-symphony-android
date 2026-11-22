@@ -74,6 +74,7 @@ data class Lyrics(val source: String, val lines: List<LyricLine>) {
 }
 
 enum class AudioMode { AUTO, NEWPIPE, AURELIS }
+enum class VisualStyle { GLASS, AMBIENT }
 
 data class AppSettings(
     val audioMode: AudioMode = AudioMode.AUTO,
