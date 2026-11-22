@@ -94,7 +94,10 @@ fun YouTubeMusicLogin(
                             }
                         }
                         webView = this
-                        loadUrl(LOGIN)
+                        // Like BitChord, open YouTube Music first: the WebView
+                        // reuses a signed-in Google session if one already exists,
+                        // otherwise YouTube Music offers its normal login.
+                        loadUrl(MUSIC)
                     }
                 },
                 modifier = Modifier.weight(1f).fillMaxWidth()
@@ -157,7 +160,13 @@ fun YouTubeMusicLogin(
                             scope.launch { hub.refresh(force = true) }
                             onClose()
                         } catch (e: Exception) {
-                            problem = e.message ?: "Gagal mengambil sesi akun."
+                            problem = when {
+                                e.message?.contains("Caller-provided IV") == true ->
+                                    "Gagal menyimpan sesi terenkripsi. Pastikan APK sudah diperbarui."
+                                e.message?.contains("SAPISID", ignoreCase = true) == true ->
+                                    "Sesi akun belum lengkap. Muat ulang YouTube Music lalu coba lagi."
+                                else -> e.message ?: "Gagal mengambil sesi akun."
+                            }
                         } finally {
                             working = false
                         }
