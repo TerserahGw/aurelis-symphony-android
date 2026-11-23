@@ -1,3 +1,7 @@
 <resources>
-    <string name="widget_description">Aurelis Symphony Now Playing — mengikuti tema Glass Ambient atau Ambient.</string>
+    <string name="widget_description">Aurelis Symphony — widget musik yang mengikuti tema aplikasi.</string>
+    <string name="widget_description_2x1">Aurelis 2×1 — cover, judul, dan artis tanpa tombol.</string>
+    <string name="widget_description_2x2">Aurelis 2×2 — musik dan kontrol Previous, Play/Pause, Next.</string>
+    <string name="widget_description_4x1">Aurelis 4×1 — pemutar musik horizontal ringkas.</string>
+    <string name="widget_description_4x2">Aurelis 4×2 — pemutar musik dan daftar Up Next.</string>
 </resources>
