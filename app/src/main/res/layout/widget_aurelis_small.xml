@@ -19,8 +19,8 @@
         android:paddingLeft="9dp" android:paddingRight="9dp"
         android:paddingTop="6dp" android:paddingBottom="6dp">
         <ImageView android:id="@+id/widget_art"
-            android:layout_width="38dp" android:layout_height="38dp"
-            android:scaleType="centerCrop" android:src="@drawable/ic_aurelis_foreground"
+            android:layout_width="40dp" android:layout_height="40dp"
+            android:scaleType="centerCrop" android:src="@drawable/widget_music_note"
             android:background="@drawable/widget_album_frame"
             android:clipToOutline="true" android:contentDescription="Cover lagu"/>
         <LinearLayout android:layout_width="0dp" android:layout_weight="1"

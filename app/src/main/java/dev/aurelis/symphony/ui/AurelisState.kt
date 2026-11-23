@@ -358,7 +358,10 @@ class AurelisState(context: Context) : ViewModel() {
             runCatching {
                 imageClient.newCall(Request.Builder().url(song.artwork).build()).execute().use { resp ->
                     val bytes = resp.body?.bytes() ?: return@use null
-                    if (bytes.size > 3_000_000) return@use null
+                    if (bytes.size > 5_000_000) return@use null
+                    // The same cover is reused by home widgets so album art
+                    // does not require a fragile second HTTP request.
+                    AurelisWidgetProvider.cacheArtworkBytes(app, song, bytes)
                     val opts = BitmapFactory.Options().apply { inSampleSize = 4 }
                     BitmapFactory.decodeByteArray(bytes, 0, bytes.size, opts)?.let { bmp ->
                         val palette = Palette.from(bmp).maximumColorCount(12).generate()

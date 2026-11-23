@@ -18,8 +18,8 @@
         android:paddingLeft="11dp" android:paddingRight="9dp"
         android:paddingTop="6dp" android:paddingBottom="6dp">
         <ImageView android:id="@+id/widget_art"
-            android:layout_width="42dp" android:layout_height="42dp"
-            android:src="@drawable/ic_aurelis_foreground" android:scaleType="centerCrop"
+            android:layout_width="44dp" android:layout_height="44dp"
+            android:src="@drawable/widget_music_note" android:scaleType="centerCrop"
             android:background="@drawable/widget_album_frame"
             android:clipToOutline="true" android:contentDescription="Cover lagu"/>
         <LinearLayout android:layout_width="0dp" android:layout_weight="1"
@@ -39,14 +39,20 @@
         <ImageView android:id="@+id/widget_prev"
             android:layout_width="30dp" android:layout_height="36dp"
             android:padding="6dp" android:src="@drawable/widget_previous"
-            android:tint="#E2F6ED" android:contentDescription="Lagu sebelumnya"/>
+            android:tint="#E2F6ED" android:contentDescription="Lagu sebelumnya" android:background="@drawable/widget_control_secondary"
+                android:layout_marginLeft="2dp" android:layout_marginRight="2dp"
+                />
         <ImageView android:id="@+id/widget_toggle"
             android:layout_width="34dp" android:layout_height="36dp"
             android:padding="6dp" android:src="@drawable/widget_play"
-            android:tint="#C8FFDF" android:contentDescription="Play atau pause"/>
+            android:tint="#C8FFDF" android:contentDescription="Play atau pause" android:background="@drawable/widget_control_primary"
+                android:layout_marginLeft="2dp" android:layout_marginRight="2dp"
+                />
         <ImageView android:id="@+id/widget_next"
             android:layout_width="30dp" android:layout_height="36dp"
             android:padding="6dp" android:src="@drawable/widget_next"
-            android:tint="#E2F6ED" android:contentDescription="Lagu berikutnya"/>
+            android:tint="#E2F6ED" android:contentDescription="Lagu berikutnya" android:background="@drawable/widget_control_secondary"
+                android:layout_marginLeft="2dp" android:layout_marginRight="2dp"
+                />
     </LinearLayout>
 </FrameLayout>
