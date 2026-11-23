@@ -40,6 +40,7 @@ class AudioService : MediaSessionService() {
     private lateinit var player: ExoPlayer
     private var incoming: ExoPlayer? = null
     private var fadeRunnable: Runnable? = null
+    private var finishCrossfade: (() -> Unit)? = null
     private var fadeGeneration = 0
 
     private fun newPlayer(audioFocus: Boolean): ExoPlayer =
@@ -55,7 +56,13 @@ class AudioService : MediaSessionService() {
                         // pause BOTH overlapping decoders. Resume both.
                         incoming?.let { fading ->
                             if (fading !== player) {
-                                if (isPlaying) fading.play() else fading.pause()
+                                if (playbackState == Player.STATE_ENDED) {
+                                    // Outgoing media can finish before the
+                                    // overlap duration or while next buffers.
+                                    // Never pause the incoming track on EOF.
+                                    finishCrossfade?.invoke()
+                                } else if (isPlaying) fading.play()
+                                else fading.pause()
                             }
                         }
                         AurelisWidgetProvider.publishFromSession(
@@ -82,6 +89,7 @@ class AudioService : MediaSessionService() {
         fadeGeneration++
         fadeRunnable?.let(handler::removeCallbacks)
         fadeRunnable = null
+        finishCrossfade = null
         if (::player.isInitialized) player.volume = 1f
         if (releaseIncoming) incoming?.let {
             if (it !== player) it.release()
@@ -104,6 +112,34 @@ class AudioService : MediaSessionService() {
                 if (playbackState != Player.STATE_READY || started ||
                     generation != fadeGeneration || incoming !== next) return
                 started = true
+                // A single guarded handoff handles both full-duration fades
+                // and a song that reaches the end during the overlap.
+                val complete: () -> Unit = {
+                    if (generation == fadeGeneration && incoming === next) {
+                        fadeRunnable?.let(handler::removeCallbacks)
+                        fadeRunnable = null
+                        runCatching {
+                            next.volume = 1f
+                            session?.setPlayer(next)
+                            player = next
+                            incoming = null
+                            finishCrossfade = null
+                            outgoing.release()
+                            next.setAudioAttributes(AudioAttributes.Builder()
+                                .setUsage(C.USAGE_MEDIA)
+                                .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
+                                .build(), true)
+                        }.onFailure { Log.e(TAG, "Crossfade handoff failed", it) }
+                    }
+                }
+                finishCrossfade = complete
+                if (outgoing.playbackState == Player.STATE_ENDED) {
+                    // The incoming stream was still buffering when the old
+                    // track ended. Resume the next song at full volume.
+                    next.play()
+                    complete()
+                    return
+                }
                 // The user may have paused while the incoming stream was
                 // buffering, so never force an unexpected resume.
                 if (outgoing.isPlaying) next.play() else next.pause()
@@ -112,6 +148,11 @@ class AudioService : MediaSessionService() {
                     private var lastTick = SystemClock.uptimeMillis()
                     override fun run() {
                         if (generation != fadeGeneration || incoming !== next) return
+                        if (outgoing.playbackState == Player.STATE_ENDED) {
+                            next.play()
+                            complete()
+                            return
+                        }
                         val now = SystemClock.uptimeMillis()
                         // Freeze the fade while paused; no silent completion
                         // and no volume jump after a long pause.
@@ -127,21 +168,7 @@ class AudioService : MediaSessionService() {
                         if (progress < 1f) {
                             fadeRunnable = this
                             handler.postDelayed(this, 45L)
-                        } else {
-                            fadeRunnable = null
-                            runCatching {
-                                next.volume = 1f
-                                session?.setPlayer(next)
-                                player = next
-                                incoming = null
-                                outgoing.release()
-                                // The new session player is now responsible
-                                // for audio focus and unplugging headphones.
-                                next.setAudioAttributes(AudioAttributes.Builder()
-                                    .setUsage(C.USAGE_MEDIA)
-                                    .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC).build(), true)
-                            }.onFailure { Log.e(TAG, "Crossfade handoff failed", it) }
-                        }
+                        } else complete()
                     }
                 }
                 tick.run()
