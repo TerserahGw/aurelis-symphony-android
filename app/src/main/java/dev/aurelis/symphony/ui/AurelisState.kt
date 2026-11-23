@@ -7,6 +7,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
+import androidx.lifecycle.ViewModel
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackException
@@ -23,7 +24,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.util.concurrent.TimeUnit
 
-class AurelisState(context: Context) {
+class AurelisState(context: Context) : ViewModel() {
     private val app = context.applicationContext
     val library = LocalLibrary(app)
     val api = AurelisApi()
@@ -535,4 +536,9 @@ class AurelisState(context: Context) {
         recommendationJob?.cancel(); nextJob?.cancel(); scope.cancel()
         if (controllerFuture.isDone) runCatching { MediaController.releaseFuture(controllerFuture) }
     }
+    override fun onCleared() {
+        close()
+        super.onCleared()
+    }
+
 }
