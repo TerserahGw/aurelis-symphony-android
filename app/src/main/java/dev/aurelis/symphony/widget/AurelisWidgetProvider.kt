@@ -171,7 +171,9 @@ open class AurelisWidgetProvider : AppWidgetProvider() {
             }
         }
 
-        private fun artworkCandidates(url: String, videoId: String): List<String> {
+        private fun artworkCandidates(
+            url: String, videoId: String, originalUrl: String = ""
+        ): List<String> {
             val candidates = mutableListOf<String>()
             fun add(value: String) {
                 if (value.startsWith("https://") && !candidates.contains(value))
@@ -179,11 +181,17 @@ open class AurelisWidgetProvider : AppWidgetProvider() {
             }
             add(upgradedArtwork(url))
             add(url)
+            // Keep the original source when the higher-res variant is blocked.
+            add(originalUrl)
             // Only fall back to a YouTube video thumbnail if the genuine album
             // cover cannot be fetched in good resolution.
-            if (videoPattern.matches(videoId)) {
+            val embeddedVideo = Regex("/vi/([A-Za-z0-9_-]{11})/")
+                .find(url)?.groupValues?.getOrNull(1).orEmpty()
+            val fallbackVideo = if (videoPattern.matches(videoId))
+                videoId else embeddedVideo
+            if (videoPattern.matches(fallbackVideo)) {
                 for (quality in listOf("maxresdefault", "sddefault", "hqdefault"))
-                    add("https://i.ytimg.com/vi/$videoId/$quality.jpg")
+                    add("https://i.ytimg.com/vi/$fallbackVideo/$quality.jpg")
             }
             return candidates
         }
@@ -195,11 +203,13 @@ open class AurelisWidgetProvider : AppWidgetProvider() {
             // Avoid waking launchers and sending RemoteViews repeatedly when
             // a session callback re-publishes exactly the same information.
             val artworkUrl = song?.let(::primaryArtwork)
+            val originalUrl = song?.let(::originalArtwork)
             val video = song?.let(::videoId)
             val trackChanged = song != null && (
                 prefs.getString("title", "") != song.title ||
                 prefs.getString("artist", "") != song.artist ||
                 prefs.getString("artwork", "") != artworkUrl ||
+                prefs.getString("original_artwork", "") != originalUrl ||
                 prefs.getString("video_id", "") != video ||
                 prefs.getString("song_key", "") != song.key
             )
@@ -212,6 +222,7 @@ open class AurelisWidgetProvider : AppWidgetProvider() {
                 editor.putString("title", song.title)
                     .putString("artist", song.artist)
                     .putString("artwork", artworkUrl)
+                    .putString("original_artwork", originalUrl)
                     .putString("video_id", video)
                     .putString("song_key", song.key)
             }
@@ -423,6 +434,7 @@ open class AurelisWidgetProvider : AppWidgetProvider() {
                 entries.add("next_$name" to song?.title.orEmpty())
                 entries.add("next_${name}_artist" to song?.artist.orEmpty())
                 entries.add("next_${name}_art" to (song?.let(::primaryArtwork).orEmpty()))
+                entries.add("next_${name}_original_art" to (song?.let(::originalArtwork).orEmpty()))
                 entries.add("next_${name}_video" to (song?.let(::videoId).orEmpty()))
             }
             if (entries.all { (key, value) -> prefs.getString(key, "") == value } &&
@@ -750,7 +762,9 @@ open class AurelisWidgetProvider : AppWidgetProvider() {
                 try {
                     var best: Bitmap? = null
                     var bestQuality = 0
-                    for (candidate in artworkCandidates(url, videoId)) {
+                    val original = context.getSharedPreferences(STORE, Context.MODE_PRIVATE)
+                        .getString("original_artwork", "").orEmpty()
+                    for (candidate in artworkCandidates(url, videoId, original)) {
                         val bytes = try { downloadArtwork(candidate) }
                         catch (e: Exception) {
                             Log.w(TAG, "HD artwork unavailable from " +
@@ -813,7 +827,8 @@ open class AurelisWidgetProvider : AppWidgetProvider() {
                     val prefs = context.getSharedPreferences(STORE, Context.MODE_PRIVATE)
                     if (prefs.getString("next_${name}_art", "") != url) return@execute
                     var cached = false
-                    for (candidate in artworkCandidates(url, videoId)) {
+                    val original = prefs.getString("next_${name}_original_art", "").orEmpty()
+                    for (candidate in artworkCandidates(url, videoId, original)) {
                         val bytes = runCatching { downloadArtwork(candidate) }.getOrNull()
                             ?: continue
                         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
