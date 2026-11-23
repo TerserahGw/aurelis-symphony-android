@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="match_parent"
+    android:padding="3dp">
+    <ImageView android:id="@+id/widget_background"
+        android:layout_width="match_parent" android:layout_height="match_parent"
+        android:scaleType="fitXY" android:contentDescription="@null"/>
+    <LinearLayout android:layout_width="match_parent" android:layout_height="match_parent"
+        android:orientation="vertical" android:padding="11dp">
+        <LinearLayout android:layout_width="match_parent" android:layout_height="19dp"
+            android:orientation="horizontal" android:gravity="center_vertical">
+            <ImageView android:layout_width="16dp" android:layout_height="16dp"
+                android:src="@drawable/ic_aurelis_monochrome"
+                android:tint="#BCEBD0" android:contentDescription="@null"/>
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:layout_marginLeft="5dp" android:text="AURELIS"
+                android:textColor="#BCEBD0" android:textStyle="bold" android:textSize="9sp"/>
+        </LinearLayout>
+        <LinearLayout android:layout_width="match_parent" android:layout_height="0dp"
+            android:layout_weight="1" android:orientation="horizontal"
+            android:gravity="center_vertical">
+            <ImageView android:id="@+id/widget_art"
+                android:layout_width="48dp" android:layout_height="48dp"
+                android:background="@drawable/widget_album_frame"
+                android:clipToOutline="true" android:scaleType="centerCrop"
+                android:src="@drawable/ic_aurelis_foreground"
+                android:contentDescription="Cover lagu"/>
+            <LinearLayout android:layout_width="0dp" android:layout_weight="1"
+                android:layout_height="wrap_content" android:orientation="vertical"
+                android:paddingLeft="8dp">
+                <TextView android:id="@+id/widget_title"
+                    android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:text="Aurelis Symphony" android:textColor="#F3F8F5"
+                    android:textStyle="bold" android:textSize="12sp"
+                    android:ellipsize="end" android:maxLines="1"/>
+                <TextView android:id="@+id/widget_artist"
+                    android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp" android:text="Musik untuk harimu"
+                    android:textColor="#B5C7BF" android:textSize="10sp"
+                    android:ellipsize="end" android:maxLines="1"/>
+            </LinearLayout>
+        </LinearLayout>
+        <LinearLayout android:layout_width="match_parent" android:layout_height="37dp"
+            android:orientation="horizontal" android:gravity="center">
+            <ImageView android:id="@+id/widget_prev"
+                android:layout_width="40dp" android:layout_height="36dp"
+                android:src="@drawable/widget_previous" android:tint="#D3EEE1"
+                android:padding="9dp" android:contentDescription="Sebelumnya"/>
+            <ImageView android:id="@+id/widget_toggle"
+                android:layout_width="43dp" android:layout_height="40dp"
+                android:src="@drawable/widget_play" android:tint="#BCEBD0"
+                android:padding="9dp" android:contentDescription="Play atau pause"/>
+            <ImageView android:id="@+id/widget_next"
+                android:layout_width="40dp" android:layout_height="36dp"
+                android:src="@drawable/widget_next" android:tint="#D3EEE1"
+                android:padding="9dp" android:contentDescription="Berikutnya"/>
+        </LinearLayout>
+    </LinearLayout>
+</FrameLayout>
