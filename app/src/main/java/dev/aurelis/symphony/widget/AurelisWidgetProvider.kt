@@ -157,7 +157,7 @@ open class AurelisWidgetProvider : AppWidgetProvider() {
                     ?: return
                 val small = Bitmap.createScaledBitmap(decoded, 192, 192, true)
                 if (small !== decoded) decoded.recycle()
-                val tmp = File(app.cacheDir, "$COVER_CACHE.tmp")
+                val tmp = File(app.cacheDir, "$COVER_CACHE.player.tmp")
                 tmp.outputStream().use { small.compress(Bitmap.CompressFormat.JPEG, 89, it) }
                 small.recycle()
                 if (prefs.getString("song_key", "") != song.key) {
@@ -363,7 +363,7 @@ open class AurelisWidgetProvider : AppWidgetProvider() {
                             small.recycle()
                             return@execute
                         }
-                        val temporary = File(context.cacheDir, "$COVER_CACHE.tmp")
+                        val temporary = File(context.cacheDir, "$COVER_CACHE.network.tmp")
                         temporary.outputStream().use {
                             small.compress(Bitmap.CompressFormat.JPEG, 89, it)
                         }
