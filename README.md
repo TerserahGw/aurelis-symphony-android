@@ -328,3 +328,15 @@ The gradient feathering is a lightweight GPU opacity transition, not an expensiv
 
 Build validation checks compilation and signing; final system-bar appearance can vary with HyperOS and Android's window contrast behavior, so confirm on-device after installing the signed APK.
 
+
+
+## v1.2.7 Stable — Fluid player morph & Home Screen music widget
+
+**Refined music-player transitions.** Portrait and landscape now use separate mini-player-to-full-player transformations: an upward spring from the bottom capsule in Portrait, and a smaller diagonal unfolding from the upper capsule in Landscape. Closing reverses the movement with reduced fade and matched easing. The `Motion & morph` switch still disables transitions for reduced motion.
+
+**Native Android widget.** Long-press an empty part of your Android Home Screen, open **Widgets**, find **Aurelis Symphony**, and add the responsive player card. Resize it for either a full Now Playing card or compact card. The widget reads the existing visual setting, so **Glass Ambient** uses a translucent, softly illuminated album-art-derived background with a rounded edge, while **Ambient** uses a clean, opaque evergreen treatment. It displays album art, title, artist and playback status and has Play/Pause, Previous and Next actions. Artwork uses a small bounded cache and the widget updates from the app and the media session without periodic background polling.
+
+**Android widget limitation:** third-party RemoteViews widgets cannot sample or blur the launcher wallpaper in real time. Glass Ambient is a deliberately rendered frosted-look gradient rather than the app's real-time backdrop blur. Play/Pause uses the active Media3 session. Playlist-aware Previous/Next work while Aurelis's playback ViewModel remains alive; when Android has reclaimed that state, these buttons open the app instead of skipping unpredictably.
+
+`versionCode 16`, `versionName 1.2.7`; same stable signing certificate, installable over v1.2.6. Automated CI builds and signs the APK; animations and widget rendering still need live-device testing across launchers.
+
