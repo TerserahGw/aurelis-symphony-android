@@ -62,6 +62,8 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.Shadow
@@ -119,6 +121,32 @@ private val LocalAppLanguage = compositionLocalOf { AppLanguage.INDONESIAN }
 private fun uiText(key: String): String =
     AurelisI18n.text(LocalAppLanguage.current, key)
 private val LocalReducedMotion = compositionLocalOf { false }
+
+/**
+ * GPU offscreen alpha mask: content dissolves smoothly at both viewport
+ * edges instead of being cut by the LazyColumn's hard clip. Unlike an opaque
+ * overlay it respects artwork and ambient backgrounds.
+ */
+private fun Modifier.featherScrollEdges(top: Dp, bottom: Dp): Modifier =
+    this.graphicsLayer {
+        compositingStrategy = CompositingStrategy.Offscreen
+    }.drawWithContent {
+        drawContent()
+        if (size.height <= 0f) return@drawWithContent
+        val upper = (top.toPx() / size.height).coerceIn(0f, .40f)
+        val lower = (bottom.toPx() / size.height).coerceIn(0f, .40f)
+        drawRect(
+            brush = Brush.verticalGradient(
+                colorStops = arrayOf(
+                    0f to (if (upper > 0f) Color.Transparent else Color.Black),
+                    upper to Color.Black,
+                    (1f - lower) to Color.Black,
+                    1f to (if (lower > 0f) Color.Transparent else Color.Black)
+                )
+            ),
+            blendMode = BlendMode.DstIn
+        )
+    }
 
 private fun Color.mix(other: Color, amount: Float) = Color(
     red = red * (1 - amount) + other.red * amount,
@@ -662,6 +690,10 @@ private fun HomePage(
 
     LazyColumn(
         state = scrollState,
+        modifier = Modifier.fillMaxSize().featherScrollEdges(
+            top = if (LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE) 32.dp else 30.dp,
+            bottom = if (LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE) 40.dp else 100.dp
+        ),
         contentPadding = PaddingValues(
             start = 21.dp, end = 21.dp,
             top = if (LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE) 95.dp else 17.dp,
@@ -930,6 +962,10 @@ private fun SearchPage(state: AurelisState, query: String,
     scrollState: androidx.compose.foundation.lazy.LazyListState,
     onPlay: (Song) -> Unit, onMenu: (Song) -> Unit) {
     LazyColumn(state = scrollState,
+        modifier = Modifier.fillMaxSize().featherScrollEdges(
+            top = if (LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE) 32.dp else 30.dp,
+            bottom = if (LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE) 40.dp else 100.dp
+        ),
         contentPadding = PaddingValues(start = 21.dp, end = 21.dp,
             top = if (LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE) 95.dp else 18.dp,
             bottom = if (LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE) 32.dp else 180.dp), verticalArrangement = Arrangement.spacedBy(13.dp)) {
@@ -968,6 +1004,10 @@ private fun LibraryPage(
     val youtube = state.youtube
     LazyColumn(
         state = scrollState,
+        modifier = Modifier.fillMaxSize().featherScrollEdges(
+            top = if (LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE) 32.dp else 30.dp,
+            bottom = if (LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE) 40.dp else 100.dp
+        ),
         contentPadding = PaddingValues(
             start = 21.dp, end = 21.dp,
             top = if (LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE) 95.dp else 18.dp,
@@ -2287,7 +2327,12 @@ private fun FullPlayer(state: AurelisState, onClose: () -> Unit, onQueue: () -> 
                                         lineHeight = 20.sp, textAlign = TextAlign.Center)
                                 }
                             } else {
-                                LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                LazyColumn(
+                                    modifier = Modifier.fillMaxSize()
+                                        .featherScrollEdges(top = 19.dp, bottom = 35.dp),
+                                    contentPadding = PaddingValues(top = 12.dp, bottom = 22.dp),
+                                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
                                     items(state.queue.size,
                                         key = { i -> "player-queue-$i-${state.queue[i].key}" }
                                     ) { i ->
@@ -2506,8 +2551,9 @@ private fun LandscapeFullPlayer(
                                 }
                             } else {
                                 LazyColumn(
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentPadding = PaddingValues(bottom = 16.dp),
+                                    modifier = Modifier.fillMaxSize()
+                                        .featherScrollEdges(top = 19.dp, bottom = 28.dp),
+                                    contentPadding = PaddingValues(top = 12.dp, bottom = 21.dp),
                                     verticalArrangement = Arrangement.spacedBy(5.dp)
                                 ) {
                                     items(state.queue.size, key = { i ->
@@ -2744,7 +2790,11 @@ private fun LyricContent(
     }
 
     LazyColumn(
-        state = scroll, modifier = modifier,
+        state = scroll,
+        modifier = modifier.featherScrollEdges(
+            top = if (compact) 24.dp else 39.dp,
+            bottom = if (compact) 28.dp else 43.dp
+        ),
         contentPadding = PaddingValues(horizontal = if (compact) 12.dp else 23.dp,
             vertical = if (compact) 13.dp else 39.dp),
         verticalArrangement = Arrangement.spacedBy(if (compact) 11.dp else 22.dp)
