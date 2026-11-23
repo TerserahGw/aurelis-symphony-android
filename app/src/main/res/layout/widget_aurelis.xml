@@ -16,9 +16,9 @@
                 android:layout_width="match_parent" android:layout_height="match_parent"
                 android:src="@drawable/widget_music_note" android:scaleType="centerCrop"
                 android:contentDescription="Cover lagu"/>
-            <FrameLayout android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:background="@drawable/widget_cover_bottom_blur"/>
+            <!-- Bottom readability wash is baked into widget_art BEFORE its
+                 horizontal alpha feather. A separate rectangular overlay
+                 caused the hard vertical line beside Up Next. -->
             <LinearLayout android:layout_width="match_parent"
                 android:layout_height="match_parent" android:orientation="vertical"
                 android:paddingLeft="11dp" android:paddingRight="11dp"
@@ -36,15 +36,17 @@
                     android:textColor="#FFFFFFFF" android:textStyle="bold" android:textSize="12sp"
                    
                    
-                    />
+                    
+                    android:requiresFadingEdge="horizontal"
+                    android:fadingEdgeLength="10dp"/>
             <ViewFlipper android:id="@+id/widget_title_flipper"
                 android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:visibility="gone"
-                android:flipInterval="7800" android:autoStart="true"
+                android:flipInterval="13800" android:autoStart="true"
                 android:requiresFadingEdge="horizontal" android:fadingEdgeLength="9dp"
-                android:animateFirstView="false"
+                android:animateFirstView="true"
                 android:inAnimation="@anim/widget_title_slide_in"
-                android:outAnimation="@anim/widget_title_slide_out">
+                android:outAnimation="@anim/widget_title_out_instant">
             <TextView android:id="@+id/widget_title_slide_one"
                 android:layout_width="wrap_content" android:layout_height="wrap_content"
                 android:singleLine="true" android:ellipsize="none" android:scrollHorizontally="true"
@@ -121,15 +123,17 @@
                         android:singleLine="true" android:ellipsize="end"
                        
                        
-                       />
+                       
+                    android:requiresFadingEdge="horizontal"
+                    android:fadingEdgeLength="10dp"/>
             <ViewFlipper android:id="@+id/widget_next_one_flipper"
                 android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:visibility="gone"
-                android:flipInterval="7800" android:autoStart="true"
+                android:flipInterval="13800" android:autoStart="true"
                 android:requiresFadingEdge="horizontal" android:fadingEdgeLength="9dp"
-                android:animateFirstView="false"
+                android:animateFirstView="true"
                 android:inAnimation="@anim/widget_title_slide_in"
-                android:outAnimation="@anim/widget_title_slide_out">
+                android:outAnimation="@anim/widget_title_out_instant">
             <TextView android:id="@+id/widget_next_one_slide_one"
                 android:layout_width="wrap_content" android:layout_height="wrap_content"
                 android:singleLine="true" android:ellipsize="none" android:scrollHorizontally="true"
@@ -177,15 +181,17 @@
                         android:singleLine="true" android:ellipsize="end"
                        
                        
-                       />
+                       
+                    android:requiresFadingEdge="horizontal"
+                    android:fadingEdgeLength="10dp"/>
             <ViewFlipper android:id="@+id/widget_next_two_flipper"
                 android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:visibility="gone"
-                android:flipInterval="7800" android:autoStart="true"
+                android:flipInterval="13800" android:autoStart="true"
                 android:requiresFadingEdge="horizontal" android:fadingEdgeLength="9dp"
-                android:animateFirstView="false"
+                android:animateFirstView="true"
                 android:inAnimation="@anim/widget_title_slide_in"
-                android:outAnimation="@anim/widget_title_slide_out">
+                android:outAnimation="@anim/widget_title_out_instant">
             <TextView android:id="@+id/widget_next_two_slide_one"
                 android:layout_width="wrap_content" android:layout_height="wrap_content"
                 android:singleLine="true" android:ellipsize="none" android:scrollHorizontally="true"
@@ -233,15 +239,17 @@
                         android:singleLine="true" android:ellipsize="end"
                        
                        
-                       />
+                       
+                    android:requiresFadingEdge="horizontal"
+                    android:fadingEdgeLength="10dp"/>
             <ViewFlipper android:id="@+id/widget_next_three_flipper"
                 android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:visibility="gone"
-                android:flipInterval="7800" android:autoStart="true"
+                android:flipInterval="13800" android:autoStart="true"
                 android:requiresFadingEdge="horizontal" android:fadingEdgeLength="9dp"
-                android:animateFirstView="false"
+                android:animateFirstView="true"
                 android:inAnimation="@anim/widget_title_slide_in"
-                android:outAnimation="@anim/widget_title_slide_out">
+                android:outAnimation="@anim/widget_title_out_instant">
             <TextView android:id="@+id/widget_next_three_slide_one"
                 android:layout_width="wrap_content" android:layout_height="wrap_content"
                 android:singleLine="true" android:ellipsize="none" android:scrollHorizontally="true"
@@ -289,15 +297,17 @@
                         android:singleLine="true" android:ellipsize="end"
                        
                        
-                       />
+                       
+                    android:requiresFadingEdge="horizontal"
+                    android:fadingEdgeLength="10dp"/>
             <ViewFlipper android:id="@+id/widget_next_four_flipper"
                 android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:visibility="gone"
-                android:flipInterval="7800" android:autoStart="true"
+                android:flipInterval="13800" android:autoStart="true"
                 android:requiresFadingEdge="horizontal" android:fadingEdgeLength="9dp"
-                android:animateFirstView="false"
+                android:animateFirstView="true"
                 android:inAnimation="@anim/widget_title_slide_in"
-                android:outAnimation="@anim/widget_title_slide_out">
+                android:outAnimation="@anim/widget_title_out_instant">
             <TextView android:id="@+id/widget_next_four_slide_one"
                 android:layout_width="wrap_content" android:layout_height="wrap_content"
                 android:singleLine="true" android:ellipsize="none" android:scrollHorizontally="true"

@@ -16,6 +16,34 @@ data class Song(
     val isYouTube: Boolean get() = videoId.matches(Regex("[A-Za-z0-9_-]{11}")) || id.startsWith("yt-")
     val key: String get() = if (id.isNotBlank()) id else "${title}_${artist}"
 
+    /**
+     * YouTube Music can return station/browse tiles with a thumbnail and a
+     * video-like ID. Those are NOT audio tracks. Filter their explicit labels
+     * at the model boundary, regardless of source (API, history, search or
+     * YouTube Music). Do not exclude real songs titled STATION (e.g. YOASOBI)
+     * or tracks simply named Radio.
+     */
+    fun isPlayableTrack(): Boolean {
+        val t = title.trim().lowercase(java.util.Locale.ROOT)
+        val a = artist.trim().lowercase(java.util.Locale.ROOT)
+        if (t.isBlank()) return false
+        val stationMarkers = listOf(
+            "youtube station", "you tube station", "youtube radio",
+            "youtube music station", "radio station",
+            "personalized station", "personalised station",
+            "start radio", "start station", "station based on",
+            "artist radio", "music radio station"
+        )
+        if (stationMarkers.any { it in t }) return false
+        val genericSource = a == "youtube music" || a == "unknown artist" ||
+            a == "youtube" || a == "radio"
+        if (genericSource && (t.endsWith(" radio") ||
+            t.endsWith(" station") || t.endsWith(" mix"))) return false
+        if (id.startsWith("RDAMVM") || id.startsWith("RDMM") ||
+            id.startsWith("RDCLAK")) return false
+        return true
+    }
+
     fun toJson(): JSONObject = JSONObject().apply {
         put("id", id); put("title", title); put("artist", artist); put("artwork", artwork)
         put("duration", duration); put("audio", audio); put("videoId", videoId); put("album", album)
@@ -30,7 +58,7 @@ data class Song(
                 id = id, title = title, artist = o.optString("artist", "Unknown artist"),
                 artwork = o.optString("artwork"), duration = o.optLong("duration"),
                 audio = o.optString("audio"), videoId = o.optString("videoId"), album = o.optString("album")
-            )
+            ).takeIf(Song::isPlayableTrack)
         }
         fun list(arr: JSONArray?): List<Song> = buildList {
             if (arr != null) for (i in 0 until arr.length()) arr.optJSONObject(i)?.let { fromJson(it)?.let(::add) }

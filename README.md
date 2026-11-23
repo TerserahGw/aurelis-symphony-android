@@ -1,3 +1,12 @@
+## v1.3.1 — sharp-edge, marquee and radio-station hotfix
+
+- **4×2 widget:** the lower dark readability wash is now baked into the large Now Playing cover *before* the entire image is softened and alpha-feathered into the widget-wide glass background. The rightmost 9% is fully transparent, avoiding a vertical cut against the Up Next pane. No change to the rest of the 4-track Up Next layout.
+- **Long widget titles:** replace the too-short 7.8-second sliding-page animation. Each complete title scrolls from its visible start to beyond its **own full measured width** over 12.6 seconds before repeating after a short pause. The outgoing duplicate is hidden instantly, so a half-read title is not overwritten by a second copy. Short titles remain stationary. This uses Android RemoteViews-compatible ViewFlipper rather than the unsupported `View.setSelected` remote call.
+- **YouTube pseudo-stations:** a central `Song.isPlayableTrack()` filter blocks labels such as *Ruth B. - YouTube Station* and similar YouTube Music browse-only radio tiles regardless of whether the source is recommendations, search, saved history, or old playlists. The filter preserves legitimate music tracks named **STATION** or **Radio**. On Next or Up Next selection, stale pseudo-station entries are removed rather than played.
+- All playback, crossfade, account preferences, visual styles, search pagination, mini-player and existing widgets remain otherwise unchanged.
+
+**Note:** Home widgets run in the OEM launcher process. Gradual art masks are rendered before delivery, but animation scheduling still depends on the launcher; test directly on HyperOS after installing the signed release.
+
 ## v1.3.0 — Personalized discovery, true audio crossfade and fluid player
 
 - **Home widgets:** The 4×2 (wide) widget now displays **four** Up Next songs instead of five to restore breathing room. The full-cover Now Playing pane gradually blurs/fades much earlier toward the right; large artwork and bottom blur are preserved. Long widget titles animate steadily **right-to-left in a loop** through the existing RemoteViews-compatible ViewFlipper (the loop can vary between launchers).

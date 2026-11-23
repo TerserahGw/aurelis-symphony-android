@@ -30,15 +30,17 @@
             android:textColor="#FFFFFFFF"
            
            
-/>
+
+                    android:requiresFadingEdge="horizontal"
+                    android:fadingEdgeLength="10dp"/>
             <ViewFlipper android:id="@+id/widget_title_flipper"
                 android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:visibility="gone"
-                android:flipInterval="7800" android:autoStart="true"
+                android:flipInterval="13800" android:autoStart="true"
                 android:requiresFadingEdge="horizontal" android:fadingEdgeLength="9dp"
-                android:animateFirstView="false"
+                android:animateFirstView="true"
                 android:inAnimation="@anim/widget_title_slide_in"
-                android:outAnimation="@anim/widget_title_slide_out">
+                android:outAnimation="@anim/widget_title_out_instant">
             <TextView android:id="@+id/widget_title_slide_one"
                 android:layout_width="wrap_content" android:layout_height="wrap_content"
                 android:singleLine="true" android:ellipsize="none" android:scrollHorizontally="true"

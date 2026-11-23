@@ -238,7 +238,7 @@ class YouTubeMusicHub(context: Context) {
             title = title, artist = artist.ifBlank { "YouTube Music" },
             artwork = thumbnails(item).ifBlank { "https://i.ytimg.com/vi/$id/hqdefault.jpg" },
             videoId = id
-        )
+        ).takeIf(Song::isPlayableTrack)
     }
 
     private fun songFromTwoRow(item: JSONObject): Song? {
@@ -256,7 +256,7 @@ class YouTubeMusicHub(context: Context) {
         return Song("yt-$id", title,
             runs(item.optJSONObject("subtitle")).ifBlank { "YouTube Music" },
             thumbnails(item).ifBlank { "https://i.ytimg.com/vi/$id/hqdefault.jpg" },
-            videoId = id)
+            videoId = id).takeIf(Song::isPlayableTrack)
     }
 
     private fun playlistFromItem(item: JSONObject): YouTubePlaylist? {

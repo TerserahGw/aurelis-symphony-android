@@ -349,47 +349,71 @@ open class AurelisWidgetProvider : AppWidgetProvider() {
             blurredLayer.recycle()
 
             if (fadeRight) {
-                // Soften the vertical meeting line between the cover hero
-                // and the Up Next card. A second blurred right-side strip
-                // avoids a hard crop; alpha then feathers it gradually into
-                // the widget's existing continuous glass background.
-                // Start the blend before the middle so the cover never
-                // ends as a clearly straight chopped rectangle.
-                val featherStart = width * .53f
-                val blurred = Bitmap.createScaledBitmap(
-                    result, (width / 14).coerceAtLeast(12),
-                    (height / 14).coerceAtLeast(12), true
-                )
-                val softRight = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-                val softCanvas = Canvas(softRight)
-                softCanvas.drawBitmap(
-                    blurred, null, Rect(0, 0, width, height), paint
-                )
-                val softMask = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                // IMPORTANT: The old separate bottom overlay in the XML was
+                // an opaque rectangular panel, which still drew a vertical
+                // seam even when this bitmap had a transparent right edge.
+                // Bake the readability veil into the SAME bitmap first, then
+                // apply one alpha mask to the finished image and all effects.
+                val readability = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                     shader = LinearGradient(
-                        featherStart, 0f, width.toFloat(), 0f,
-                        intArrayOf(Color.TRANSPARENT, 0xDAFFFFFF.toInt()),
+                        0f, height * .44f, 0f, height.toFloat(),
+                        intArrayOf(0x00101920, 0x73101920, 0xE0081018.toInt()),
+                        floatArrayOf(0f, .64f, 1f),
+                        Shader.TileMode.CLAMP
+                    )
+                }
+                canvas.drawRect(
+                    0f, height * .44f, width.toFloat(), height.toFloat(), readability
+                )
+                readability.shader = null
+
+                // Increase the optical softness in the right half without
+                // making the cover itself a fuzzy low-resolution thumbnail.
+                val softened = Bitmap.createScaledBitmap(
+                    result, (width / 15).coerceAtLeast(12),
+                    (height / 15).coerceAtLeast(12), true
+                )
+                // Draw soft image into a temporary layer so its alpha can be
+                // used as the blend rather than replacing sharp cover pixels.
+                val temp = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+                val tempCanvas = Canvas(temp)
+                val fill = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+                tempCanvas.drawBitmap(
+                    softened, null, Rect(0, 0, width, height), fill
+                )
+                val mask = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    shader = LinearGradient(
+                        width * .38f, 0f, width * .82f, 0f,
+                        intArrayOf(Color.TRANSPARENT, 0xCCFFFFFF.toInt()),
                         null, Shader.TileMode.CLAMP
                     )
                     xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_IN)
                 }
-                softCanvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), softMask)
-                softMask.shader = null
-                softMask.xfermode = null
-                canvas.drawBitmap(softRight, 0f, 0f, paint)
-                val edgeMask = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                tempCanvas.drawRect(
+                    0f, 0f, width.toFloat(), height.toFloat(), mask
+                )
+                canvas.drawBitmap(temp, 0f, 0f, fill)
+                softened.recycle()
+                temp.recycle()
+
+                // The full alpha reaches ZERO before the pane boundary.
+                // The widget-wide ambient background shines through the
+                // last 10% so there cannot be a straight vertical edge.
+                val rightMask = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                     shader = LinearGradient(
-                        featherStart, 0f, width.toFloat(), 0f,
-                        intArrayOf(Color.WHITE, 0x00FFFFFF),
-                        null, Shader.TileMode.CLAMP
+                        width * .34f, 0f, width * .91f, 0f,
+                        intArrayOf(Color.WHITE, 0xC8FFFFFF.toInt(),
+                            0x54FFFFFF, Color.TRANSPARENT),
+                        floatArrayOf(0f, .50f, .80f, 1f),
+                        Shader.TileMode.CLAMP
                     )
                     xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_IN)
                 }
-                canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), edgeMask)
-                edgeMask.shader = null
-                edgeMask.xfermode = null
-                blurred.recycle()
-                softRight.recycle()
+                canvas.drawRect(
+                    0f, 0f, width.toFloat(), height.toFloat(), rightMask
+                )
+                rightMask.shader = null
+                rightMask.xfermode = null
             }
             return result
         }
@@ -474,6 +498,14 @@ open class AurelisWidgetProvider : AppWidgetProvider() {
          * continuously LEFT (rather than paging between two title fragments)
          * and loops from the beginning after a short pause.
          */
+        /**
+         * Full-title scroll, one text copy VISIBLE at a time. Unlike the old
+         * flipper, the incoming text travels by 100% of its own measured width
+         * over 12.6 seconds. The previous copy disappears immediately so a
+         * new title cannot overwrite the end of an unfinished old title.
+         * ViewFlipper.setFlipInterval is RemotableViewMethod and safe in
+         * Android launchers; View.setSelected is NOT, so avoid that API.
+         */
         private fun updateSlidingTitle(
             views: RemoteViews, originalId: Int, flipperId: Int,
             firstId: Int, secondId: Int, title: String, maxCharacters: Int
@@ -485,6 +517,7 @@ open class AurelisWidgetProvider : AppWidgetProvider() {
             if (shouldScroll) {
                 views.setTextViewText(firstId, text)
                 views.setTextViewText(secondId, text)
+                views.setInt(flipperId, "setFlipInterval", 13_800)
             }
         }
 
