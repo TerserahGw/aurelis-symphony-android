@@ -52,7 +52,7 @@ jobs:
       - name: Upload test APK (signing varies per runner)
         uses: actions/upload-artifact@v4
         with:
-          name: AurelisSymphony-ARM64-v1.2.11-TEST-DEBUG
+          name: AurelisSymphony-ARM64-v1.2.12-TEST-DEBUG
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 14
@@ -100,11 +100,11 @@ jobs:
         if: steps.signing.outputs.enabled == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: AurelisSymphony-ARM64-v1.2.11-SIGNED
+          name: AurelisSymphony-ARM64-v1.2.12-SIGNED
           path: app/build/outputs/apk/release/*.apk
           if-no-files-found: error
 
-      - name: Publish GitHub Release v1.2.11 Stable
+      - name: Publish GitHub Release v1.2.12 Stable
         if: steps.signing.outputs.enabled == 'true' && github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
@@ -112,11 +112,11 @@ jobs:
         run: |
           set -euo pipefail
           cp app/build/outputs/apk/release/app-release.apk \
-            AurelisSymphony-Android-arm64-v1.2.11.apk
-          if ! gh release view v1.2.11 >/dev/null 2>&1; then
-            gh release create v1.2.11 --target "$GITHUB_SHA" \
-              --title "Aurelis Symphony Android v1.2.11 Stable" \
-              --notes "Aurelis Symphony Android v1.2.11 Stable. Fix player morph edge clipping: full-screen background remains unscaled while only foreground content animates. Landscape music-player control rail can be moved left or right via a persistent setting in Interaction, or swipe horizontally with three fingers while landscape player is visible. Animated spring-like rail relocation respects Motion & morph; one-finger lyrics, queue, seeking and other gestures are unaffected. Retains v1.2.10 seamless widget background, minimalist transport controls and three real Up Next covers. Signed release using persistent keystore; versionCode 20."
+            AurelisSymphony-Android-arm64-v1.2.12.apk
+          if ! gh release view v1.2.12 >/dev/null 2>&1; then
+            gh release create v1.2.12 --target "$GITHUB_SHA" \
+              --title "Aurelis Symphony Android v1.2.12 Stable" \
+              --notes "Aurelis Symphony Android v1.2.12 Stable. Restores original satisfying spring-zoom and slide Music Player open/close animations in portrait and landscape. A full-screen blurred ambient underlay and transient edge feather hide exposed cut-off borders without flattening the morph. One persistent left/right landscape rail setting now controls both Home/Search/Library/Settings menu and full Music Player, with smoothly animated relocation. Three-finger swipe left/right works on both main menu and player without intercepting normal single-finger actions. Landscape three-dot popup anchors correctly left/up or right/up from its respective bottom-corner rail button, with matching morph on open/close. Retains prior seamless widgets and album art. Signed release, versionCode 21."
           fi
-          gh release upload v1.2.11 \
-            AurelisSymphony-Android-arm64-v1.2.11.apk --clobber
+          gh release upload v1.2.12 \
+            AurelisSymphony-Android-arm64-v1.2.12.apk --clobber

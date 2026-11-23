@@ -1,3 +1,11 @@
+## v1.2.12 — satisfying Player spring, seamless edges & global landscape controls
+
+- Restores the **original spring zoom and diagonal/vertical slide** when opening and closing the Music Player in portrait and landscape. An unscaled artwork-reactive **blurred underlay** fills the exposed perimeter while a temporary GPU alpha feather softens the transitioning player's sharp edges; at rest it is fully sharp.
+- The **same saved Kiri/Kanan setting** now moves the vertical navigation rail on the **main landscape screen** (Home, Search, Library, Settings) and the control rail inside the landscape Music Player (Close, Lirik/Up Next, three-dot).
+- **Three-finger horizontal swipe** works from both the main menu and the player in landscape. Swipe left for left controls or right for right. One- and two-finger interactions are not intercepted.
+- The three-dot popup is **anchored and animated to the physical side**: bottom-left opens toward the right/up, bottom-right toward the left/up. Spring scales around the correct lower corner with matching exit animation.
+- Existing v1.2.10 widget artwork, seamless Glass Ambient surfaces, and 3-item real Up Next remain unchanged.
+
 # Aurelis Symphony — Android (Kotlin / ARM64)
 
 **Native Android beta source project**, based on Aurelis Symphony Web 2.7.0 by TerserahGw.
