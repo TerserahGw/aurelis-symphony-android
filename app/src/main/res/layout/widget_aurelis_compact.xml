@@ -26,11 +26,13 @@
             <TextView android:id="@+id/widget_title"
             android:layout_width="match_parent" android:layout_height="wrap_content"
             android:text="Aurelis Symphony" android:singleLine="true"
-            android:ellipsize="end" android:textSize="12sp" android:textStyle="bold"
+            android:ellipsize="marquee" android:textSize="12sp" android:textStyle="bold"
             android:textColor="#FFFFFFFF"
            
            
-/>
+android:marqueeRepeatLimit="marquee_forever"
+                    android:requiresFadingEdge="horizontal"
+                    android:fadingEdgeLength="10dp"/>
             <ViewFlipper android:id="@+id/widget_title_flipper"
                 android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:visibility="gone"
