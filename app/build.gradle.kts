@@ -11,8 +11,8 @@ android {
         applicationId = "dev.aurelis.symphony"
         minSdk = 28
         targetSdk = 35
-        versionCode = 18
-        versionName = "1.2.9"
+        versionCode = 19
+        versionName = "1.2.10"
         ndk { abiFilters += "arm64-v8a" }
     }
     // A single private keystore must be reused for EVERY future update.
