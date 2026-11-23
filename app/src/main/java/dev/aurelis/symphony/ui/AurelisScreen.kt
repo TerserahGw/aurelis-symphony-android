@@ -1634,7 +1634,8 @@ private fun GlassPopupItem(icon: androidx.compose.ui.graphics.vector.ImageVector
 private class AdaptiveGlassMenuPosition(
     private val preferDown: Boolean,
     private val inset: Int,
-    private val preferRight: Boolean = false
+    private val preferRight: Boolean = false,
+    private val railOnRight: Boolean = false
 ) : PopupPositionProvider {
     override fun calculatePosition(
         anchorBounds: IntRect, windowSize: IntSize,
@@ -1649,12 +1650,16 @@ private class AdaptiveGlassMenuPosition(
             above >= height -> false
             else -> below >= above
         }
-        // Anchor the glass to the SAME top-right corner as the three-dot capsule.
-        // This does not move the popup off-screen when a row is near the edges.
-        val y = if (preferRight) anchorBounds.bottom - height
+        // The landscape rail's three-dot trigger sits at the BOTTOM corner:
+        // left rail -> menu opens rightward; right rail -> menu opens leftward.
+        // Other row menus preserve their original anchored placement.
+        val y = if (preferRight || railOnRight) anchorBounds.bottom - height
             else if (putBelow) anchorBounds.top else anchorBounds.bottom - height
-        val x = if (preferRight) anchorBounds.right + inset
-            else anchorBounds.right - width
+        val x = when {
+            railOnRight -> anchorBounds.left - width - inset
+            preferRight -> anchorBounds.right + inset
+            else -> anchorBounds.right - width
+        }
         return IntOffset(
             x.coerceIn(inset, max(inset, windowSize.width - width - inset)),
             y.coerceIn(inset, max(inset, windowSize.height - height - inset))
@@ -1686,7 +1691,8 @@ private fun InlineGlassSongMenu(
     lyricOffset: Boolean = false,
     transitionState: androidx.compose.animation.core.MutableTransitionState<Boolean>? = null,
     localPlaylist: String? = null,
-    preferRight: Boolean = false
+    preferRight: Boolean = false,
+    railOnRight: Boolean = false
 ) {
     val isGlass = LocalVisualStyle.current == VisualStyle.GLASS
     val visibility = transitionState ?: remember {
@@ -1703,11 +1709,17 @@ private fun InlineGlassSongMenu(
     else 252.dp
     val popupHeight = (configuration.screenHeightDp.dp - 32.dp)
         .coerceAtLeast(160.dp)
-    val provider = remember(lyricOffset, margin, preferRight) {
+    val provider = remember(lyricOffset, margin, preferRight, railOnRight) {
         AdaptiveGlassMenuPosition(
             preferDown = lyricOffset, inset = margin,
-            preferRight = preferRight
+            preferRight = preferRight, railOnRight = railOnRight
         )
+    }
+    val railPopup = preferRight || railOnRight
+    val origin = when {
+        railOnRight -> TransformOrigin(1f, 1f)
+        preferRight -> TransformOrigin(0f, 1f)
+        else -> TransformOrigin(1f, 0f)
     }
     Popup(
         popupPositionProvider = provider,
@@ -1716,27 +1728,30 @@ private fun InlineGlassSongMenu(
     ) {
         AnimatedVisibility(
             visibleState = visibility,
-            // Keep layout bounds constant during morph: resizing the popup's
-            // window on every spring frame caused its anchor to visibly jitter.
-            // Right-side row menus grow from the top-right as before;
-            // the landscape player has a BOTTOM-LEFT rail trigger, so its
-            // popup grows from the adjacent bottom-left corner instead.
+            // Keep popup window bounds stable during its morph.
+            // Follow the physical button: bottom-left -> grow right/up,
+            // bottom-right -> grow left/up. Classic row menus are unchanged.
             enter = scaleIn(
-                initialScale = if (preferRight) .44f else .22f,
-                transformOrigin = if (preferRight)
-                    TransformOrigin(0f, 1f) else TransformOrigin(1f, 0f),
-                animationSpec = spring(dampingRatio = .89f,
+                initialScale = if (railPopup) .40f else .22f,
+                transformOrigin = origin,
+                animationSpec = spring(dampingRatio = .84f,
                     stiffness = Spring.StiffnessMediumLow)
-            ) + fadeIn(tween(185)) +
-                (if (preferRight) slideInVertically(tween(240)) { it / 12 }
+            ) + fadeIn(tween(205)) +
+                (if (railPopup) slideInHorizontally(tween(260,
+                    easing = FastOutSlowInEasing)) {
+                        if (railOnRight) it / 8 else -it / 8
+                    } else slideInHorizontally(tween(0)) { 0 }) +
+                (if (railPopup) slideInVertically(tween(245)) { it / 12 }
                  else slideInVertically(tween(0)) { 0 }),
             exit = scaleOut(
-                targetScale = if (preferRight) .48f else .22f,
-                transformOrigin = if (preferRight)
-                    TransformOrigin(0f, 1f) else TransformOrigin(1f, 0f),
-                animationSpec = tween(245)
-            ) + fadeOut(tween(190)) +
-                (if (preferRight) slideOutVertically(tween(230)) { it / 14 }
+                targetScale = if (railPopup) .46f else .22f,
+                transformOrigin = origin,
+                animationSpec = tween(250, easing = FastOutSlowInEasing)
+            ) + fadeOut(tween(195)) +
+                (if (railPopup) slideOutHorizontally(tween(235)) {
+                    if (railOnRight) it / 9 else -it / 9
+                } else slideOutHorizontally(tween(0)) { 0 }) +
+                (if (railPopup) slideOutVertically(tween(225)) { it / 14 }
                  else slideOutVertically(tween(0)) { 0 })
         ) {
         Glass(
@@ -2643,6 +2658,9 @@ private fun LandscapeFullPlayer(
         androidx.compose.animation.core.MutableTransitionState(false)
     }
     menuTransition.targetState = landscapeMenuExpanded
+    LaunchedEffect(state.settings.landscapeRailRight) {
+        landscapeMenuExpanded = false
+    }
 
     // Keep every rail action in one composable so moving it between the
     // two edges never duplicates controls, menus, or navigation state.
@@ -2692,7 +2710,8 @@ private fun LandscapeFullPlayer(
                         onDismiss = { landscapeMenuExpanded = false },
                         lyricOffset = true,
                         transitionState = menuTransition,
-                        preferRight = !state.settings.landscapeRailRight
+                        preferRight = !state.settings.landscapeRailRight,
+                        railOnRight = state.settings.landscapeRailRight
                     )
                 }
             }
