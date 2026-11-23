@@ -7,18 +7,20 @@
         android:layout_width="match_parent" android:layout_height="match_parent"
         android:scaleType="fitXY" android:contentDescription="@null"/>
     <LinearLayout android:layout_width="match_parent" android:layout_height="match_parent"
-        android:orientation="horizontal" android:padding="9dp">
-        <LinearLayout android:layout_width="0dp" android:layout_weight="1.14"
+        android:orientation="horizontal" android:paddingLeft="12dp"
+        android:paddingRight="11dp" android:paddingTop="11dp" android:paddingBottom="10dp">
+        <LinearLayout android:layout_width="0dp" android:layout_weight="1.07"
             android:layout_height="match_parent" android:orientation="vertical"
-            android:paddingRight="10dp">
+            android:paddingRight="7dp">
             <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:text="AURELIS  •  NOW PLAYING" android:textColor="#C4F3E1"
-                android:textStyle="bold" android:textSize="9sp" android:singleLine="true"/>
+                android:text="AURELIS  ·  NOW PLAYING" android:textColor="#BDDFD0"
+                android:textStyle="bold" android:textSize="8sp" android:singleLine="true"/>
             <LinearLayout android:layout_width="match_parent" android:layout_height="0dp"
                 android:layout_weight="1" android:orientation="horizontal"
                 android:gravity="center_vertical">
-                <ImageView android:id="@+id/widget_art" android:layout_width="58dp"
-                    android:layout_height="58dp" android:src="@drawable/widget_music_note"
+                <ImageView android:id="@+id/widget_art"
+                    android:layout_width="52dp" android:layout_height="52dp"
+                    android:src="@drawable/widget_music_note"
                     android:background="@drawable/widget_album_frame"
                     android:clipToOutline="true" android:scaleType="centerCrop"
                     android:contentDescription="Cover lagu"/>
@@ -28,83 +30,113 @@
                     <TextView android:id="@+id/widget_title"
                         android:layout_width="match_parent" android:layout_height="wrap_content"
                         android:maxLines="2" android:ellipsize="end"
-                        android:text="Aurelis Symphony" android:textColor="#FAFFFD"
-                        android:textStyle="bold" android:textSize="13sp"/>
+                        android:text="Aurelis Symphony" android:textColor="#F5FCF8"
+                        android:textStyle="bold" android:textSize="12sp"/>
                     <TextView android:id="@+id/widget_artist"
                         android:layout_width="match_parent" android:layout_height="wrap_content"
                         android:layout_marginTop="3dp" android:maxLines="1"
                         android:ellipsize="end" android:text="Musik untuk harimu"
-                        android:textColor="#BDD4CA" android:textSize="10sp"/>
+                        android:textColor="#B6D0C5" android:textSize="10sp"/>
                 </LinearLayout>
             </LinearLayout>
             <LinearLayout android:layout_width="match_parent" android:layout_height="36dp"
                 android:orientation="horizontal" android:gravity="center">
-                <ImageView android:id="@+id/widget_prev" android:layout_width="0dp" android:layout_weight="1"
-                    android:layout_height="36dp" android:padding="8dp"
-                    android:src="@drawable/widget_previous" android:tint="#E2F6ED"
-                    android:contentDescription="Lagu sebelumnya" android:background="@drawable/widget_control_secondary"
-                android:layout_marginLeft="2dp" android:layout_marginRight="2dp"
-                />
-                <ImageView android:id="@+id/widget_toggle" android:layout_width="0dp" android:layout_weight="1.15"
-                    android:layout_height="36dp" android:padding="7dp"
-                    android:src="@drawable/widget_play" android:tint="#C8FFDF"
-                    android:contentDescription="Play atau pause" android:background="@drawable/widget_control_primary"
-                android:layout_marginLeft="2dp" android:layout_marginRight="2dp"
-                />
-                <ImageView android:id="@+id/widget_next" android:layout_width="0dp" android:layout_weight="1"
-                    android:layout_height="36dp" android:padding="8dp"
-                    android:src="@drawable/widget_next" android:tint="#E2F6ED"
-                    android:contentDescription="Lagu berikutnya" android:background="@drawable/widget_control_secondary"
-                android:layout_marginLeft="2dp" android:layout_marginRight="2dp"
-                />
+                <ImageView android:id="@+id/widget_prev" android:layout_width="0dp"
+                    android:layout_weight="1" android:layout_height="36dp"
+                    android:padding="8dp" android:src="@drawable/widget_previous"
+                    android:tint="#E3F7EC" android:contentDescription="Lagu sebelumnya"/>
+                <ImageView android:id="@+id/widget_toggle" android:layout_width="0dp"
+                    android:layout_weight="1.13" android:layout_height="36dp"
+                    android:padding="7dp" android:src="@drawable/widget_play"
+                    android:tint="#C9FFE3" android:contentDescription="Play atau pause"/>
+                <ImageView android:id="@+id/widget_next" android:layout_width="0dp"
+                    android:layout_weight="1" android:layout_height="36dp"
+                    android:padding="8dp" android:src="@drawable/widget_next"
+                    android:tint="#E3F7EC" android:contentDescription="Lagu berikutnya"/>
             </LinearLayout>
         </LinearLayout>
-        <FrameLayout android:layout_width="1dp" android:layout_height="match_parent"
-            android:background="#3EA0C8B8"/>
-        <LinearLayout android:layout_width="0dp" android:layout_weight=".88"
+        <LinearLayout android:layout_width="0dp" android:layout_weight=".93"
             android:layout_height="match_parent" android:orientation="vertical"
-            android:paddingLeft="11dp">
+            android:paddingLeft="10dp">
             <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:text="UP NEXT  ›" android:textColor="#C4F3E1"
-                android:textSize="10sp" android:textStyle="bold"/>
-            <LinearLayout android:layout_width="match_parent" android:layout_height="0dp"
-                android:layout_weight="1" android:gravity="center_vertical"
-                android:orientation="horizontal">
-                <TextView android:layout_width="20dp" android:layout_height="wrap_content"
-                    android:text="01" android:textSize="10sp" android:textColor="#8BAF9E"/>
+                android:text="UP NEXT" android:textColor="#BDDFD0"
+                android:textSize="9sp" android:textStyle="bold"/>
+                        <LinearLayout android:id="@+id/widget_next_one_row"
+                android:layout_width="match_parent" android:layout_height="0dp"
+                android:layout_weight="1" android:orientation="horizontal"
+                android:gravity="center_vertical" android:paddingTop="2dp"
+                android:paddingBottom="2dp">
+                <ImageView android:id="@+id/widget_next_one_art"
+                    android:layout_width="29dp" android:layout_height="29dp"
+                    android:src="@drawable/widget_music_note"
+                    android:background="@drawable/widget_album_frame"
+                    android:clipToOutline="true" android:scaleType="centerCrop"
+                    android:contentDescription="Cover lagu"/>
                 <LinearLayout android:layout_width="0dp" android:layout_weight="1"
-                    android:layout_height="wrap_content" android:orientation="vertical">
+                    android:layout_height="wrap_content" android:orientation="vertical"
+                    android:layout_marginLeft="7dp">
                     <TextView android:id="@+id/widget_next_one"
                         android:layout_width="match_parent" android:layout_height="wrap_content"
-                        android:text="Belum ada antrean" android:textColor="#F6FFFA"
-                        android:singleLine="true" android:ellipsize="end"
-                        android:textSize="11sp" android:textStyle="bold"/>
+                        android:text="Lagu berikutnya" android:textColor="#F0F8F5"
+                        android:textStyle="bold" android:textSize="10sp"
+                        android:singleLine="true" android:ellipsize="end"/>
                     <TextView android:id="@+id/widget_next_one_artist"
                         android:layout_width="match_parent" android:layout_height="wrap_content"
-                        android:text="Pilih lagu untuk memulai" android:textColor="#B2CFC4"
-                        android:singleLine="true" android:ellipsize="end"
-                        android:textSize="9sp"/>
+                        android:layout_marginTop="1dp" android:text="Artis"
+                        android:textColor="#B5CAC4" android:textSize="9sp"
+                        android:singleLine="true" android:ellipsize="end"/>
                 </LinearLayout>
             </LinearLayout>
-            <FrameLayout android:layout_width="match_parent" android:layout_height="1dp"
-                android:background="#20FFFFFF"/>
-            <LinearLayout android:layout_width="match_parent" android:layout_height="0dp"
-                android:layout_weight="1" android:gravity="center_vertical"
-                android:orientation="horizontal">
-                <TextView android:layout_width="20dp" android:layout_height="wrap_content"
-                    android:text="02" android:textSize="10sp" android:textColor="#8BAF9E"/>
+                        <LinearLayout android:id="@+id/widget_next_two_row"
+                android:layout_width="match_parent" android:layout_height="0dp"
+                android:layout_weight="1" android:orientation="horizontal"
+                android:gravity="center_vertical" android:paddingTop="2dp"
+                android:paddingBottom="2dp">
+                <ImageView android:id="@+id/widget_next_two_art"
+                    android:layout_width="29dp" android:layout_height="29dp"
+                    android:src="@drawable/widget_music_note"
+                    android:background="@drawable/widget_album_frame"
+                    android:clipToOutline="true" android:scaleType="centerCrop"
+                    android:contentDescription="Cover lagu"/>
                 <LinearLayout android:layout_width="0dp" android:layout_weight="1"
-                    android:layout_height="wrap_content" android:orientation="vertical">
+                    android:layout_height="wrap_content" android:orientation="vertical"
+                    android:layout_marginLeft="7dp">
                     <TextView android:id="@+id/widget_next_two"
                         android:layout_width="match_parent" android:layout_height="wrap_content"
-                        android:text="Rekomendasi berikutnya" android:textColor="#F6FFFA"
-                        android:singleLine="true" android:ellipsize="end"
-                        android:textSize="11sp" android:textStyle="bold"/>
+                        android:text="Lagu berikutnya" android:textColor="#F0F8F5"
+                        android:textStyle="bold" android:textSize="10sp"
+                        android:singleLine="true" android:ellipsize="end"/>
                     <TextView android:id="@+id/widget_next_two_artist"
                         android:layout_width="match_parent" android:layout_height="wrap_content"
-                        android:text="Menunggu Up Next" android:textColor="#B2CFC4"
-                        android:singleLine="true" android:ellipsize="end"
-                        android:textSize="9sp"/>
+                        android:layout_marginTop="1dp" android:text="Artis"
+                        android:textColor="#B5CAC4" android:textSize="9sp"
+                        android:singleLine="true" android:ellipsize="end"/>
+                </LinearLayout>
+            </LinearLayout>
+                        <LinearLayout android:id="@+id/widget_next_three_row"
+                android:layout_width="match_parent" android:layout_height="0dp"
+                android:layout_weight="1" android:orientation="horizontal"
+                android:gravity="center_vertical" android:paddingTop="2dp"
+                android:paddingBottom="2dp">
+                <ImageView android:id="@+id/widget_next_three_art"
+                    android:layout_width="29dp" android:layout_height="29dp"
+                    android:src="@drawable/widget_music_note"
+                    android:background="@drawable/widget_album_frame"
+                    android:clipToOutline="true" android:scaleType="centerCrop"
+                    android:contentDescription="Cover lagu"/>
+                <LinearLayout android:layout_width="0dp" android:layout_weight="1"
+                    android:layout_height="wrap_content" android:orientation="vertical"
+                    android:layout_marginLeft="7dp">
+                    <TextView android:id="@+id/widget_next_three"
+                        android:layout_width="match_parent" android:layout_height="wrap_content"
+                        android:text="Lagu berikutnya" android:textColor="#F0F8F5"
+                        android:textStyle="bold" android:textSize="10sp"
+                        android:singleLine="true" android:ellipsize="end"/>
+                    <TextView android:id="@+id/widget_next_three_artist"
+                        android:layout_width="match_parent" android:layout_height="wrap_content"
+                        android:layout_marginTop="1dp" android:text="Artis"
+                        android:textColor="#B5CAC4" android:textSize="9sp"
+                        android:singleLine="true" android:ellipsize="end"/>
                 </LinearLayout>
             </LinearLayout>
         </LinearLayout>
