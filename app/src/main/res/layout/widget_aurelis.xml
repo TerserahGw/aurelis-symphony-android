@@ -12,13 +12,13 @@
             android:layout_height="match_parent" android:orientation="vertical"
             android:paddingRight="10dp">
             <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:text="N O W  P L A Y I N G" android:textColor="#C4F3E1"
+                android:text="AURELIS  •  NOW PLAYING" android:textColor="#C4F3E1"
                 android:textStyle="bold" android:textSize="9sp" android:singleLine="true"/>
             <LinearLayout android:layout_width="match_parent" android:layout_height="0dp"
                 android:layout_weight="1" android:orientation="horizontal"
                 android:gravity="center_vertical">
-                <ImageView android:id="@+id/widget_art" android:layout_width="48dp"
-                    android:layout_height="48dp" android:src="@drawable/ic_aurelis_foreground"
+                <ImageView android:id="@+id/widget_art" android:layout_width="58dp"
+                    android:layout_height="58dp" android:src="@drawable/widget_music_note"
                     android:background="@drawable/widget_album_frame"
                     android:clipToOutline="true" android:scaleType="centerCrop"
                     android:contentDescription="Cover lagu"/>
@@ -29,7 +29,7 @@
                         android:layout_width="match_parent" android:layout_height="wrap_content"
                         android:maxLines="2" android:ellipsize="end"
                         android:text="Aurelis Symphony" android:textColor="#FAFFFD"
-                        android:textStyle="bold" android:textSize="12sp"/>
+                        android:textStyle="bold" android:textSize="13sp"/>
                     <TextView android:id="@+id/widget_artist"
                         android:layout_width="match_parent" android:layout_height="wrap_content"
                         android:layout_marginTop="3dp" android:maxLines="1"
@@ -42,24 +42,30 @@
                 <ImageView android:id="@+id/widget_prev" android:layout_width="0dp" android:layout_weight="1"
                     android:layout_height="36dp" android:padding="8dp"
                     android:src="@drawable/widget_previous" android:tint="#E2F6ED"
-                    android:contentDescription="Lagu sebelumnya"/>
+                    android:contentDescription="Lagu sebelumnya"android:background="@drawable/widget_control_secondary"
+                android:layout_marginLeft="2dp" android:layout_marginRight="2dp"
+                />
                 <ImageView android:id="@+id/widget_toggle" android:layout_width="0dp" android:layout_weight="1.15"
                     android:layout_height="36dp" android:padding="7dp"
                     android:src="@drawable/widget_play" android:tint="#C8FFDF"
-                    android:contentDescription="Play atau pause"/>
+                    android:contentDescription="Play atau pause"android:background="@drawable/widget_control_primary"
+                android:layout_marginLeft="2dp" android:layout_marginRight="2dp"
+                />
                 <ImageView android:id="@+id/widget_next" android:layout_width="0dp" android:layout_weight="1"
                     android:layout_height="36dp" android:padding="8dp"
                     android:src="@drawable/widget_next" android:tint="#E2F6ED"
-                    android:contentDescription="Lagu berikutnya"/>
+                    android:contentDescription="Lagu berikutnya"android:background="@drawable/widget_control_secondary"
+                android:layout_marginLeft="2dp" android:layout_marginRight="2dp"
+                />
             </LinearLayout>
         </LinearLayout>
-        <View android:layout_width="1dp" android:layout_height="match_parent"
+        <FrameLayout android:layout_width="1dp" android:layout_height="match_parent"
             android:background="#3EA0C8B8"/>
         <LinearLayout android:layout_width="0dp" android:layout_weight=".88"
             android:layout_height="match_parent" android:orientation="vertical"
             android:paddingLeft="11dp">
             <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:text="UP NEXT" android:textColor="#C4F3E1"
+                android:text="UP NEXT  ›" android:textColor="#C4F3E1"
                 android:textSize="10sp" android:textStyle="bold"/>
             <LinearLayout android:layout_width="match_parent" android:layout_height="0dp"
                 android:layout_weight="1" android:gravity="center_vertical"
@@ -80,7 +86,7 @@
                         android:textSize="9sp"/>
                 </LinearLayout>
             </LinearLayout>
-            <View android:layout_width="match_parent" android:layout_height="1dp"
+            <FrameLayout android:layout_width="match_parent" android:layout_height="1dp"
                 android:background="#20FFFFFF"/>
             <LinearLayout android:layout_width="match_parent" android:layout_height="0dp"
                 android:layout_weight="1" android:gravity="center_vertical"
