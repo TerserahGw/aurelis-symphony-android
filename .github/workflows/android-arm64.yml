@@ -52,7 +52,7 @@ jobs:
       - name: Upload test APK (signing varies per runner)
         uses: actions/upload-artifact@v4
         with:
-          name: AurelisSymphony-ARM64-v1.2.16-TEST-DEBUG
+          name: AurelisSymphony-ARM64-v1.2.17-TEST-DEBUG
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 14
@@ -100,11 +100,11 @@ jobs:
         if: steps.signing.outputs.enabled == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: AurelisSymphony-ARM64-v1.2.16-SIGNED
+          name: AurelisSymphony-ARM64-v1.2.17-SIGNED
           path: app/build/outputs/apk/release/*.apk
           if-no-files-found: error
 
-      - name: Publish GitHub Release v1.2.16 Stable
+      - name: Publish GitHub Release v1.2.17 Stable
         if: steps.signing.outputs.enabled == 'true' && github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
@@ -112,11 +112,11 @@ jobs:
         run: |
           set -euo pipefail
           cp app/build/outputs/apk/release/app-release.apk \
-            AurelisSymphony-Android-arm64-v1.2.16.apk
-          if ! gh release view v1.2.16 >/dev/null 2>&1; then
-            gh release create v1.2.16 --target "$GITHUB_SHA" \
-              --title "Aurelis Symphony Android v1.2.16 Stable" \
-              --notes "Aurelis Symphony Android v1.2.16 Stable. Landscape mini-player stays merged into the Search cover for one additional second after vertical scrolling stops; repeated flings cancel the pending reset and avoid flicker, in both left/right layouts. The 2x2 widget and the Now Playing half of the 4x2 Up Next widget now display large full-pane album art with a softly blurred lower region, dark gradient legibility and minimalist title/previous/play/next controls. Up Next covers remain in the right pane, and 2x1 and 4x1 are unchanged. Stability/performance: reuses widget cover and gradient bitmaps, caches preblurred cover images per track, skips redundant widget publishes, decodes JPEG at bounded source resolution, and isolates one widget's launcher update failure from the others. All existing app features, player animations and gestures retained. Signed versionCode 25."
+            AurelisSymphony-Android-arm64-v1.2.17.apk
+          if ! gh release view v1.2.17 >/dev/null 2>&1; then
+            gh release create v1.2.17 --target "$GITHUB_SHA" \
+              --title "Aurelis Symphony Android v1.2.17 Stable" \
+              --notes "Aurelis Symphony Android v1.2.17 Stable. Home widget album art uses higher-resolution source URLs where supported (Google 1080px and YouTube maxres/sd/hq fallbacks), a 768px quality cache with square crop, and sharper but memory-bounded hero renders. Covers for 2x1 and 4x1 are slightly larger with left spacing preserved. The 4x2 Now Playing cover now softly blurs and fades into its right Up Next pane without a hard vertical edge. Long widget titles use safe looping native ViewFlipper slides with subtle faded margins instead of unsupported RemoteViews setters. Up Next has five compact dynamic slots with larger 36dp covers, no counter, and hides unused entries. All widget variants preserve previous buttons and themed Glass Ambient backgrounds. Release-signed versionCode 26."
           fi
-          gh release upload v1.2.16 \
-            AurelisSymphony-Android-arm64-v1.2.16.apk --clobber
+          gh release upload v1.2.17 \
+            AurelisSymphony-Android-arm64-v1.2.17.apk --clobber
