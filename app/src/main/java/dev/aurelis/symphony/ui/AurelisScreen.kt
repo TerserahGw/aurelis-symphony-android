@@ -457,19 +457,24 @@ fun AurelisScreen(state: AurelisState) {
                     }
                     Box(Modifier.weight(1f).fillMaxHeight()) {
                         pageContent()
-                        // Real content scrolls behind this atmospheric fade.
-                        // Unlike the old top padding, the next item is not cut
-                        // on a hard line when entering under the top islands.
-                        Box(Modifier.fillMaxWidth().height(94.dp)
-                            .align(Alignment.TopCenter)
-                            .background(Brush.verticalGradient(
-                                0.0f to bg.copy(alpha = .97f),
-                                .40f to bg.copy(alpha = .86f),
-                                .73f to bg.copy(alpha = .32f),
-                                1.0f to Color.Transparent
-                            )))
                     }
                 }
+                // Keep the scrim in the ROOT coordinate system so that the
+                // system-bar inset, left navigation area and right content
+                // have one uninterrupted atmospheric color field. The old
+                // page-only 94dp scrim started at x=79dp and created a seam.
+                // This layer has no clickable/pointer handlers; capsules are
+                // drawn above it and remain fully interactive.
+                Box(Modifier.fillMaxWidth().height(144.dp)
+                    .align(Alignment.TopCenter)
+                    .background(Brush.verticalGradient(
+                        colorStops = arrayOf(
+                            0f to bg.copy(alpha = .88f),
+                            .24f to bg.copy(alpha = .78f),
+                            .58f to bg.copy(alpha = .34f),
+                            1f to Color.Transparent
+                        )
+                    )))
                 LandscapeTopDock(
                     modifier = Modifier.align(Alignment.TopStart)
                         .statusBarsPadding().padding(start = 14.dp, end = 13.dp, top = 8.dp),
@@ -1514,17 +1519,26 @@ private fun InlineGlassSongMenu(
             visibleState = visibility,
             // Keep layout bounds constant during morph: resizing the popup's
             // window on every spring frame caused its anchor to visibly jitter.
+            // Right-side row menus grow from the top-right as before;
+            // the landscape player has a BOTTOM-LEFT rail trigger, so its
+            // popup grows from the adjacent bottom-left corner instead.
             enter = scaleIn(
-                initialScale = .22f,
-                transformOrigin = TransformOrigin(1f, 0f),
-                animationSpec = spring(dampingRatio = .93f,
+                initialScale = if (preferRight) .44f else .22f,
+                transformOrigin = if (preferRight)
+                    TransformOrigin(0f, 1f) else TransformOrigin(1f, 0f),
+                animationSpec = spring(dampingRatio = .89f,
                     stiffness = Spring.StiffnessMediumLow)
-            ) + fadeIn(tween(170)),
+            ) + fadeIn(tween(185)) +
+                (if (preferRight) slideInVertically(tween(240)) { it / 12 }
+                 else slideInVertically(tween(0)) { 0 }),
             exit = scaleOut(
-                targetScale = .22f,
-                transformOrigin = TransformOrigin(1f, 0f),
-                animationSpec = tween(255)
-            ) + fadeOut(tween(195))
+                targetScale = if (preferRight) .48f else .22f,
+                transformOrigin = if (preferRight)
+                    TransformOrigin(0f, 1f) else TransformOrigin(1f, 0f),
+                animationSpec = tween(245)
+            ) + fadeOut(tween(190)) +
+                (if (preferRight) slideOutVertically(tween(230)) { it / 14 }
+                 else slideOutVertically(tween(0)) { 0 })
         ) {
         Glass(
             Modifier.width(popupWidth).shadow(
