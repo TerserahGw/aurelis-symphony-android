@@ -2042,6 +2042,30 @@ private fun FullPlayer(state: AurelisState, onClose: () -> Unit, onQueue: () -> 
         "https://i.ytimg.com/vi/$video/maxresdefault.jpg" else artwork
     val animateMs = if (state.settings.motion) 360 else 0
 
+    val isLandscapePlayer = LocalConfiguration.current.orientation ==
+        Configuration.ORIENTATION_LANDSCAPE
+    if (isLandscapePlayer) {
+        LandscapeFullPlayer(
+            state = state, song = song, onClose = onClose,
+            selected = if (pane == "Up Next") "Up Next" else "Lirik",
+            onSelect = { pane = it },
+            showRoman = showRoman,
+            onRomanToggle = {
+                showRoman = !showRoman
+                if (showRoman && !state.settings.romanize)
+                    state.update(state.settings.copy(romanize = true))
+            },
+            showTranslation = showTranslation,
+            onTranslationToggle = {
+                showTranslation = !showTranslation
+                if (showTranslation) state.loadTranslations()
+            },
+            onSongMenu = onMenu,
+            onQueue = onQueue
+        )
+        return
+    }
+
     Box(Modifier.fillMaxSize().background(bg)) {
         Ambient(state)
         // Full-bleed cover: clear center, soft/vignetted upper and lower edges.
@@ -2268,6 +2292,262 @@ private fun FullPlayer(state: AurelisState, onClose: () -> Unit, onQueue: () -> 
     }
 }
 
+/**
+ * The landscape player always shows artwork + playback on the left.
+ * The right panel is independently navigable between lyrics and Up Next.
+ * There is intentionally NO bottom Cover/Lirik/Up Next horizontal island.
+ */
+@Composable
+private fun LandscapeFullPlayer(
+    state: AurelisState,
+    song: Song,
+    onClose: () -> Unit,
+    selected: String,
+    onSelect: (String) -> Unit,
+    showRoman: Boolean,
+    onRomanToggle: () -> Unit,
+    showTranslation: Boolean,
+    onTranslationToggle: () -> Unit,
+    onSongMenu: () -> Unit,
+    onQueue: () -> Unit
+) {
+    val reduced = LocalReducedMotion.current
+    val isGlass = LocalVisualStyle.current == VisualStyle.GLASS
+    val artwork = song.artwork.takeIf { it.startsWith("https://") }
+    Box(Modifier.fillMaxSize().background(bg)) {
+        Ambient(state)
+        Row(
+            Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()
+                .padding(start = 12.dp, end = 15.dp, top = 8.dp, bottom = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(
+                Modifier.width(57.dp).fillMaxHeight(),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                CircleAction(Icons.Rounded.KeyboardArrowDown,
+                    "Tutup pemutar", onClose, size = 46.dp)
+                Spacer(Modifier.height(13.dp))
+                listOf(
+                    Triple("Lirik", Icons.Rounded.Mic, "Lirik"),
+                    Triple("Up Next", Icons.Rounded.QueueMusic, "Up Next")
+                ).forEach { (mode, icon, label) ->
+                    val active = selected == mode
+                    Tactile(action = { onSelect(mode) }) {
+                        Glass(
+                            Modifier.size(51.dp),
+                            RoundedCornerShape(22.dp),
+                            tint = if (active) state.ambientColor
+                                else Color(0xFF223D38),
+                            opacity = if (active) .87f else .36f,
+                            backdrop = if (active) artwork else null
+                        ) {
+                            Icon(icon, label,
+                                Modifier.size(22.dp).align(Alignment.Center),
+                                tint = if (active) lime else mist)
+                            if (active) {
+                                Box(
+                                    Modifier.align(Alignment.BottomCenter)
+                                        .padding(bottom = 5.dp)
+                                        .width(15.dp).height(2.dp)
+                                        .clip(RoundedCornerShape(2.dp))
+                                        .background(if (isGlass)
+                                            lime.copy(alpha = .70f) else lime)
+                                )
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(10.dp))
+                }
+            }
+
+            Spacer(Modifier.width(13.dp))
+
+            // Cover column. Controls remain here while the right panel changes.
+            Column(Modifier.weight(1f).fillMaxHeight()) {
+                Box(
+                    Modifier.fillMaxWidth().weight(1f)
+                        .clip(RoundedCornerShape(22.dp))
+                ) {
+                    if (artwork != null) {
+                        AsyncImage(
+                            model = artwork, contentDescription = null,
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop
+                        )
+                    } else {
+                        Box(Modifier.fillMaxSize().background(state.ambientColor))
+                    }
+                    Box(Modifier.fillMaxSize().background(
+                        Brush.verticalGradient(
+                            colorStops = arrayOf(
+                                0f to bg.copy(alpha = .04f),
+                                .32f to bg.copy(alpha = .06f),
+                                .67f to bg.copy(alpha = .45f),
+                                1f to bg.copy(alpha = .89f)
+                            )
+                        )
+                    ))
+                    Column(
+                        Modifier.align(Alignment.BottomStart)
+                            .fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp)
+                    ) {
+                        Text(song.title, color = white, fontSize = 16.sp,
+                            fontWeight = FontWeight.SemiBold, maxLines = 2,
+                            lineHeight = 19.sp, overflow = TextOverflow.Ellipsis)
+                        Spacer(Modifier.height(3.dp))
+                        Text(song.artist, color = white.copy(alpha = .74f),
+                            fontSize = 11.sp, maxLines = 1,
+                            overflow = TextOverflow.Ellipsis)
+                    }
+                }
+                Spacer(Modifier.height(4.dp))
+                // Seek/duration, previous, play and next sit below the artwork.
+                PlayerControls(state)
+            }
+
+            Spacer(Modifier.width(14.dp))
+
+            Column(Modifier.weight(1.12f).fillMaxHeight()) {
+                Row(
+                    Modifier.fillMaxWidth().height(42.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(uiText(selected), color = white,
+                        fontSize = 19.sp, fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.weight(1f), maxLines = 1)
+                    if (selected == "Lirik") {
+                        IconButton(onClick = onRomanToggle,
+                            modifier = Modifier.size(36.dp)) {
+                            Icon(Icons.Rounded.Language, "Romanisasi",
+                                Modifier.size(19.dp),
+                                tint = if (showRoman) lime else mist)
+                        }
+                        IconButton(onClick = onTranslationToggle,
+                            modifier = Modifier.size(36.dp)) {
+                            if (showTranslation && state.translating) {
+                                CircularProgressIndicator(
+                                    Modifier.size(17.dp),
+                                    strokeWidth = 2.dp, color = lime)
+                            } else {
+                                Icon(Icons.Rounded.Translate, "Terjemahan",
+                                    Modifier.size(19.dp),
+                                    tint = if (showTranslation) lime else mist)
+                            }
+                        }
+                    }
+                    IconButton(onClick = onSongMenu,
+                        modifier = Modifier.size(37.dp)) {
+                        Icon(Icons.Rounded.MoreHoriz, "Opsi lagu",
+                            Modifier.size(21.dp), tint = mist)
+                    }
+                }
+                AnimatedContent(
+                    targetState = selected,
+                    modifier = Modifier.fillMaxWidth().weight(1f),
+                    label = "landscapePlayerRightPanel",
+                    transitionSpec = {
+                        (fadeIn(tween(if (reduced) 0 else 260)) +
+                            slideInHorizontally(tween(if (reduced) 0 else 320)) { it / 9 }
+                        ) togetherWith
+                        (fadeOut(tween(if (reduced) 0 else 170)) +
+                            slideOutHorizontally(tween(if (reduced) 0 else 210)) { -it / 10 })
+                    }
+                ) { mode ->
+                    if (mode == "Lirik") {
+                        Column(Modifier.fillMaxSize()) {
+                            if (showTranslation &&
+                                (state.translating || state.translationError != null)) {
+                                Text(
+                                    if (state.translating)
+                                        "Menerjemahkan ke ${state.settings.language.displayName}…"
+                                    else state.translationError.orEmpty(),
+                                    Modifier.fillMaxWidth().padding(
+                                        horizontal = 11.dp, vertical = 3.dp),
+                                    color = if (state.translationError != null)
+                                        Color(0xFFFFC5C5) else mist,
+                                    fontSize = 10.sp
+                                )
+                            }
+                            LyricContent(
+                                state, Modifier.fillMaxWidth().weight(1f),
+                                showRoman = showRoman,
+                                showTranslation = showTranslation,
+                                compact = true
+                            )
+                        }
+                    } else {
+                        Column(Modifier.fillMaxSize()) {
+                            Text(
+                                state.activePlaylist?.let { "Playlist · $it" }
+                                    ?: "Rekomendasi musik selanjutnya",
+                                color = mist, fontSize = 11.sp, maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            if (state.queue.isEmpty()) {
+                                Box(Modifier.fillMaxSize(),
+                                    contentAlignment = Alignment.Center) {
+                                    Text("Belum ada lagu dalam antrean.",
+                                        color = mist, fontSize = 12.sp,
+                                        textAlign = TextAlign.Center)
+                                }
+                            } else {
+                                LazyColumn(
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentPadding = PaddingValues(bottom = 16.dp),
+                                    verticalArrangement = Arrangement.spacedBy(5.dp)
+                                ) {
+                                    items(state.queue.size, key = { i ->
+                                        "landscape-queue-$i-${state.queue[i].key}"
+                                    }) { index ->
+                                        val queued = state.queue[index]
+                                        Row(
+                                            Modifier.fillMaxWidth(),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Tactile(Modifier.weight(1f), {
+                                                state.playFromQueue(queued, index)
+                                            }) {
+                                                Row(
+                                                    Modifier.fillMaxWidth()
+                                                        .padding(vertical = 3.dp),
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Artwork(queued, 44.dp, 12.dp)
+                                                    Spacer(Modifier.width(10.dp))
+                                                    Column(Modifier.weight(1f)) {
+                                                        Text(queued.title, color = white,
+                                                            fontSize = 12.sp,
+                                                            maxLines = 1,
+                                                            overflow = TextOverflow.Ellipsis)
+                                                        Text(queued.artist, color = mist,
+                                                            fontSize = 10.sp,
+                                                            maxLines = 1,
+                                                            overflow = TextOverflow.Ellipsis)
+                                                    }
+                                                }
+                                            }
+                                            IconButton(
+                                                onClick = { state.removeQueue(queued) },
+                                                modifier = Modifier.size(34.dp)
+                                            ) {
+                                                Icon(Icons.Rounded.Close,
+                                                    "Hapus dari antrean",
+                                                    Modifier.size(17.dp), tint = mist)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 @Composable
 private fun PlayerModeIsland(selected: String, onSelect: (String) -> Unit,
     artwork: String, enabledMotion: Boolean) {
@@ -2333,7 +2613,8 @@ private fun PlayerModeIsland(selected: String, onSelect: (String) -> Unit,
 @Composable
 private fun LyricContent(
     state: AurelisState, modifier: Modifier = Modifier,
-    showRoman: Boolean = true, showTranslation: Boolean = false
+    showRoman: Boolean = true, showTranslation: Boolean = false,
+    compact: Boolean = false
 ) {
     val currentSec = (state.progress + state.settings.lyricOffsetMs) / 1000.0
     val lines = state.lyrics.lines
@@ -2368,8 +2649,9 @@ private fun LyricContent(
 
     LazyColumn(
         state = scroll, modifier = modifier,
-        contentPadding = PaddingValues(horizontal = 23.dp, vertical = 39.dp),
-        verticalArrangement = Arrangement.spacedBy(22.dp)
+        contentPadding = PaddingValues(horizontal = if (compact) 12.dp else 23.dp,
+            vertical = if (compact) 13.dp else 39.dp),
+        verticalArrangement = Arrangement.spacedBy(if (compact) 11.dp else 22.dp)
     ) {
         items(lines.size, key = { "lyric-$it" }) { i ->
             val line = lines[i]
@@ -2425,7 +2707,8 @@ private fun LyricContent(
                 } else {
                     Text(
                         text = line.text, color = if (focused) white else mist,
-                        fontSize = 23.sp, lineHeight = 34.sp,
+                        fontSize = if (compact) 18.sp else 23.sp,
+                        lineHeight = if (compact) 25.sp else 34.sp,
                         fontWeight = if (focused) FontWeight.SemiBold else FontWeight.Medium,
                         style = androidx.compose.ui.text.TextStyle(
                             shadow = if (focused) Shadow(lime.copy(alpha = .21f),
