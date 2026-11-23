@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <set xmlns:android="http://schemas.android.com/apk/res/android"
     android:interpolator="@android:interpolator/linear">
-    <!-- Enter from the right continuously instead of flipping title pages. -->
-    <translate android:fromXDelta="100%p" android:toXDelta="0%p"
-        android:duration="6100"/>
+    <!-- Travel by the text view's OWN full width, not its parent width.
+         Even long titles completely pass through before reset. -->
+    <translate android:fromXDelta="0%" android:toXDelta="-100%"
+        android:duration="12600"/>
 </set>
