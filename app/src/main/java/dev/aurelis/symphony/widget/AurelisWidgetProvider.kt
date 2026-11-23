@@ -199,7 +199,7 @@ class AurelisWidgetProvider : AppWidgetProvider() {
                 remote.setOnClickPendingIntent(R.id.widget_artist, openPending)
                 remote.setOnClickPendingIntent(R.id.widget_toggle,
                     actionIntent(app, id * 10 + 1, ACTION_TOGGLE))
-                remote.setOnClickPendingIntent(R.id.widget_previous,
+                remote.setOnClickPendingIntent(R.id.widget_prev,
                     actionIntent(app, id * 10 + 2, ACTION_PREVIOUS))
                 remote.setOnClickPendingIntent(R.id.widget_next,
                     actionIntent(app, id * 10 + 3, ACTION_NEXT))
