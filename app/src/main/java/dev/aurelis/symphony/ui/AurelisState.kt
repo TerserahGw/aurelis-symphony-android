@@ -7,6 +7,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
+import dev.aurelis.symphony.widget.AurelisWidgetProvider
+import dev.aurelis.symphony.widget.WidgetPlaybackBridge
 import androidx.lifecycle.ViewModel
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
@@ -96,14 +99,33 @@ class AurelisState(context: Context) : ViewModel() {
         private set
 
     init {
+        WidgetPlaybackBridge.attach(this)
         val token = SessionToken(app, ComponentName(app, AudioService::class.java))
         controllerFuture = MediaController.Builder(app, token).buildAsync()
         controllerFuture.addListener({
             runCatching { controllerFuture.get() }.onSuccess { player ->
                 controller = player
                 isPlaying = player.isPlaying
+                // Restore the currently playing MediaSession item if the
+                // Activity was recreated after the old ViewModel was cleared.
+                player.currentMediaItem?.let { item ->
+                    if (current == null && item.mediaMetadata.title != null) {
+                        current = Song(
+                            id = item.mediaId,
+                            title = item.mediaMetadata.title.toString(),
+                            artist = item.mediaMetadata.artist?.toString().orEmpty(),
+                            artwork = item.mediaMetadata.artworkUri?.toString().orEmpty()
+                        )
+                    }
+                }
+                AurelisWidgetProvider.publish(app, current, isPlaying,
+                    ambientColor.toArgb())
                 player.addListener(object : Player.Listener {
-                    override fun onIsPlayingChanged(isPlayingNow: Boolean) { isPlaying = isPlayingNow }
+                    override fun onIsPlayingChanged(isPlayingNow: Boolean) {
+                        isPlaying = isPlayingNow
+                        AurelisWidgetProvider.publish(app, current, isPlayingNow,
+                            ambientColor.toArgb())
+                    }
                     override fun onPlaybackStateChanged(playbackState: Int) {
                         if (playbackState == Player.STATE_ENDED) next()
                         if (playbackState == Player.STATE_READY) preparing = false
@@ -208,6 +230,7 @@ class AurelisState(context: Context) : ViewModel() {
         translationError = null
         playJob = scope.launch {
             current = song; preparing = true; progress = 0; lyrics = Lyrics("", emptyList()); romanized = emptyMap()
+            AurelisWidgetProvider.publish(app, song, isPlaying, ambientColor.toArgb())
             replenishQueue(song)
             error = null; triedFallbackFor = null
             if (addHistory) { library.addHistory(song); libraryStamp++ }
@@ -315,7 +338,11 @@ class AurelisState(context: Context) : ViewModel() {
         c.prepare(); c.play()
     }
     private fun refreshAmbient(song: Song) {
-        if (!song.artwork.startsWith("https://")) { ambientColor = Color(0xFF315A4C); return }
+        if (!song.artwork.startsWith("https://")) {
+            ambientColor = Color(0xFF315A4C)
+            AurelisWidgetProvider.publish(app, song, isPlaying, ambientColor.toArgb())
+            return
+        }
         scope.launch(Dispatchers.IO) {
             runCatching {
                 imageClient.newCall(Request.Builder().url(song.artwork).build()).execute().use { resp ->
@@ -329,7 +356,11 @@ class AurelisState(context: Context) : ViewModel() {
                     }
                 }
             }.getOrNull()?.let { color -> withContext(Dispatchers.Main) {
-                if (current?.key == song.key) ambientColor = Color(color)
+                if (current?.key == song.key) {
+                    ambientColor = Color(color)
+                    AurelisWidgetProvider.publish(app, song, isPlaying,
+                        ambientColor.toArgb())
+                }
             } }
         }
     }
@@ -525,11 +556,15 @@ class AurelisState(context: Context) : ViewModel() {
         } else {
             library.updateSettings(s)
         }
+        // Widget is immediately re-themed from the saved preference, even
+        // when the same track remains playing.
+        AurelisWidgetProvider.publish(app, current, isPlaying, ambientColor.toArgb())
         if (s.romanize && romanized.isEmpty() && lyrics.lines.isNotEmpty()) {
             scope.launch { romanized = runCatching { api.romanize(lyrics) }.getOrDefault(emptyMap()) }
         }
     }
     fun close() {
+        WidgetPlaybackBridge.detach(this)
         settingsSaveJob?.cancel()
         library.updateSettings(settings)
         playJob?.cancel(); lyricJob?.cancel(); translationJob?.cancel(); searchJob?.cancel()
