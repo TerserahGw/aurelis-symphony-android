@@ -2025,10 +2025,27 @@ private fun MiniPlayer(state: AurelisState, onExpand: () -> Unit) {
                 Row(Modifier.weight(1f).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     MorphArtwork(song, 55.dp, 17.dp, state)
                     Spacer(Modifier.width(11.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(song.title, color = white, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                        Spacer(Modifier.height(3.dp))
-                        Text(if (state.preparing) "Menyiapkan audio…" else song.artist, color = mist, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 11.sp)
+                    AnimatedContent(
+                        targetState = song,
+                        modifier = Modifier.weight(1f),
+                        label = "miniPlayerTitleArtistBlend",
+                        transitionSpec = {
+                            (fadeIn(tween(if (state.settings.motion) 360 else 0)) +
+                                slideInVertically(tween(if (state.settings.motion) 360 else 0)) { it / 5 }
+                            ) togetherWith
+                            (fadeOut(tween(if (state.settings.motion) 230 else 0)) +
+                                slideOutVertically(tween(if (state.settings.motion) 280 else 0)) { -it / 5 })
+                        }
+                    ) { track ->
+                        Column {
+                            Text(track.title, color = white, maxLines = 1,
+                                overflow = TextOverflow.Ellipsis, fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold)
+                            Spacer(Modifier.height(3.dp))
+                            Text(if (state.preparing) "Menyiapkan audio…" else track.artist,
+                                color = mist, maxLines = 1,
+                                overflow = TextOverflow.Ellipsis, fontSize = 11.sp)
+                        }
                     }
                     IconButton(onClick = { state.togglePlay() }, enabled = !state.preparing) {
                         Icon(if (state.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, "Putar atau jeda", tint = white, modifier = Modifier.size(26.dp))
@@ -2670,14 +2687,22 @@ private fun FullPlayer(state: AurelisState, onClose: () -> Unit, onQueue: () -> 
             if (pane == "Cover") {
                 // A SINGLE full-bleed cover, with no fit-size rectangle or seams.
                 // Keep texture at the top and fade only where text/controls need contrast.
-                AsyncImage(
-                    model = coverUrl,
-                    contentDescription = null,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop,
-                    alignment = Alignment.Center,
-                    onError = { if (useMaxres) useMaxres = false }
-                )
+                Crossfade(
+                    targetState = coverUrl,
+                    animationSpec = tween(if (state.settings.motion)
+                        (if (state.settings.crossfadeEnabled)
+                            state.settings.crossfadeSeconds * 700 else 480) else 0),
+                    label = "portraitCoverCrossfade"
+                ) { requestUrl ->
+                    AsyncImage(
+                        model = requestUrl,
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop,
+                        alignment = Alignment.Center,
+                        onError = { if (useMaxres) useMaxres = false }
+                    )
+                }
                 Box(Modifier.fillMaxSize().background(
                     Brush.verticalGradient(colorStops = arrayOf(
                         0f to bg.copy(alpha = .59f),
@@ -2756,11 +2781,26 @@ private fun FullPlayer(state: AurelisState, onClose: () -> Unit, onQueue: () -> 
                                     fontSize = 10.sp, letterSpacing = 1.5.sp,
                                     fontWeight = FontWeight.SemiBold)
                                 Spacer(Modifier.height(10.dp))
-                                Text(song.title, color = white, fontSize = 29.sp,
-                                    lineHeight = 33.sp, fontWeight = FontWeight.SemiBold,
-                                    maxLines = 3, overflow = TextOverflow.Ellipsis)
-                                Spacer(Modifier.height(7.dp))
-                                Text(song.artist, color = white.copy(alpha = .74f), fontSize = 15.sp)
+                                AnimatedContent(
+                                    targetState = song,
+                                    label = "portraitTrackDetailsMorph",
+                                    transitionSpec = {
+                                        (fadeIn(tween(if (state.settings.motion) 420 else 0)) +
+                                            slideInVertically(tween(if (state.settings.motion) 380 else 0)) { it / 6 }
+                                        ) togetherWith
+                                        (fadeOut(tween(if (state.settings.motion) 240 else 0)) +
+                                            slideOutVertically(tween(if (state.settings.motion) 310 else 0)) { -it / 7 })
+                                    }
+                                ) { shown ->
+                                    Column {
+                                        Text(shown.title, color = white, fontSize = 29.sp,
+                                            lineHeight = 33.sp, fontWeight = FontWeight.SemiBold,
+                                            maxLines = 3, overflow = TextOverflow.Ellipsis)
+                                        Spacer(Modifier.height(7.dp))
+                                        Text(shown.artist, color = white.copy(alpha = .74f),
+                                            fontSize = 15.sp)
+                                    }
+                                }
                                 Spacer(Modifier.height(10.dp))
                                 IconButton(onClick = { state.like(song) }) {
                                     Icon(if (state.isLiked(song)) Icons.Rounded.Favorite
@@ -2831,8 +2871,17 @@ private fun FullPlayer(state: AurelisState, onClose: () -> Unit, onQueue: () -> 
                                 )
                             }
                             // There is deliberately NO separate glass lyric panel.
-                            LyricContent(state, Modifier.fillMaxWidth().weight(1f),
-                                showRoman = showRoman, showTranslation = showTranslation)
+                            Crossfade(
+                                targetState = state.lyrics,
+                                modifier = Modifier.fillMaxWidth().weight(1f),
+                                animationSpec = tween(if (state.settings.motion) 400 else 0),
+                                label = "portraitLyricsTrackCrossfade"
+                            ) { snapshot ->
+                                LyricContent(state, Modifier.fillMaxSize(),
+                                    showRoman = showRoman,
+                                    showTranslation = showTranslation,
+                                    shownLyrics = snapshot)
+                            }
                         }
                     }
                     else -> {
@@ -2871,10 +2920,16 @@ private fun FullPlayer(state: AurelisState, onClose: () -> Unit, onQueue: () -> 
                                     verticalArrangement = Arrangement.spacedBy(12.dp)
                                 ) {
                                     items(state.queue.size,
-                                        key = { i -> "player-queue-$i-${state.queue[i].key}" }
+                                        key = { i ->
+                                            val item = state.queue[i]
+                                            "player-queue-${item.key}-${state.queue.take(i).count { it.key == item.key }}"
+                                        }
                                     ) { i ->
                                         val queued = state.queue[i]
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Row(
+                                            Modifier.animateItem(),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
                                             Box(Modifier.weight(1f)) {
                                                 SongRow(queued, state,
                                                     onPlay = { state.playFromQueue(queued, i) },
@@ -3163,12 +3218,20 @@ private fun LandscapeFullPlayer(
                                     fontSize = 10.sp
                                 )
                             }
-                            LyricContent(
-                                state, Modifier.fillMaxWidth().weight(1f),
-                                showRoman = showRoman,
-                                showTranslation = showTranslation,
-                                compact = true
-                            )
+                            Crossfade(
+                                targetState = state.lyrics,
+                                modifier = Modifier.fillMaxWidth().weight(1f),
+                                animationSpec = tween(if (state.settings.motion) 400 else 0),
+                                label = "landscapeLyricsTrackCrossfade"
+                            ) { snapshot ->
+                                LyricContent(
+                                    state, Modifier.fillMaxSize(),
+                                    showRoman = showRoman,
+                                    showTranslation = showTranslation,
+                                    compact = true,
+                                    shownLyrics = snapshot
+                                )
+                            }
                         }
                     } else {
                         Column(Modifier.fillMaxSize()) {
