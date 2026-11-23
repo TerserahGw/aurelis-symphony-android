@@ -338,6 +338,12 @@ class AurelisState(context: Context) : ViewModel() {
     }
 
     fun play(song: Song, addHistory: Boolean = true, preserveQueue: Boolean = false) {
+        // Reject non-playable browsing cards before mutating the current
+        // playlist/queue: tapping a station must never destroy Up Next.
+        if (!playable(song)) {
+            error = "Item radio/station ini bukan trek audio. Pilih lagu individual."
+            return
+        }
         if (!preserveQueue) {
             activePlaylist = null
             playlistTracks = emptyList()
@@ -360,10 +366,6 @@ class AurelisState(context: Context) : ViewModel() {
         translating = false
         translationError = null
         playJob = scope.launch {
-            if (!playable(song)) {
-                error = "Item radio/station ini bukan trek audio. Pilih lagu individual."
-                return@launch
-            }
             current = song; preparing = true; progress = 0; lyrics = Lyrics("", emptyList()); romanized = emptyMap()
             AurelisWidgetProvider.publish(app, song, isPlaying, ambientColor.toArgb())
             replenishQueue(song)
