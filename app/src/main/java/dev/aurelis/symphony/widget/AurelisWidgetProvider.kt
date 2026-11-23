@@ -406,53 +406,59 @@ open class AurelisWidgetProvider : AppWidgetProvider() {
         private fun rgba(color: Int, a: Int) =
             Color.argb(a, Color.red(color), Color.green(color), Color.blue(color))
 
+        /**
+         * Single continuous colour field. The previous version stamped a
+         * rectangular upscaled artwork bitmap onto the canvas, which produced
+         * a hard vertical seam at one third of the widget on some launchers.
+         * Sample the cover's color instead and apply full-canvas soft glows.
+         */
         private fun renderBackground(
             glass: Boolean, accent: Int, artwork: Bitmap?, width: Int, height: Int
         ): Bitmap {
-            val image = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-            val canvas = Canvas(image)
+            val output = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+            val canvas = Canvas(output)
             val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
-            val slate = 0xFF101C27.toInt()
-            val base = mix(accent, slate, if (glass) .58f else .79f)
-            val upper = mix(base, 0xFF324B58.toInt(), if (glass) .28f else .12f)
+            val sample = if (artwork != null && !artwork.isRecycled &&
+                artwork.width > 0 && artwork.height > 0) {
+                artwork.getPixel(artwork.width / 2, artwork.height / 2)
+            } else accent
+            val coverAccent = mix(accent, sample, if (glass) .30f else .12f)
+            val quietBase = mix(coverAccent, 0xFF14242A.toInt(), if (glass) .76f else .87f)
+            val top = mix(quietBase, 0xFF273B42.toInt(), .30f)
             paint.shader = LinearGradient(
                 0f, 0f, width.toFloat(), height.toFloat(),
                 if (glass) intArrayOf(
-                    rgba(upper, 242), rgba(base, 242), rgba(0xFF0C1720.toInt(), 250)
+                    rgba(top, 236),
+                    rgba(quietBase, 241),
+                    0xF00E1C23.toInt()
                 ) else intArrayOf(
-                    0xFF1A252E.toInt(), rgba(base, 255), 0xFF0B141B.toInt()
+                    0xFF1A2D2B.toInt(), quietBase, 0xFF111D22.toInt()
+                ),
+                floatArrayOf(0f, .54f, 1f), Shader.TileMode.CLAMP
+            )
+            canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), paint)
+            val softLight = mix(coverAccent, 0xFFB6FFE9.toInt(), .58f)
+            // Shader is evaluated at every pixel of the full surface: no
+            // crop / rectangles / hard gradient boundaries at any size.
+            paint.shader = RadialGradient(
+                width * .10f, height * .04f, width * 1.06f,
+                intArrayOf(
+                    rgba(softLight, if (glass) 61 else 22),
+                    rgba(softLight, if (glass) 14 else 5),
+                    Color.TRANSPARENT
+                ), floatArrayOf(0f, .48f, 1f), Shader.TileMode.CLAMP
+            )
+            canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), paint)
+            paint.shader = RadialGradient(
+                width * .94f, height * 1.04f, width * .86f,
+                intArrayOf(
+                    rgba(mix(coverAccent, 0xFF6CA1C8.toInt(), .60f), if (glass) 26 else 8),
+                    Color.TRANSPARENT
                 ), null, Shader.TileMode.CLAMP
             )
             canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), paint)
             paint.shader = null
-
-            if (artwork != null) {
-                // Upscaling an extremely small thumbnail produces a soft
-                // frosted artwork-reactive wash without wallpaper capture.
-                val tiny = Bitmap.createScaledBitmap(artwork, 7, 7, true)
-                paint.alpha = if (glass) 92 else 34
-                canvas.drawBitmap(tiny, null,
-                    Rect(width / 3, -height / 3, width + width / 3, height + height / 3), paint)
-                tiny.recycle()
-                paint.alpha = 255
-            }
-            val highlight = mix(accent, 0xFFE3FFFA.toInt(), .72f)
-            paint.shader = RadialGradient(
-                width * .1f, height * .05f, width * .8f,
-                intArrayOf(rgba(highlight, if (glass) 74 else 26), Color.TRANSPARENT),
-                null, Shader.TileMode.CLAMP
-            )
-            canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), paint)
-            paint.shader = RadialGradient(
-                width * .97f, height * .99f, width * .68f,
-                intArrayOf(if (glass) 0x2C85BFE1 else 0x183B807E, Color.TRANSPARENT),
-                null, Shader.TileMode.CLAMP
-            )
-            canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), paint)
-            paint.shader = null
-            paint.color = if (glass) 0x24FFFFFF else 0x09FFFFFF
-            canvas.drawRect(22f, 2f, width - 22f, 3f, paint)
-            return image
+            return output
         }
 
     }
