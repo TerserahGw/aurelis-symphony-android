@@ -3416,7 +3416,7 @@ private fun SettingsSheet(
                     Text(it, color = lime, fontSize = 11.sp, lineHeight = 17.sp)
                 }
                 Spacer(Modifier.height(17.dp))
-                Text("AURELIS SYMPHONY  ·  ANDROID 1.2.5 STABLE",
+                Text("AURELIS SYMPHONY  ·  ANDROID 1.2.6 STABLE",
                     color = mist.copy(alpha = .8f), fontSize = 10.sp,
                     letterSpacing = 1.sp)
                 Text("APK dipasang melalui konfirmasi sistem Android.",
