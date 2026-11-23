@@ -6,55 +6,59 @@
     <ImageView android:id="@+id/widget_background"
         android:layout_width="match_parent" android:layout_height="match_parent"
         android:scaleType="fitXY" android:contentDescription="@null"/>
-    <LinearLayout android:layout_width="match_parent" android:layout_height="match_parent"
-        android:orientation="horizontal" android:paddingLeft="12dp"
-        android:paddingRight="11dp" android:paddingTop="11dp" android:paddingBottom="10dp">
-        <LinearLayout android:layout_width="0dp" android:layout_weight="1.07"
-            android:layout_height="match_parent" android:orientation="vertical"
-            android:paddingRight="7dp">
-            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:text="AURELIS  ·  NOW PLAYING" android:textColor="#BDDFD0"
-                android:textStyle="bold" android:textSize="8sp" android:singleLine="true"/>
-            <LinearLayout android:layout_width="match_parent" android:layout_height="0dp"
-                android:layout_weight="1" android:orientation="horizontal"
-                android:gravity="center_vertical">
-                <ImageView android:id="@+id/widget_art"
-                    android:layout_width="52dp" android:layout_height="52dp"
-                    android:src="@drawable/widget_music_note"
-                    android:background="@drawable/widget_album_frame"
-                    android:clipToOutline="true" android:scaleType="centerCrop"
-                    android:contentDescription="Cover lagu"/>
-                <LinearLayout android:layout_width="0dp" android:layout_weight="1"
-                    android:layout_height="wrap_content" android:layout_marginLeft="9dp"
-                    android:orientation="vertical">
-                    <TextView android:id="@+id/widget_title"
-                        android:layout_width="match_parent" android:layout_height="wrap_content"
-                        android:maxLines="2" android:ellipsize="end"
-                        android:text="Aurelis Symphony" android:textColor="#F5FCF8"
-                        android:textStyle="bold" android:textSize="12sp"/>
-                    <TextView android:id="@+id/widget_artist"
-                        android:layout_width="match_parent" android:layout_height="wrap_content"
-                        android:layout_marginTop="3dp" android:maxLines="1"
-                        android:ellipsize="end" android:text="Musik untuk harimu"
-                        android:textColor="#B6D0C5" android:textSize="10sp"/>
-                </LinearLayout>
+    <LinearLayout android:layout_width="match_parent"
+        android:layout_height="match_parent" android:orientation="horizontal">
+        <!-- The Now Playing pane is an edge-to-edge cover card with a
+             GPU-preblurred lower half and a gentle dark readability fade. -->
+        <FrameLayout android:layout_width="0dp" android:layout_weight="1.07"
+            android:layout_height="match_parent">
+            <ImageView android:id="@+id/widget_art"
+                android:layout_width="match_parent" android:layout_height="match_parent"
+                android:src="@drawable/widget_music_note" android:scaleType="centerCrop"
+                android:contentDescription="Cover lagu"/>
+            <FrameLayout android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="@drawable/widget_cover_bottom_blur"/>
+            <LinearLayout android:layout_width="match_parent"
+                android:layout_height="match_parent" android:orientation="vertical"
+                android:paddingLeft="11dp" android:paddingRight="11dp"
+                android:paddingTop="10dp" android:paddingBottom="7dp">
+                <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:text="AURELIS  ·  NOW PLAYING" android:textColor="#F0FFF9"
+                    android:textStyle="bold" android:textSize="8sp" android:singleLine="true"/>
+                <FrameLayout android:layout_width="match_parent" android:layout_height="0dp"
+                    android:layout_weight="1"/>
+                <TextView android:id="@+id/widget_title"
+                    android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:maxLines="1" android:ellipsize="end" android:text="Aurelis Symphony"
+                    android:textColor="#FFFFFFFF" android:textStyle="bold" android:textSize="12sp"/>
+                <TextView android:id="@+id/widget_artist"
+                    android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp" android:layout_marginBottom="5dp"
+                    android:maxLines="1" android:ellipsize="end"
+                    android:text="Musik untuk harimu" android:textColor="#D6E9E2"
+                    android:textSize="10sp"/>
+            <LinearLayout android:layout_width="match_parent" android:layout_height="33dp"
+                android:orientation="horizontal" android:gravity="center_vertical">
+                <ImageView android:id="@+id/widget_prev"
+                    android:layout_width="0dp" android:layout_weight="1"
+                    android:layout_height="33dp" android:padding="7dp"
+                    android:src="@drawable/widget_previous" android:tint="#F2FFF8"
+                    android:contentDescription="Lagu sebelumnya"/>
+                <ImageView android:id="@+id/widget_toggle"
+                    android:layout_width="0dp" android:layout_weight="1.18"
+                    android:layout_height="33dp" android:padding="6dp"
+                    android:src="@drawable/widget_play" android:tint="#C4FFE4"
+                    android:contentDescription="Play atau pause"/>
+                <ImageView android:id="@+id/widget_next"
+                    android:layout_width="0dp" android:layout_weight="1"
+                    android:layout_height="33dp" android:padding="7dp"
+                    android:src="@drawable/widget_next" android:tint="#F2FFF8"
+                    android:contentDescription="Lagu berikutnya"/>
             </LinearLayout>
-            <LinearLayout android:layout_width="match_parent" android:layout_height="36dp"
-                android:orientation="horizontal" android:gravity="center">
-                <ImageView android:id="@+id/widget_prev" android:layout_width="0dp"
-                    android:layout_weight="1" android:layout_height="36dp"
-                    android:padding="8dp" android:src="@drawable/widget_previous"
-                    android:tint="#E3F7EC" android:contentDescription="Lagu sebelumnya"/>
-                <ImageView android:id="@+id/widget_toggle" android:layout_width="0dp"
-                    android:layout_weight="1.13" android:layout_height="36dp"
-                    android:padding="7dp" android:src="@drawable/widget_play"
-                    android:tint="#C9FFE3" android:contentDescription="Play atau pause"/>
-                <ImageView android:id="@+id/widget_next" android:layout_width="0dp"
-                    android:layout_weight="1" android:layout_height="36dp"
-                    android:padding="8dp" android:src="@drawable/widget_next"
-                    android:tint="#E3F7EC" android:contentDescription="Lagu berikutnya"/>
             </LinearLayout>
-        </LinearLayout>
+        </FrameLayout>
+        <!-- Preserve the three real Up Next rows and artwork as before. -->
         <LinearLayout android:layout_width="0dp" android:layout_weight=".93"
             android:layout_height="match_parent" android:orientation="vertical"
             android:paddingLeft="10dp">

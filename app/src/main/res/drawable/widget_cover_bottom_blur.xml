@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <!-- A soft readability veil placed over the preblurred lower cover.
+         Top stays photographic, lower titles and controls stay legible. -->
+    <gradient android:angle="270"
+        android:startColor="#0A081319"
+        android:centerColor="#75081118"
+        android:endColor="#EE081018"/>
+</shape>

@@ -362,15 +362,30 @@ fun AurelisScreen(state: AurelisState) {
     val searchScrollState = rememberLazyListState()
     val libraryScrollState = rememberLazyListState()
     var compactDock by remember { mutableStateOf(false) }
-    // React to actual vertical scrolling; the 3s portrait idle delay is
-    // deliberately NOT used for the landscape music/Search morph.
-    val landscapeScrollState = when (tab) {
-        "Search" -> searchScrollState
-        "Library" -> libraryScrollState
-        else -> homeScrollState
+    // Keep the mini player merged for one second after the last scroll.
+    // collectLatest cancels the pending return immediately on the next fling,
+    // preventing the capsules from repeatedly expanding between scrolls.
+    var landscapeMorphHeld by remember { mutableStateOf(false) }
+    LaunchedEffect(isLandscape, tab, state.current?.key) {
+        landscapeMorphHeld = false
+        if (!isLandscape || state.current == null) return@LaunchedEffect
+        val activeScroll = when (tab) {
+            "Search" -> searchScrollState
+            "Library" -> libraryScrollState
+            else -> homeScrollState
+        }
+        snapshotFlow { activeScroll.isScrollInProgress }
+            .distinctUntilChanged()
+            .collectLatest { scrolling ->
+                if (scrolling) landscapeMorphHeld = true
+                else {
+                    delay(1_000L)
+                    landscapeMorphHeld = false
+                }
+            }
     }
     val landscapeDockMerging = isLandscape &&
-        landscapeScrollState.isScrollInProgress && state.current != null
+        landscapeMorphHeld && state.current != null
     var expanded by rememberSaveable { mutableStateOf(false) }
     var searchExpanded by rememberSaveable { mutableStateOf(false) }
     var searchQuery by rememberSaveable { mutableStateOf("") }
