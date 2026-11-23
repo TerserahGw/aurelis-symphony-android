@@ -70,6 +70,8 @@ import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.window.PopupProperties
@@ -2990,37 +2992,35 @@ private fun SettingsSheet(
 ) {
     val song = state.current
     val s = state.settings
+    val landscapeSettings = LocalConfiguration.current.orientation ==
+        Configuration.ORIENTATION_LANDSCAPE
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val sheetScope = rememberCoroutineScope()
     val closeSheet: () -> Unit = {
-        sheetScope.launch {
+        if (landscapeSettings) onClose()
+        else sheetScope.launch {
             sheetState.hide()
             onClose()
         }
         Unit
     }
-    ModalBottomSheet(
-        onDismissRequest = closeSheet,
-        sheetState = sheetState,
-        sheetGesturesEnabled = false,
-        containerColor = Color(0xFF0D191E),
-        contentColor = white,
-        tonalElevation = 0.dp,
-        scrimColor = bg.copy(alpha = .73f),
-        dragHandle = null,
-        shape = RoundedCornerShape(topStart = 34.dp, topEnd = 34.dp)
-    ) {
+    // Shared settings controls; only their container differs per orientation.
+    val sheetContent: @Composable () -> Unit = {
         Glass(
-            Modifier.fillMaxWidth().fillMaxHeight(),
-            RoundedCornerShape(topStart = 34.dp, topEnd = 34.dp),
+            Modifier.fillMaxSize(),
+            if (landscapeSettings) RoundedCornerShape(27.dp)
+                else RoundedCornerShape(topStart = 34.dp, topEnd = 34.dp),
             tint = state.ambientColor,
             opacity = .83f,
             backdrop = song?.artwork
         ) {
             val settingsScroll = androidx.compose.foundation.rememberScrollState()
-            Column(Modifier.fillMaxSize().padding(top = 38.dp)
+            Column(Modifier.fillMaxSize()
+                .padding(top = if (landscapeSettings) 4.dp else 38.dp)
                 .verticalScroll(settingsScroll)
-                .padding(start = 23.dp, end = 23.dp, bottom = 42.dp)) {
+                .padding(start = if (landscapeSettings) 27.dp else 23.dp,
+                    end = if (landscapeSettings) 27.dp else 23.dp,
+                    bottom = if (landscapeSettings) 16.dp else 42.dp)) {
                 Spacer(Modifier.height(8.dp))
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
@@ -3028,7 +3028,8 @@ private fun SettingsSheet(
                             color = lime.copy(alpha = .80f))
                         Spacer(Modifier.height(6.dp))
                         Text(uiText("Pengaturan"), color = white,
-                            fontSize = 29.sp, fontWeight = FontWeight.SemiBold,
+                            fontSize = if (landscapeSettings) 23.sp else 29.sp,
+                            fontWeight = FontWeight.SemiBold,
                             letterSpacing = (-.8).sp)
                     }
                     Tactile(action = closeSheet) {
@@ -3042,6 +3043,7 @@ private fun SettingsSheet(
                 Text(uiText("Ruang untuk musik, cahaya, dan gerakan."), color = mist, fontSize = 12.sp)
                 Spacer(Modifier.height(22.dp))
 
+                if (!landscapeSettings) {
                 Glass(Modifier.fillMaxWidth().height(94.dp), RoundedCornerShape(23.dp),
                     opacity = .46f, backdrop = song?.artwork, tint = state.ambientColor) {
                     Row(Modifier.fillMaxSize().padding(18.dp),
@@ -3064,7 +3066,8 @@ private fun SettingsSheet(
                     }
                 }
 
-                Spacer(Modifier.height(24.dp))
+                }
+                Spacer(Modifier.height(if (landscapeSettings) 9.dp else 24.dp))
                 SettingsCategory(uiText("SUASANA"), uiText("Tampilan"))
                 Text(uiText("Gaya visual"), color = white, fontSize = 14.sp,
                     fontWeight = FontWeight.Medium)
@@ -3304,7 +3307,7 @@ private fun SettingsSheet(
             // Dedicated large handle hit-zone. Fast swipes inside content
             // remain scroll gestures, while a downward pull from the strip
             // closes the sheet with its built-in dismissal animation.
-            Box(
+            if (!landscapeSettings) Box(
                 Modifier.fillMaxWidth().height(40.dp).align(Alignment.TopCenter)
                     .pointerInput(Unit) {
                         var total = 0f
@@ -3326,6 +3329,36 @@ private fun SettingsSheet(
                 Box(Modifier.width(43.dp).height(5.dp)
                     .clip(CircleShape).background(white.copy(alpha = .42f)))
             }
+        }
+    }
+    if (landscapeSettings) {
+        Dialog(
+            onDismissRequest = closeSheet,
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Box(
+                    Modifier.fillMaxWidth(.87f).fillMaxHeight(.92f)
+                        .clip(RoundedCornerShape(27.dp))
+                        .background(Color(0xFF0D191E))
+                ) {
+                    sheetContent()
+                }
+            }
+        }
+    } else {
+        ModalBottomSheet(
+            onDismissRequest = closeSheet,
+            sheetState = sheetState,
+            sheetGesturesEnabled = false,
+            containerColor = Color(0xFF0D191E),
+            contentColor = white,
+            tonalElevation = 0.dp,
+            scrimColor = bg.copy(alpha = .73f),
+            dragHandle = null,
+            shape = RoundedCornerShape(topStart = 34.dp, topEnd = 34.dp)
+        ) {
+            sheetContent()
         }
     }
 }
