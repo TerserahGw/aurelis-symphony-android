@@ -9,14 +9,14 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
+import android.graphics.Color
 import android.graphics.LinearGradient
 import android.graphics.Paint
-import android.graphics.Path
 import android.graphics.RadialGradient
 import android.graphics.Rect
-import android.graphics.RectF
 import android.graphics.Shader
 import android.os.Bundle
+import android.os.SystemClock
 import android.widget.RemoteViews
 import androidx.media3.common.MediaItem
 import androidx.media3.session.MediaController
@@ -32,15 +32,12 @@ import java.net.URL
 import java.util.concurrent.Executors
 
 /**
- * Lightweight, real Android Home Screen widget.
- *
- * RemoteViews cannot blur the *live wallpaper* behind a widget. Instead the
- * GLASS theme uses a rounded, translucent artwork-reactive canvas with a
- * diffuse highlight, while AMBIENT is an opaque charcoal/evergreen card.
- * Both use actual playback data; no permanent background polling is needed.
+ * Widget layouts are FIXED per receiver rather than chosen by the launcher's
+ * arbitrary width/height (which distorted corners and broke larger grids).
+ * Android RemoteViews cannot blur the launcher wallpaper. Glass Ambient uses
+ * a transparent, artwork-reactive acrylic render with fixed-dp XML clipping.
  */
-class AurelisWidgetProvider : AppWidgetProvider() {
-
+open class AurelisWidgetProvider : AppWidgetProvider() {
     override fun onUpdate(context: Context, manager: AppWidgetManager, ids: IntArray) {
         updateWidgets(context, ids)
     }
@@ -48,25 +45,19 @@ class AurelisWidgetProvider : AppWidgetProvider() {
     override fun onAppWidgetOptionsChanged(
         context: Context, manager: AppWidgetManager, widgetId: Int, options: Bundle
     ) {
+        // Some OEM launchers still dispatch resize events with resizeMode=none.
+        // Keep the selected widget layout; never swap based on measured width.
         updateWidgets(context, intArrayOf(widgetId))
     }
 
-    override fun onEnabled(context: Context) {
-        updateWidgets(context)
-    }
+    override fun onEnabled(context: Context) { updateWidgets(context) }
 
     override fun onReceive(context: Context, intent: Intent) {
         super.onReceive(context, intent)
         when (intent.action) {
             ACTION_TOGGLE -> transportToggle(context)
-            ACTION_NEXT, ACTION_PREVIOUS -> {
-                // Next/previous are playlist-aware while the Aurelis ViewModel
-                // is alive. If the process was reclaimed, let the user pick
-                // music in-app rather than silently skipping the wrong stream.
-                if (!WidgetPlaybackBridge.transport(intent.action.orEmpty())) {
-                    openAurelis(context)
-                }
-            }
+            ACTION_NEXT, ACTION_PREVIOUS ->
+                if (!WidgetPlaybackBridge.transport(intent.action.orEmpty())) openAurelis(context)
             ACTION_REFRESH -> updateWidgets(context)
         }
     }
@@ -100,31 +91,57 @@ class AurelisWidgetProvider : AppWidgetProvider() {
         private const val COVER_CACHE = "aurelis_widget_cover.jpg"
         private val images = Executors.newSingleThreadExecutor()
         @Volatile private var inFlightArt: String? = null
-        @Volatile private var attemptedArt: String? = null
+        @Volatile private var failedArtwork: String? = null
+        @Volatile private var failedAt: Long = 0L
 
-        /**
-         * Invoked only when playback, artwork, or theme changes. Theme is read
-         * from the app's existing 'aurelis_native' settings, so no second user
-         * preference can drift out of sync with Glass Ambient / Ambient.
-         */
+        private enum class Size(val layout: Int, val width: Int, val height: Int, val controls: Boolean) {
+            TWO_ONE(R.layout.widget_aurelis_small, 252, 112, false),
+            TWO_TWO(R.layout.widget_aurelis_compact, 240, 240, true),
+            FOUR_ONE(R.layout.widget_aurelis_slim, 480, 112, true),
+            FOUR_TWO(R.layout.widget_aurelis, 480, 244, true)
+        }
+
+        private val providers = listOf(
+            AurelisWidgetProvider::class.java,
+            AurelisWidgetTwoByOneProvider::class.java,
+            AurelisWidgetTwoByTwoProvider::class.java,
+            AurelisWidgetFourByOneProvider::class.java
+        )
+
         fun publish(context: Context, song: Song?, playing: Boolean, accent: Int) {
             val prefs = context.getSharedPreferences(STORE, Context.MODE_PRIVATE)
-            val change = prefs.edit()
+            val editor = prefs.edit()
             if (song != null) {
-                change.putString("title", song.title)
-                change.putString("artist", song.artist)
-                change.putString("artwork", song.artwork)
-                change.putString("song_key", song.key)
+                editor.putString("title", song.title)
+                    .putString("artist", song.artist)
+                    .putString("artwork", song.artwork)
+                    .putString("song_key", song.key)
             }
-            change.putBoolean("playing", playing)
-                .putInt("accent", accent).apply()
+            editor.putBoolean("playing", playing).putInt("accent", accent).apply()
+            updateWidgets(context)
+        }
+
+        /** The same real Up Next list shown by AurelisState, not a fake preview. */
+        fun publishQueue(context: Context, queue: List<Song>) {
+            val prefs = context.getSharedPreferences(STORE, Context.MODE_PRIVATE)
+            val first = queue.getOrNull(0)
+            val second = queue.getOrNull(1)
+            val values = listOf(
+                first?.title.orEmpty(), first?.artist.orEmpty(),
+                second?.title.orEmpty(), second?.artist.orEmpty()
+            )
+            val keys = listOf("next_one", "next_one_artist", "next_two", "next_two_artist")
+            if (keys.indices.all { prefs.getString(keys[it], "") == values[it] }) return
+            val editor = prefs.edit()
+            keys.indices.forEach { editor.putString(keys[it], values[it]) }
+            editor.apply()
             updateWidgets(context)
         }
 
         fun publishFromSession(context: Context, media: MediaItem?, playing: Boolean) {
             if (media == null) {
-                val prefs = context.getSharedPreferences(STORE, Context.MODE_PRIVATE)
-                prefs.edit().putBoolean("playing", playing).apply()
+                context.getSharedPreferences(STORE, Context.MODE_PRIVATE)
+                    .edit().putBoolean("playing", playing).apply()
                 updateWidgets(context)
                 return
             }
@@ -132,21 +149,20 @@ class AurelisWidgetProvider : AppWidgetProvider() {
             val title = metadata.title?.toString().orEmpty()
             if (title.isBlank()) return
             val snapshot = context.getSharedPreferences(STORE, Context.MODE_PRIVATE)
-            val oldAccent = snapshot.getInt("accent", 0xFF315A4C.toInt())
             publish(context, Song(
                 id = media.mediaId.ifEmpty { title },
                 title = title,
                 artist = metadata.artist?.toString() ?: "Aurelis Symphony",
                 artwork = metadata.artworkUri?.toString().orEmpty()
-            ), playing, oldAccent)
+            ), playing, snapshot.getInt("accent", 0xFF315A4C.toInt()))
         }
 
         fun updateWidgets(context: Context, widgetIds: IntArray? = null) {
             val app = context.applicationContext
             val manager = AppWidgetManager.getInstance(app)
-            val ids = widgetIds ?: manager.getAppWidgetIds(
-                ComponentName(app, AurelisWidgetProvider::class.java)
-            )
+            val ids = widgetIds ?: providers.flatMap { provider ->
+                manager.getAppWidgetIds(ComponentName(app, provider)).toList()
+            }.distinct().toIntArray()
             if (ids.isEmpty()) return
             val store = app.getSharedPreferences(STORE, Context.MODE_PRIVATE)
             val theme = app.getSharedPreferences("aurelis_native", Context.MODE_PRIVATE)
@@ -154,7 +170,7 @@ class AurelisWidgetProvider : AppWidgetProvider() {
             val glass = theme != "AMBIENT"
             val artUrl = store.getString("artwork", "").orEmpty()
             val file = File(app.cacheDir, COVER_CACHE)
-            val art = if (artUrl.isNotEmpty() &&
+            val art = if (artUrl.isNotBlank() &&
                 artUrl == store.getString("cached_artwork", "") && file.isFile) {
                 BitmapFactory.decodeFile(file.absolutePath)
             } else null
@@ -162,59 +178,73 @@ class AurelisWidgetProvider : AppWidgetProvider() {
             val playing = store.getBoolean("playing", false)
             val title = store.getString("title", "Aurelis Symphony").orEmpty()
             val artist = store.getString("artist", "Musik untuk harimu").orEmpty()
-            val background = renderBackground(glass, accent, art)
+            val first = store.getString("next_one", "").orEmpty()
+            val second = store.getString("next_two", "").orEmpty()
+            val backdrops = mutableMapOf<Size, Bitmap>()
 
             ids.forEach { id ->
-                val options = manager.getAppWidgetOptions(id)
-                val width = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 280)
-                val height = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 160)
-                val compact = width < 225 || height < 137
-                val remote = RemoteViews(app.packageName, if (compact)
-                    R.layout.widget_aurelis_compact else R.layout.widget_aurelis)
+                val provider = manager.getAppWidgetInfo(id)?.provider?.className.orEmpty()
+                val size = when (provider) {
+                    AurelisWidgetTwoByOneProvider::class.java.name -> Size.TWO_ONE
+                    AurelisWidgetTwoByTwoProvider::class.java.name -> Size.TWO_TWO
+                    AurelisWidgetFourByOneProvider::class.java.name -> Size.FOUR_ONE
+                    else -> Size.FOUR_TWO // Existing widget IDs remain valid.
+                }
+                val remote = RemoteViews(app.packageName, size.layout)
+                val background = backdrops.getOrPut(size) {
+                    renderBackground(glass, accent, art, size.width, size.height)
+                }
                 remote.setImageViewBitmap(R.id.widget_background, background)
                 if (art != null) remote.setImageViewBitmap(R.id.widget_art, art)
                 else remote.setImageViewResource(R.id.widget_art, R.drawable.ic_aurelis_foreground)
                 remote.setTextViewText(R.id.widget_title, title)
                 remote.setTextViewText(R.id.widget_artist, artist)
-                if (!compact) {
-                    remote.setTextViewText(R.id.widget_status, when {
-                        title == "Aurelis Symphony" -> "READY"
-                        playing -> "PLAYING"
-                        else -> "PAUSED"
-                    })
-                }
-                remote.setImageViewResource(R.id.widget_toggle,
-                    if (playing) R.drawable.widget_pause else R.drawable.widget_play)
+
                 val openIntent = Intent(app, MainActivity::class.java).apply {
                     flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or
                         Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_NEW_TASK
                 }
                 val openPending = PendingIntent.getActivity(
-                    app, id * 10, openIntent, PendingIntent.FLAG_UPDATE_CURRENT or
-                        PendingIntent.FLAG_IMMUTABLE
+                    app, id * 10, openIntent,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                 )
                 remote.setOnClickPendingIntent(R.id.widget_root, openPending)
                 remote.setOnClickPendingIntent(R.id.widget_art, openPending)
                 remote.setOnClickPendingIntent(R.id.widget_title, openPending)
                 remote.setOnClickPendingIntent(R.id.widget_artist, openPending)
-                remote.setOnClickPendingIntent(R.id.widget_toggle,
-                    actionIntent(app, id * 10 + 1, ACTION_TOGGLE))
-                remote.setOnClickPendingIntent(R.id.widget_prev,
-                    actionIntent(app, id * 10 + 2, ACTION_PREVIOUS))
-                remote.setOnClickPendingIntent(R.id.widget_next,
-                    actionIntent(app, id * 10 + 3, ACTION_NEXT))
+                if (size.controls) {
+                    remote.setImageViewResource(R.id.widget_toggle,
+                        if (playing) R.drawable.widget_pause else R.drawable.widget_play)
+                    remote.setOnClickPendingIntent(R.id.widget_toggle,
+                        actionIntent(app, id * 10 + 1, ACTION_TOGGLE))
+                    remote.setOnClickPendingIntent(R.id.widget_prev,
+                        actionIntent(app, id * 10 + 2, ACTION_PREVIOUS))
+                    remote.setOnClickPendingIntent(R.id.widget_next,
+                        actionIntent(app, id * 10 + 3, ACTION_NEXT))
+                }
+                if (size == Size.FOUR_TWO) {
+                    remote.setTextViewText(R.id.widget_next_one,
+                        first.ifBlank { "Belum ada antrean" })
+                    remote.setTextViewText(R.id.widget_next_one_artist,
+                        store.getString("next_one_artist", "").orEmpty()
+                            .ifBlank { "Pilih lagu untuk memulai" })
+                    remote.setTextViewText(R.id.widget_next_two,
+                        second.ifBlank { "Rekomendasi berikutnya" })
+                    remote.setTextViewText(R.id.widget_next_two_artist,
+                        store.getString("next_two_artist", "").orEmpty()
+                            .ifBlank { "Menunggu Up Next" })
+                }
                 manager.updateAppWidget(id, remote)
             }
             if (artUrl.startsWith("https://") && art == null) loadArtwork(app, artUrl)
         }
 
-        private fun actionIntent(context: Context, code: Int, action: String): PendingIntent {
-            val intent = Intent(context, AurelisWidgetProvider::class.java).apply {
-                this.action = action
-            }
-            return PendingIntent.getBroadcast(context, code, intent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-        }
+        private fun actionIntent(context: Context, code: Int, action: String): PendingIntent =
+            PendingIntent.getBroadcast(
+                context, code,
+                Intent(context, AurelisWidgetProvider::class.java).apply { this.action = action },
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
 
         private fun openAurelis(context: Context) {
             runCatching {
@@ -226,11 +256,12 @@ class AurelisWidgetProvider : AppWidgetProvider() {
         }
 
         private fun loadArtwork(context: Context, url: String) {
-            if (inFlightArt == url || attemptedArt == url) return
+            if (inFlightArt == url) return
+            val now = SystemClock.elapsedRealtime()
+            if (failedArtwork == url && now - failedAt < 180_000L) return
             synchronized(this) {
-                if (inFlightArt == url || attemptedArt == url) return
+                if (inFlightArt == url) return
                 inFlightArt = url
-                attemptedArt = url
             }
             images.execute {
                 try {
@@ -238,7 +269,7 @@ class AurelisWidgetProvider : AppWidgetProvider() {
                         connectTimeout = 4500
                         readTimeout = 4500
                         instanceFollowRedirects = true
-                        setRequestProperty("User-Agent", "AurelisWidget/1.2")
+                        setRequestProperty("User-Agent", "AurelisWidget/1.2.8")
                     }
                     val bytes = try {
                         if (connection.contentLength > 2_000_000) return@execute
@@ -254,29 +285,35 @@ class AurelisWidgetProvider : AppWidgetProvider() {
                             out.toByteArray()
                         }
                     } finally { connection.disconnect() }
-                    val bmp = BitmapFactory.decodeByteArray(bytes, 0, bytes.size,
+                    val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size,
                         BitmapFactory.Options().apply { inSampleSize = 2 })
                         ?: return@execute
-                    val small = Bitmap.createScaledBitmap(bmp, 160, 160, true)
-                    if (small !== bmp) bmp.recycle()
+                    val small = Bitmap.createScaledBitmap(bitmap, 160, 160, true)
+                    if (small !== bitmap) bitmap.recycle()
                     val prefs = context.getSharedPreferences(STORE, Context.MODE_PRIVATE)
                     if (prefs.getString("artwork", "") != url) {
                         small.recycle()
                         return@execute
                     }
                     val destination = File(context.cacheDir, COVER_CACHE)
-                    val temporary = File(context.cacheDir, "$COVER_CACHE.tmp")
+                    val temporary = File(context.cacheDir, COVER_CACHE + ".tmp")
                     temporary.outputStream().use {
                         small.compress(Bitmap.CompressFormat.JPEG, 86, it)
                     }
                     small.recycle()
                     if (temporary.renameTo(destination)) {
                         prefs.edit().putString("cached_artwork", url).apply()
+                        failedArtwork = null
                         updateWidgets(context)
                     }
                 } catch (_: Exception) {
-                    // Network art is optional; widget remains usable offline.
+                    // Offline: leave the usable cover placeholder intact.
                 } finally {
+                    if (context.getSharedPreferences(STORE, Context.MODE_PRIVATE)
+                            .getString("cached_artwork", "") != url) {
+                        failedArtwork = url
+                        failedAt = SystemClock.elapsedRealtime()
+                    }
                     if (inFlightArt == url) inFlightArt = null
                 }
             }
@@ -284,64 +321,68 @@ class AurelisWidgetProvider : AppWidgetProvider() {
 
         private fun mix(first: Int, second: Int, rate: Float): Int {
             val t = rate.coerceIn(0f, 1f)
-            return android.graphics.Color.rgb(
-                (android.graphics.Color.red(first) * (1f - t) +
-                    android.graphics.Color.red(second) * t).toInt(),
-                (android.graphics.Color.green(first) * (1f - t) +
-                    android.graphics.Color.green(second) * t).toInt(),
-                (android.graphics.Color.blue(first) * (1f - t) +
-                    android.graphics.Color.blue(second) * t).toInt()
+            return Color.rgb(
+                (Color.red(first) * (1f - t) + Color.red(second) * t).toInt(),
+                (Color.green(first) * (1f - t) + Color.green(second) * t).toInt(),
+                (Color.blue(first) * (1f - t) + Color.blue(second) * t).toInt()
             )
         }
 
-        private fun renderBackground(glass: Boolean, accent: Int, artwork: Bitmap?): Bitmap {
-            val width = 520
-            val height = 260
-            val out = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-            val canvas = Canvas(out)
-            val border = RectF(3f, 3f, width - 3f, height - 3f)
-            val path = Path().apply { addRoundRect(border, 46f, 46f, Path.Direction.CW) }
+        private fun rgba(color: Int, a: Int) =
+            Color.argb(a, Color.red(color), Color.green(color), Color.blue(color))
+
+        private fun renderBackground(
+            glass: Boolean, accent: Int, artwork: Bitmap?, width: Int, height: Int
+        ): Bitmap {
+            val image = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+            val canvas = Canvas(image)
             val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
-            canvas.save()
-            canvas.clipPath(path)
-            val evergreen = android.graphics.Color.rgb(12, 27, 29)
-            val base = mix(accent, evergreen, if (glass) .67f else .84f)
-            paint.shader = LinearGradient(0f, 0f, width.toFloat(), height.toFloat(),
+            val base = mix(accent, 0xFF11252A.toInt(), if (glass) .63f else .82f)
+            val bright = mix(accent, 0xFFA9F3DD.toInt(), .42f)
+            paint.shader = LinearGradient(
+                0f, 0f, width.toFloat(), height.toFloat(),
                 if (glass) intArrayOf(
-                    android.graphics.Color.argb(229,
-                        android.graphics.Color.red(base),
-                        android.graphics.Color.green(base),
-                        android.graphics.Color.blue(base)),
-                    0xE8172829.toInt(), 0xEE0B1419.toInt()
-                ) else intArrayOf(0xFF162824.toInt(), base, 0xFF0B1518.toInt()),
-                null, Shader.TileMode.CLAMP)
+                    rgba(mix(base, 0xFF26383C.toInt(), .22f), 222),
+                    rgba(base, 228), 0xE90A161D.toInt()
+                ) else intArrayOf(
+                    0xFF1A302E.toInt(), rgba(base, 255), 0xFF0C171D.toInt()
+                ),
+                null, Shader.TileMode.CLAMP
+            )
             canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), paint)
             paint.shader = null
             if (glass && artwork != null) {
-                // Tiny softened artwork in the background: frosted appearance
-                // without live wallpaper capture or expensive blur effects.
-                val tiny = Bitmap.createScaledBitmap(artwork, 9, 9, true)
-                paint.alpha = 49
-                paint.isFilterBitmap = true
-                canvas.drawBitmap(tiny, null,
-                    Rect(170, -50, width + 80, height + 40), paint)
+                // Artwork tint is subdued enough to keep small titles readable.
+                val tiny = Bitmap.createScaledBitmap(artwork, 10, 10, true)
+                paint.alpha = 38
+                canvas.drawBitmap(tiny, null, Rect(width / 3, -height / 3,
+                    width + width / 4, height + height / 3), paint)
                 tiny.recycle()
                 paint.alpha = 255
             }
             paint.shader = RadialGradient(
-                width * .24f, height * .07f, width * .73f,
-                intArrayOf(if (glass) 0x47C6FFE2 else 0x153B836C,
-                    0x00000000), null, Shader.TileMode.CLAMP
+                width * .09f, height * .01f, width * .82f,
+                intArrayOf(rgba(bright, if (glass) 87 else 34), 0x00000000),
+                null, Shader.TileMode.CLAMP
+            )
+            canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), paint)
+            paint.shader = RadialGradient(
+                width * .98f, height * .92f, width * .76f,
+                intArrayOf(if (glass) 0x365A9BC6 else 0x142A7064, 0x00000000),
+                null, Shader.TileMode.CLAMP
             )
             canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), paint)
             paint.shader = null
-            canvas.restore()
-            paint.style = Paint.Style.STROKE
-            paint.strokeWidth = 3.2f
-            paint.color = if (glass) 0x86C7F7DD.toInt() else 0x455F8D77
-            canvas.drawRoundRect(border, 46f, 46f, paint)
-            paint.style = Paint.Style.FILL
-            return out
+            // Soft top lip. Rounded contour is applied in dp by the XML root,
+            // not pre-rasterized into a bitmap that the launcher can stretch.
+            paint.color = if (glass) 0x27FFFFFF else 0x12FFFFFF
+            canvas.drawRect(12f, 2f, width - 12f, 3.5f, paint)
+            return image
         }
     }
 }
+
+/** Four separate picker entries; no app-widget resize handles. */
+class AurelisWidgetTwoByOneProvider : AurelisWidgetProvider()
+class AurelisWidgetTwoByTwoProvider : AurelisWidgetProvider()
+class AurelisWidgetFourByOneProvider : AurelisWidgetProvider()
