@@ -46,7 +46,7 @@ jobs:
       - name: Upload test APK (signing varies per runner)
         uses: actions/upload-artifact@v4
         with:
-          name: AurelisSymphony-ARM64-v1.2.2-TEST-DEBUG
+          name: AurelisSymphony-ARM64-v1.2.3-TEST-DEBUG
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 14
@@ -94,11 +94,11 @@ jobs:
         if: steps.signing.outputs.enabled == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: AurelisSymphony-ARM64-v1.2.2-SIGNED
+          name: AurelisSymphony-ARM64-v1.2.3-SIGNED
           path: app/build/outputs/apk/release/*.apk
           if-no-files-found: error
 
-      - name: Publish GitHub Release v1.2.2 Stable
+      - name: Publish GitHub Release v1.2.3 Stable
         if: steps.signing.outputs.enabled == 'true' && github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
@@ -106,11 +106,11 @@ jobs:
         run: |
           set -euo pipefail
           cp app/build/outputs/apk/release/app-release.apk \
-            AurelisSymphony-Android-arm64-v1.2.2.apk
-          if ! gh release view v1.2.2 >/dev/null 2>&1; then
-            gh release create v1.2.2 --target "$GITHUB_SHA" \
-              --title "Aurelis Symphony Android v1.2.2 Stable" \
-              --notes "Aurelis Symphony Android v1.2.2 Stable. Playlist track menus now offer Remove from this playlist for the local playlist where the action is opened, without affecting other playlists. Tapping a local or YouTube playlist loads the first track and animates open the full player. YouTube playlists expand in-place with a dedicated arrow and lazy song rows; imported links start playback too. Refreshed Aurelis Orbit geometric adaptive launcher icon with Material You monochrome/round variants. Includes prior updater-cache cleanup; versionCode 11, same permanent release signing key."
+            AurelisSymphony-Android-arm64-v1.2.3.apk
+          if ! gh release view v1.2.3 >/dev/null 2>&1; then
+            gh release create v1.2.3 --target "$GITHUB_SHA" \
+              --title "Aurelis Symphony Android v1.2.3 Stable" \
+              --notes "Aurelis Symphony Android v1.2.3 Stable. FIX: Activity rotation now keeps playback and mini-player state alive using Android ViewModel instead of closing the controller on configuration change. Landscape Home/Search/Library reflow into a reserved vertical navigation rail at left with animated vertical capsule highlight. The new top search capsule expands rightward while its adjacent mini-player smoothly reduces to artwork-only; full content margins reserve the left rail. Landscape full player now displays album artwork plus seek/duration/previous/play/next permanently at left and live synchronized Lyrics or Up Next at right, selected using two vertical mode capsules below the close button. Portrait layout retained. Same release signing key; versionCode 12."
           fi
-          gh release upload v1.2.2 \
-            AurelisSymphony-Android-arm64-v1.2.2.apk --clobber
+          gh release upload v1.2.3 \
+            AurelisSymphony-Android-arm64-v1.2.3.apk --clobber
