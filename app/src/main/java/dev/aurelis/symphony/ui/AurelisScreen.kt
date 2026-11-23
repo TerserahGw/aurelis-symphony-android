@@ -79,6 +79,8 @@ import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import android.content.res.Configuration
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import dev.aurelis.symphony.update.AurelisUpdater
@@ -229,6 +231,8 @@ fun AurelisScreen(state: AurelisState) {
     val context = LocalContext.current
     val updater = remember(context) { AurelisUpdater(context) }
     val pageScope = rememberCoroutineScope()
+    val isLandscape = LocalConfiguration.current.orientation ==
+        Configuration.ORIENTATION_LANDSCAPE
     LaunchedEffect(state.settings.checkUpdates) {
         while (state.settings.checkUpdates) {
             updater.check()
@@ -287,6 +291,12 @@ fun AurelisScreen(state: AurelisState) {
             }
     }
 
+    // One page hierarchy is reused in both orientations. LazyListStates are
+    // retained across rotations, avoiding list jumps and duplicate network loads.
+    val pageContent: @Composable () -> Unit = {
+                    pageContent()
+    }
+
     CompositionLocalProvider(
         LocalGlassDensity provides state.settings.glassOpacity,
         LocalReducedMotion provides !state.settings.motion,
@@ -299,6 +309,7 @@ fun AurelisScreen(state: AurelisState) {
     )) {
         Box(Modifier.fillMaxSize()) {
             Ambient(state)
+            if (!isLandscape) {
             Column(Modifier.fillMaxSize().statusBarsPadding()) {
                 Header(tab, onSettings = { showSettings = true }, onLibrary = { tab = "Library" })
                 Box(Modifier.weight(1f)) {
@@ -374,6 +385,47 @@ fun AurelisScreen(state: AurelisState) {
                     compact = compactDock && !expanded,
                     onOpenNav = { compactDock = false; searchExpanded = false },
                     onExpandPlayer = { expanded = true }
+                )
+            }
+            } else {
+                // Landscape has a vertical navigation island at left and a
+                // horizontal search + mini-player bar above the content.
+                Row(
+                    Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()
+                ) {
+                    Column(
+                        Modifier.width(79.dp).fillMaxHeight()
+                            .padding(start = 10.dp, top = 73.dp, bottom = 10.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        LandscapeNavigationRail(
+                            tab = tab,
+                            artwork = state.current?.artwork.orEmpty(),
+                            state = state,
+                            onTab = { next ->
+                                tab = next
+                                searchExpanded = false
+                            }
+                        )
+                    }
+                    Box(Modifier.weight(1f).fillMaxHeight().padding(top = 68.dp)) {
+                        pageContent()
+                    }
+                }
+                LandscapeTopDock(
+                    modifier = Modifier.align(Alignment.TopStart)
+                        .statusBarsPadding().padding(start = 11.dp, end = 13.dp, top = 8.dp),
+                    state = state,
+                    query = searchQuery,
+                    searchExpanded = searchExpanded,
+                    onSearchClick = {
+                        tab = "Search"
+                        searchExpanded = !searchExpanded
+                        compactDock = false
+                    },
+                    onQuery = { searchQuery = it },
+                    onExpandPlayer = { expanded = true },
+                    onSettings = { showSettings = true }
                 )
             }
             AnimatedVisibility(visible = expanded && state.current != null,
