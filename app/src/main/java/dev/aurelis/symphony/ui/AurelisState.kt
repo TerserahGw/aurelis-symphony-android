@@ -60,6 +60,9 @@ class AurelisState(context: Context) : ViewModel() {
     private var nextJob: Job? = null
     private var recommendationRevision = 0L
     private val skippedRecommendations = mutableSetOf<String>()
+    // Explicit Add to Queue items are user choices, never silently removed by
+    // automatic genre-vibe continuity filtering.
+    private val manuallyQueuedKeys = mutableSetOf<String>()
     private val queueTargetSize = 5
     // Central eligibility shared by API results, search, YouTube Music radio,
     // saved history and the player; do not let any one source bypass it.
@@ -347,7 +350,16 @@ class AurelisState(context: Context) : ViewModel() {
         recommendationRevision++
         if (!preserveQueue) {
             queue = emptyList()
+            manuallyQueuedKeys.clear()
             skippedRecommendations.clear()
+        } else if (activePlaylist == null && queue.isNotEmpty()) {
+            // A new radio recommendation can change the seed. Carry only
+            // compatible automatic suggestions to the next song; preserve
+            // intentionally enqueued songs even when a genre differs.
+            queue = queue.filter { candidate ->
+                candidate.key in manuallyQueuedKeys ||
+                    !RecommendationRanker.clashesWith(song, candidate)
+            }
         }
         if (current?.key != song.key) autoCrossfadeForKey = null
         playJob?.cancel()
@@ -425,6 +437,7 @@ class AurelisState(context: Context) : ViewModel() {
         val wanted = tracks.getOrNull(index)?.key
         val safe = actualTracks.indexOfFirst { it.key == wanted }
             .takeIf { it >= 0 } ?: index.coerceIn(0, actualTracks.lastIndex)
+        manuallyQueuedKeys.clear()
         playlistTracks = actualTracks
         playlistIndex = safe
         activePlaylist = name
@@ -461,6 +474,7 @@ class AurelisState(context: Context) : ViewModel() {
             return
         }
         queue = queue.drop(idx + 1)
+        manuallyQueuedKeys.remove(selected.key)
         if (activePlaylist != null) {
             val found = playlistTracks.indexOfFirst {
                 it.key == selected.key && playlistTracks.indexOf(it) > playlistIndex
@@ -575,35 +589,39 @@ class AurelisState(context: Context) : ViewModel() {
         controller?.let { if (it.isPlaying) it.pause() else it.play() }
     }
     fun seek(fraction: Float) { controller?.let { if (duration > 0) it.seekTo((duration * fraction.coerceIn(0f, 1f)).toLong()) } }
-    private fun makeRecommendationPool(seed: Song, remotelyRecommended: List<Song>): List<Song> {
-        // The server ranks candidates first; local signals improve relevance and
-        // diversify them. Use catalog/history fallback if the backend is offline.
-        val ytTaste = (youtube.shelves.flatMap { it.tracks } +
+    private fun makeRecommendationPool(
+        seed: Song, radio: List<Song>, server: List<Song>
+    ): List<Song> {
+        val related = (radio + server).filter(::playable).distinctBy { it.key }
+        val account = (youtube.shelves.flatMap { it.tracks } +
             youtube.history + library.favorites + library.history)
             .filter(::playable).distinctBy { it.key }
+        // The active track's radio is the main source of continuity. Home
+        // and history personalize *within* its style, never override it with
+        // unrelated music just because both were played by this user.
         return if (youtube.isConnected) {
-            // A signed-in account's recommendations and actual listening
-            // history outrank public server picks and generic catalog items.
-            (remotelyRecommended.filter { it.isYouTube } + ytTaste +
-                remotelyRecommended.filterNot { it.isYouTube } +
-                home.take(15)).filter(::playable)
+            (related + account + home.take(15)).distinctBy { it.key }
         } else {
-            (remotelyRecommended + library.favorites + library.history.take(75) +
-                home.take(30) + originals.take(20)).filter(::playable)
+            (related + library.favorites + library.history.take(45) +
+                home.take(20) + originals.take(12)).distinctBy { it.key }
         }
     }
 
-    private fun rankQueue(seed: Song, remote: List<Song>, want: Int): List<Song> {
+    private fun rankQueue(
+        seed: Song, radio: List<Song>, server: List<Song>, want: Int
+    ): List<Song> {
         val excluded = (queue.map { it.key } +
             skippedRecommendations + listOfNotNull(current?.key)).toSet()
         return RecommendationRanker.pick(
             seed = seed,
-            incoming = makeRecommendationPool(seed, remote),
+            incoming = makeRecommendationPool(seed, radio, server),
             favorites = library.favorites,
             history = library.history,
             youtubeHistory = if (youtube.isConnected) youtube.history else emptyList(),
             youtubeRecommendations = if (youtube.isConnected)
-                youtube.shelves.flatMap { it.tracks }.take(100) else emptyList(),
+                youtube.shelves.flatMap { it.tracks }.take(140) else emptyList(),
+            seedRadio = radio,
+            seedServer = server,
             excluded = excluded,
             maxCount = want
         )
@@ -614,27 +632,28 @@ class AurelisState(context: Context) : ViewModel() {
         recommendationJob?.cancel()
         val revision = ++recommendationRevision
         recommendationJob = scope.launch {
-            val candidates = coroutineScope {
+            val (radio, server) = coroutineScope {
                 val fromAurelis = async {
-                    try { api.recommendations(seed) }
+                    try { api.recommendations(seed).filter(::playable) }
                     catch (cancelled: CancellationException) { throw cancelled }
                     catch (_: Exception) { emptyList() }
                 }
-                val radio = async {
-                    if (seed.isYouTube) youtube.radio(seed) else emptyList()
+                val fromRadio = async {
+                    if (seed.isYouTube) youtube.radio(seed).filter(::playable)
+                    else emptyList()
                 }
-                // Prefer related YouTube Music radio, then existing Aurelis
-                // suggestions; both are requested concurrently.
-                (radio.await() + fromAurelis.await()).filter(::playable)
+                fromRadio.await() to fromAurelis.await()
             }
-            if (revision != recommendationRevision || current?.key != seed.key) return@launch
+            if (revision != recommendationRevision ||
+                current?.key != seed.key) return@launch
             val needed = (queueTargetSize - queue.size).coerceAtLeast(0)
             if (needed == 0) return@launch
-            val additions = rankQueue(seed, candidates, needed)
+            val additions = rankQueue(seed, radio, server, needed)
             if (additions.isNotEmpty()) {
-                queue = (queue + additions.filter(::playable))
-                    .distinctBy { it.key }.take(10)
+                queue = (queue + additions).distinctBy { it.key }.take(10)
             }
+            // If no good candidate exists, don't fill with a different
+            // language/genre merely to reach five visible Up Next tracks.
         }
     }
 
@@ -642,12 +661,14 @@ class AurelisState(context: Context) : ViewModel() {
         if (playable(song) && song.key != current?.key &&
             queue.none { it.key == song.key }) {
             skippedRecommendations.remove(song.key)
+            manuallyQueuedKeys.add(song.key)
             queue = (queue + song).take(20)
         }
     }
 
     fun removeQueue(song: Song) {
         skippedRecommendations.add(song.key)
+        manuallyQueuedKeys.remove(song.key)
         queue = queue.filterNot { it.key == song.key }
         if (activePlaylist == null) current?.let(::replenishQueue)
     }
@@ -657,6 +678,14 @@ class AurelisState(context: Context) : ViewModel() {
         // Flush stale, previously cached pseudo-station entries before
         // selecting next. A non-playable entry must not trap autoplay.
         if (queue.any { !playable(it) }) queue = queue.filter(::playable)
+        if (activePlaylist == null) {
+            // Old generated suggestions can outlive a genre change. Do not
+            // advance into an incompatible automatically suggested track.
+            queue = queue.filter { candidate ->
+                candidate.key in manuallyQueuedKeys ||
+                    !RecommendationRanker.clashesWith(seed, candidate)
+            }
+        }
         nextJob?.cancel()
         if (activePlaylist != null) {
             val remaining = queue
@@ -673,28 +702,35 @@ class AurelisState(context: Context) : ViewModel() {
         val ready = queue.firstOrNull()
         if (ready != null) {
             queue = queue.drop(1)
+            manuallyQueuedKeys.remove(ready.key)
             play(ready, preserveQueue = true)
             return
         }
         // If the user presses Next before prefetch returns, fetch once and
         // fall back gracefully instead of making an unrelated song choice.
         nextJob = scope.launch {
-            val remote = coroutineScope {
-                val yt = async { if (seed.isYouTube) youtube.radio(seed) else emptyList() }
-                val server = async {
-                    try { api.recommendations(seed) }
+            val (radio, server) = coroutineScope {
+                val yt = async {
+                    if (seed.isYouTube) youtube.radio(seed).filter(::playable)
+                    else emptyList()
+                }
+                val serverCall = async {
+                    try { api.recommendations(seed).filter(::playable) }
                     catch (cancelled: CancellationException) { throw cancelled }
                     catch (_: Exception) { emptyList() }
                 }
-                (yt.await() + server.await()).filter(::playable)
+                yt.await() to serverCall.await()
             }
             if (current?.key != seed.key) return@launch
-            val picked = queue.firstOrNull() ?: rankQueue(seed, remote, 1).firstOrNull()
+            val picked = queue.firstOrNull()
+                ?: rankQueue(seed, radio, server, 1).firstOrNull()
             if (picked == null) {
                 controller?.pause()
+                error = "Belum ditemukan lagu berikutnya dengan vibe serupa."
                 return@launch
             }
             queue = queue.filterNot { it.key == picked.key }
+            manuallyQueuedKeys.remove(picked.key)
             play(picked, preserveQueue = true)
         }
     }

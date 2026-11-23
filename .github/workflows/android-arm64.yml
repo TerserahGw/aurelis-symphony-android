@@ -52,7 +52,7 @@ jobs:
       - name: Upload test APK (signing varies per runner)
         uses: actions/upload-artifact@v4
         with:
-          name: AurelisSymphony-ARM64-v1.3.1-TEST-DEBUG
+          name: AurelisSymphony-ARM64-v1.3.2-TEST-DEBUG
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 14
@@ -100,11 +100,11 @@ jobs:
         if: steps.signing.outputs.enabled == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: AurelisSymphony-ARM64-v1.3.1-SIGNED
+          name: AurelisSymphony-ARM64-v1.3.2-SIGNED
           path: app/build/outputs/apk/release/*.apk
           if-no-files-found: error
 
-      - name: Publish GitHub Release v1.3.1 Stable
+      - name: Publish GitHub Release v1.3.2 Stable
         if: steps.signing.outputs.enabled == 'true' && github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
@@ -112,11 +112,11 @@ jobs:
         run: |
           set -euo pipefail
           cp app/build/outputs/apk/release/app-release.apk \
-            AurelisSymphony-Android-arm64-v1.3.1.apk
-          if ! gh release view v1.3.1 >/dev/null 2>&1; then
-            gh release create v1.3.1 --target "$GITHUB_SHA" \
-              --title "Aurelis Symphony Android v1.3.1 Stable" \
-              --notes "Aurelis Symphony Android v1.3.1 Stable hotfix: eliminate sharp vertical edge between full-cover Now Playing and Up Next by baking the lower readability wash into the hero image and alpha-feathering the full composite into the shared widget background BEFORE the pane boundary. Fix long widget title reset/overlap: one complete leftward scroll per title for 12.6 seconds, with instantaneous outgoing hide and 13.8-second repeat; native RemoteViews-safe ViewFlipper. Filter browse-only YouTube Radio/Station pseudo-tracks (including Ruth B. - YouTube Station) at the shared Song model, YouTube Music parsing, playlists and Up Next selection without dropping legitimate tracks called STATION. Preserve four Up Next tracks, audio crossfade and all visual options. VersionCode 28, signed ARM64 APK."
+            AurelisSymphony-Android-arm64-v1.3.2.apk
+          if ! gh release view v1.3.2 >/dev/null 2>&1; then
+            gh release create v1.3.2 --target "$GITHUB_SHA" \
+              --title "Aurelis Symphony Android v1.3.2 Stable" \
+              --notes "Aurelis Symphony Android v1.3.2 Stable. Up Next now prioritizes the currently playing track's directly related YouTube Music radio before account Home/History and generic catalog recommendations. It estimates compatible music scenes (Japanese/Korean/Indian/Indonesian/Western) and broad styles only from available track metadata and known artist catalogs; it excludes clear genre/culture jumps, penalizes abrupt transitions between consecutive recommendations, and prefers a shorter coherent queue over unrelated filler. Explicit Add to Queue entries and ordered playlists are never filtered. Existing v1.3.1 widget gradient, full-title marquee and invalid radio/station hotfix remain unchanged. VersionCode 29, signed ARM64 APK."
           fi
-          gh release upload v1.3.1 \
-            AurelisSymphony-Android-arm64-v1.3.1.apk --clobber
+          gh release upload v1.3.2 \
+            AurelisSymphony-Android-arm64-v1.3.2.apk --clobber
