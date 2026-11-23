@@ -216,18 +216,69 @@ open class AurelisWidgetProvider : AppWidgetProvider() {
         }
 
 
-        /** Decode toward ~700px before scaling, with bounded peak memory. */
+        /** Decode HD art toward 1280px; final RemoteViews bitmaps stay small. */
         private fun decodeArtwork(bytes: ByteArray): Bitmap? {
             val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
             BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
             val longest = maxOf(bounds.outWidth, bounds.outHeight)
             if (longest <= 0 || longest > 16000) return null
             var sample = 1
-            while (longest / sample > 720) sample *= 2
+            while (longest / sample > 1280) sample *= 2
             return BitmapFactory.decodeByteArray(
                 bytes, 0, bytes.size,
                 BitmapFactory.Options().apply { inSampleSize = sample }
             )
+        }
+
+        /**
+         * Preserve the square crop without distorting album art. The file is
+         * high enough resolution for launcher xhdpi/xxhdpi hero cards; only
+         * the fixed-size 240/256px render is sent through RemoteViews.
+         */
+        private fun squareCover(source: Bitmap, size: Int): Bitmap {
+            val output = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+            val shortest = minOf(source.width, source.height)
+            val x = (source.width - shortest) / 2
+            val y = (source.height - shortest) / 2
+            Canvas(output).drawBitmap(
+                source, Rect(x, y, x + shortest, y + shortest),
+                Rect(0, 0, size, size),
+                Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+            )
+            return output
+        }
+
+        private fun saveCover(
+            context: Context, url: String, decoded: Bitmap,
+            sourceQuality: Int, temporaryName: String, cacheVersion: Int
+        ): Boolean {
+            val app = context.applicationContext
+            val store = app.getSharedPreferences(STORE, Context.MODE_PRIVATE)
+            if (store.getString("artwork", "") != url) return false
+            val oldQuality = store.getInt("cached_art_quality", 0)
+            // Never replace an already fetched HD image with a later,
+            // lower-resolution palette image or stale network fallback.
+            if (store.getString("cached_artwork", "") == url &&
+                store.getInt("cached_art_version", 0) >= ART_CACHE_VERSION &&
+                oldQuality > sourceQuality) return false
+            val square = squareCover(decoded, HERO_CACHE_SIZE)
+            val temp = File(app.cacheDir, temporaryName)
+            try {
+                temp.outputStream().use {
+                    square.compress(Bitmap.CompressFormat.JPEG, 94, it)
+                }
+                if (store.getString("artwork", "") != url) return false
+                if (!temp.renameTo(File(app.cacheDir, COVER_CACHE))) return false
+                store.edit().putString("cached_artwork", url)
+                    .putInt("cached_art_quality", sourceQuality)
+                    .putInt("cached_art_version", cacheVersion).apply()
+                failedArtwork = null
+                updateWidgets(app)
+                return true
+            } finally {
+                square.recycle()
+                temp.delete()
+            }
         }
 
         /**
@@ -236,7 +287,9 @@ open class AurelisWidgetProvider : AppWidgetProvider() {
          * A low-res blurred pass is alpha-feathered in, so no horizontal seam.
          * Final sizes are fixed per widget and cached until the cover changes.
          */
-        private fun renderHeroArtwork(source: Bitmap, width: Int, height: Int): Bitmap {
+        private fun renderHeroArtwork(
+            source: Bitmap, width: Int, height: Int, fadeRight: Boolean = false
+        ): Bitmap {
             val result = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
             val canvas = Canvas(result)
             val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
@@ -279,6 +332,48 @@ open class AurelisWidgetProvider : AppWidgetProvider() {
             portion.recycle()
             low.recycle()
             blurredLayer.recycle()
+
+            if (fadeRight) {
+                // Soften the vertical meeting line between the cover hero
+                // and the Up Next card. A second blurred right-side strip
+                // avoids a hard crop; alpha then feathers it gradually into
+                // the widget's existing continuous glass background.
+                val featherStart = width * .74f
+                val blurred = Bitmap.createScaledBitmap(
+                    result, (width / 14).coerceAtLeast(12),
+                    (height / 14).coerceAtLeast(12), true
+                )
+                val softRight = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+                val softCanvas = Canvas(softRight)
+                softCanvas.drawBitmap(
+                    blurred, null, Rect(0, 0, width, height), paint
+                )
+                val softMask = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    shader = LinearGradient(
+                        featherStart, 0f, width.toFloat(), 0f,
+                        intArrayOf(Color.TRANSPARENT, 0xAAFFFFFF.toInt()),
+                        null, Shader.TileMode.CLAMP
+                    )
+                    xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_IN)
+                }
+                softCanvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), softMask)
+                softMask.shader = null
+                softMask.xfermode = null
+                canvas.drawBitmap(softRight, 0f, 0f, paint)
+                val edgeMask = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    shader = LinearGradient(
+                        featherStart, 0f, width.toFloat(), 0f,
+                        intArrayOf(Color.WHITE, 0x00FFFFFF),
+                        null, Shader.TileMode.CLAMP
+                    )
+                    xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_IN)
+                }
+                canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), edgeMask)
+                edgeMask.shader = null
+                edgeMask.xfermode = null
+                blurred.recycle()
+                softRight.recycle()
+            }
             return result
         }
 
@@ -290,23 +385,22 @@ open class AurelisWidgetProvider : AppWidgetProvider() {
             val app = context.applicationContext
             val prefs = app.getSharedPreferences(STORE, Context.MODE_PRIVATE)
             val url = primaryArtwork(song)
-            if (url.isBlank() || prefs.getString("song_key", "") != song.key) return
+            if (url.isBlank() || prefs.getString("song_key", "") != song.key ||
+                bytes.size > 5_000_000) return
             runCatching {
-                if (bytes.size > 5_000_000) return
                 val decoded = decodeArtwork(bytes) ?: return
-                val small = Bitmap.createScaledBitmap(decoded, 384, 384, true)
-                if (small !== decoded) decoded.recycle()
-                val tmp = File(app.cacheDir, "$COVER_CACHE.player.tmp")
-                tmp.outputStream().use { small.compress(Bitmap.CompressFormat.JPEG, 89, it) }
-                small.recycle()
-                if (prefs.getString("song_key", "") != song.key) {
-                    tmp.delete()
-                    return
-                }
-                if (tmp.renameTo(File(app.cacheDir, COVER_CACHE))) {
-                    prefs.edit().putString("cached_artwork", url).apply()
-                    failedArtwork = null
-                    updateWidgets(app)
+                try {
+                    val quality = minOf(decoded.width, decoded.height)
+                    // The player may have fetched a tiny thumbnail for its
+                    // palette. Show it temporarily, but allow the widget's
+                    // dedicated HD request to replace it.
+                    saveCover(
+                        app, url, decoded, quality,
+                        "$COVER_CACHE.player.tmp",
+                        if (quality >= 520) ART_CACHE_VERSION else 1
+                    )
+                } finally {
+                    decoded.recycle()
                 }
             }.onFailure { Log.w(TAG, "Could not cache main-player artwork", it) }
         }
@@ -433,7 +527,7 @@ open class AurelisWidgetProvider : AppWidgetProvider() {
                             }
                             cachedHeroArt.getOrPut(size) {
                                 if (size == Size.TWO_TWO) renderHeroArtwork(art, 240, 240)
-                                else renderHeroArtwork(art, 256, 244)
+                                else renderHeroArtwork(art, 256, 244, fadeRight = true)
                             }
                         }
                         remote.setImageViewBitmap(R.id.widget_art, heroBitmap)
@@ -573,56 +667,55 @@ open class AurelisWidgetProvider : AppWidgetProvider() {
         private fun loadArtwork(context: Context, url: String, videoId: String) {
             if (inFlightArt == url) return
             val now = SystemClock.elapsedRealtime()
-            if (failedArtwork == url && now - failedAt < 60_000L) return
+            if (failedArtwork == url && now - failedAt < 90_000L) return
             synchronized(this) {
                 if (inFlightArt == url) return
                 inFlightArt = url
             }
             images.execute {
                 try {
-                    val fallback = if (videoPattern.matches(videoId))
-                        "https://i.ytimg.com/vi/$videoId/hqdefault.jpg" else ""
-                    val candidates = listOf(url, fallback).filter { it.startsWith("https://") }.distinct()
-                    var saved = false
-                    for (candidate in candidates) {
+                    var best: Bitmap? = null
+                    var bestQuality = 0
+                    for (candidate in artworkCandidates(url, videoId)) {
                         val bytes = try { downloadArtwork(candidate) }
                         catch (e: Exception) {
-                            Log.w(TAG, "Artwork unavailable from " + URL(candidate).host, e)
+                            Log.w(TAG, "HD artwork unavailable from " +
+                                URL(candidate).host, e)
                             null
                         } ?: continue
-                        val bitmap = decodeArtwork(bytes) ?: continue
-                        val small = Bitmap.createScaledBitmap(bitmap, 384, 384, true)
-                        if (small !== bitmap) bitmap.recycle()
-                        val prefs = context.getSharedPreferences(STORE, Context.MODE_PRIVATE)
-                        if (prefs.getString("artwork", "") != url) {
-                            small.recycle()
-                            return@execute
-                        }
-                        val temporary = File(context.cacheDir, "$COVER_CACHE.network.tmp")
-                        temporary.outputStream().use {
-                            small.compress(Bitmap.CompressFormat.JPEG, 89, it)
-                        }
-                        small.recycle()
-                        if (prefs.getString("artwork", "") != url) {
-                            temporary.delete()
-                            return@execute
-                        }
-                        if (temporary.renameTo(File(context.cacheDir, COVER_CACHE))) {
-                            prefs.edit().putString("cached_artwork", url).apply()
-                            saved = true
-                            failedArtwork = null
-                            updateWidgets(context)
-                            break
-                        }
+                        val decoded = decodeArtwork(bytes) ?: continue
+                        val quality = minOf(decoded.width, decoded.height)
+                        if (quality > bestQuality) {
+                            best?.recycle()
+                            best = decoded
+                            bestQuality = quality
+                        } else decoded.recycle()
+                        // A genuinely large square source is already enough.
+                        // Stop here instead of burning network and CPU for
+                        // lower-quality alternate video-frame images.
+                        if (quality >= 680) break
                     }
-                    if (!saved) {
+                    val chosen = best
+                    if (chosen != null) {
+                        try {
+                            val prefs = context.getSharedPreferences(STORE, Context.MODE_PRIVATE)
+                            val currentQuality = if (
+                                prefs.getString("cached_artwork", "") == url)
+                                prefs.getInt("cached_art_quality", 0) else 0
+                            if (prefs.getInt("cached_art_version", 0) < ART_CACHE_VERSION ||
+                                bestQuality > currentQuality) {
+                                saveCover(context, url, chosen, bestQuality,
+                                    "$COVER_CACHE.network.tmp", ART_CACHE_VERSION)
+                            }
+                        } finally { chosen.recycle() }
+                    } else {
                         failedArtwork = url
                         failedAt = SystemClock.elapsedRealtime()
                     }
                 } catch (e: Exception) {
                     failedArtwork = url
                     failedAt = SystemClock.elapsedRealtime()
-                    Log.w(TAG, "Widget artwork cache unavailable", e)
+                    Log.w(TAG, "Widget HD artwork unavailable", e)
                 } finally {
                     if (inFlightArt == url) inFlightArt = null
                 }
@@ -655,9 +748,9 @@ open class AurelisWidgetProvider : AppWidgetProvider() {
                             ?: continue
                         val decoded = BitmapFactory.decodeByteArray(
                             bytes, 0, bytes.size,
-                            BitmapFactory.Options().apply { inSampleSize = 3 }
+                            BitmapFactory.Options().apply { inSampleSize = 2 }
                         ) ?: continue
-                        val thumb = Bitmap.createScaledBitmap(decoded, 88, 88, true)
+                        val thumb = squareCover(decoded, 128)
                         if (thumb !== decoded) decoded.recycle()
                         if (prefs.getString("next_${name}_art", "") != url) {
                             thumb.recycle()
@@ -665,7 +758,7 @@ open class AurelisWidgetProvider : AppWidgetProvider() {
                         }
                         val temporary = File(context.cacheDir, "aurelis_widget_next_$name.tmp")
                         temporary.outputStream().use {
-                            thumb.compress(Bitmap.CompressFormat.JPEG, 85, it)
+                            thumb.compress(Bitmap.CompressFormat.JPEG, 90, it)
                         }
                         thumb.recycle()
                         if (prefs.getString("next_${name}_art", "") != url) {
