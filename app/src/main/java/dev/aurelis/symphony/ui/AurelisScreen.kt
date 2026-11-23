@@ -1828,25 +1828,41 @@ private fun LandscapeTopDock(
                         tint = state.ambientColor, opacity = .42f,
                         backdrop = track.artwork,
                         backdropBlur = 37.dp, backdropOpacity = .61f) {
-                        Row(Modifier.fillMaxSize().padding(horizontal = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically) {
-                            Artwork(track, 41.dp, 14.dp)
+                        // Artwork coordinates are based on the capsule's real
+                        // animated width, not the row's 6dp left padding.
+                        // In compact mode the 41dp cover stays precisely
+                        // centered throughout the width morph to 62dp.
+                        Box(Modifier.fillMaxSize()) {
+                            val coverX = if (searchExpanded)
+                                ((miniWidth - 41.dp) / 2f).coerceAtLeast(0.dp)
+                            else 6.dp
+                            Box(Modifier.align(Alignment.CenterStart)
+                                .offset(x = coverX)) {
+                                Artwork(track, 41.dp, 14.dp)
+                            }
                             if (!searchExpanded && miniWidth > 110.dp) {
-                                Spacer(Modifier.width(9.dp))
-                                Column(Modifier.weight(1f)) {
-                                    Text(track.title, color = white, fontSize = 11.sp,
-                                        fontWeight = FontWeight.SemiBold, maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis)
-                                    Text(track.artist, color = mist, fontSize = 9.sp,
-                                        maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                }
-                                if (miniWidth >= 185.dp) {
-                                    IconButton(onClick = state::togglePlay,
-                                        enabled = !state.preparing,
-                                        modifier = Modifier.size(35.dp)) {
-                                        Icon(if (state.isPlaying) Icons.Rounded.Pause
-                                            else Icons.Rounded.PlayArrow,
-                                            "Putar atau jeda", Modifier.size(21.dp), tint = lime)
+                                Row(
+                                    Modifier.align(Alignment.CenterStart)
+                                        .fillMaxWidth()
+                                        .padding(start = 56.dp, end = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(Modifier.weight(1f)) {
+                                        Text(track.title, color = white, fontSize = 11.sp,
+                                            fontWeight = FontWeight.SemiBold, maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis)
+                                        Text(track.artist, color = mist, fontSize = 9.sp,
+                                            maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    }
+                                    if (miniWidth >= 185.dp) {
+                                        IconButton(onClick = state::togglePlay,
+                                            enabled = !state.preparing,
+                                            modifier = Modifier.size(35.dp)) {
+                                            Icon(if (state.isPlaying) Icons.Rounded.Pause
+                                                else Icons.Rounded.PlayArrow,
+                                                "Putar atau jeda", Modifier.size(21.dp),
+                                                tint = lime)
+                                        }
                                     }
                                 }
                             }
