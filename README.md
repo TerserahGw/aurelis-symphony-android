@@ -1,3 +1,10 @@
+## v1.2.14 — mirrored landscape Search + mini player
+
+- In landscape **Kiri**, the upper-left Search capsule and adjacent mini-player retain their existing order. Expanding Search grows rightward while the mini-player shrinks into a centered album-cover capsule.
+- In landscape **Kanan**, both upper capsules move with the navigation rail: **Mini Player on the left, Search on the far right**, vertically aligned above Home/Search/Library. Expanding Search grows **to the left**, while the mini-player compresses to its cover without disappearing.
+- Search, mini-player and navigation rail follow the same saved left/right selection or three-finger horizontal swipe. The upper dock slides with a spring, and the two capsules crossfade/slide into mirrored order. Dock coordinates are clamped without negative padding.
+- v1.2.13 negative-padding crash fix, spring Player transitions, three-dot popup side anchoring, and widget updates are preserved.
+
 ## v1.2.13 — Landscape rail crash hotfix
 
 Fixed the Android Compose `IllegalArgumentException: Padding must be non-negative` seen when toggling the landscape menu/player rail from left to right (or vice versa). Spring animations can briefly overshoot below zero; both content insets and the rail offset are now bounded to valid geometry on every frame. No change to the visual spring, three-finger gesture, widgets, or full-player zoom animation. Signed versionCode 22.
