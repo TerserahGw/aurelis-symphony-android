@@ -290,3 +290,18 @@ As with prior releases, GitHub Actions validates compilation and APK signing. Ph
 
 **Testing limitation:** GitHub Actions compilation, release signing, and APK signature verification check package integrity, but device-specific screen insets, rotation behavior, and animated visual balance still require physical Android testing.
 
+
+
+## v1.2.4 Stable — Landscape capsule alignment & atmospheric transitions
+
+This hotfix refines landscape behavior after reviewing a 30-second recording of the Android build:
+
+- **Accurate Search alignment:** the collapsed search capsule is exactly 62dp square, horizontally aligned with the left vertical Home/Search/Library navigation capsule; expanding search retains its rightward spring animation, and shrinks the mini player to cover-only.
+- **No abrupt scrolling cutoff:** the Home, Search and Library lists now start safely below the upper dock but can scroll behind it, using a top atmospheric fade instead of the previous hard clip.
+- **Settings relocated:** the Settings button is a matching 62dp left-bottom capsule rather than an isolated top-right icon. The navigation rail scales down where needed to leave enough space for Settings on landscape displays.
+- **Landscape settings:** a broad rounded, centered, scrollable dialog with a compact title and reduced top spacing replaces the cramped portrait-style bottom sheet; portrait keeps the original bottom sheet and pull-to-dismiss gesture.
+- **Landscape full player navigation:** Lyrics and Up Next share one tall vertical capsule with a spring-animated moving highlight. The Close player button uses a separate matching 62dp capsule above it.
+- **All prior audio/playlists:** the Android ViewModel rotation continuity, playback queue, in-app updater cleanup, YouTube Music hub and local playlist context remain in place.
+
+`versionName=1.2.4`, `versionCode=13`, ARM64 signed with the same persistent release keystore. GitHub Actions verifies build and signing, but real-world landscape insets and scrolling should still be checked on device.
+
