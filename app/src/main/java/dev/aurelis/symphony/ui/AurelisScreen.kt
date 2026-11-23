@@ -994,7 +994,16 @@ private fun HomePage(
                     }
                 }
                 Spacer(Modifier.height(18.dp))
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                val moodCarouselState = rememberLazyListState()
+                LazyRow(
+                    state = moodCarouselState,
+                    modifier = Modifier.fillMaxWidth().featherHorizontalEdges(
+                        start = 14.dp, end = 17.dp,
+                        fadeStart = moodCarouselState.canScrollBackward,
+                        fadeEnd = moodCarouselState.canScrollForward
+                    ),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
                     items(listOf("Semua", "Santai", "Energi", "Disukai", "Baru")) { filter ->
                         Tactile(action = { mood = filter }) {
                             Glass(
@@ -1098,7 +1107,16 @@ private fun HomePage(
                 Column {
                     SectionHeading(uiText("Playlist YouTube Music"), "Koleksi tersinkron dari akun yang terhubung")
                     Spacer(Modifier.height(11.dp))
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    val playlistCarouselState = rememberLazyListState()
+                    LazyRow(
+                        state = playlistCarouselState,
+                        modifier = Modifier.fillMaxWidth().featherHorizontalEdges(
+                            start = 20.dp, end = 26.dp,
+                            fadeStart = playlistCarouselState.canScrollBackward,
+                            fadeEnd = playlistCarouselState.canScrollForward
+                        ),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
                         items(state.youtube.playlists, key = { it.id }) { playlist ->
                             Tactile(Modifier.width(149.dp), { onPlaylist(playlist) }) {
                                 Column {
@@ -1150,7 +1168,16 @@ private fun HomeSongCarousel(
     Column {
         SectionHeading(title, subtitle)
         Spacer(Modifier.height(11.dp))
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(13.dp)) {
+        val horizontalState = rememberLazyListState()
+        LazyRow(
+            state = horizontalState,
+            modifier = Modifier.fillMaxWidth().featherHorizontalEdges(
+                start = 23.dp, end = 28.dp,
+                fadeStart = horizontalState.canScrollBackward,
+                fadeEnd = horizontalState.canScrollForward
+            ),
+            horizontalArrangement = Arrangement.spacedBy(13.dp)
+        ) {
             items(songs.take(20), key = { it.key }) { song ->
                 Tactile(Modifier.width(153.dp), { onPlay(song) }) {
                     Column {
@@ -2826,6 +2853,17 @@ private fun LandscapeFullPlayer(
 ) {
     val reduced = LocalReducedMotion.current
     val artwork = song.artwork.takeIf { it.startsWith("https://") }
+    val bestArtwork = remember(song.key, song.artwork) { highResolutionCover(song) }
+    var highResUnavailable by remember(song.key) { mutableStateOf(false) }
+    val coverRequestUrl = if (highResUnavailable) artwork else bestArtwork
+    val imageContext = LocalContext.current
+    val highResRequest = remember(coverRequestUrl) {
+        coil.request.ImageRequest.Builder(imageContext)
+            .data(coverRequestUrl)
+            .size(1080, 1080)
+            .crossfade(200)
+            .build()
+    }
     var landscapeMenuExpanded by remember { mutableStateOf(false) }
     val menuTransition = remember {
         androidx.compose.animation.core.MutableTransitionState(false)
@@ -2933,10 +2971,17 @@ private fun LandscapeFullPlayer(
                         .clip(RoundedCornerShape(22.dp))
                 ) {
                     if (artwork != null) {
+                        // Request the highest source image available while
+                        // keeping the EXACT same bounds, crop and corner mask.
+                        // If high-res isn't provided, retry the original URL.
                         AsyncImage(
-                            model = artwork, contentDescription = null,
+                            model = highResRequest, contentDescription = null,
                             modifier = Modifier.fillMaxSize(),
-                            contentScale = ContentScale.Crop
+                            contentScale = ContentScale.Crop,
+                            onError = {
+                                if (!highResUnavailable && bestArtwork != artwork)
+                                    highResUnavailable = true
+                            }
                         )
                     } else {
                         Box(Modifier.fillMaxSize().background(state.ambientColor))
