@@ -50,6 +50,8 @@ class AurelisState(context: Context) : ViewModel() {
     private var searchApiHasMore = true
     private var searchYoutubeToken: String? = null
     private var autoCrossfadeForKey: String? = null
+    private var pendingCrossfadeKey: String? = null
+    private var crossfadeGuardJob: Job? = null
     var searchHasMore by mutableStateOf(false)
         private set
     var loadingMoreSearch by mutableStateOf(false)
@@ -151,6 +153,14 @@ class AurelisState(context: Context) : ViewModel() {
                 AurelisWidgetProvider.publish(app, current, isPlaying,
                     ambientColor.toArgb())
                 player.addListener(object : Player.Listener {
+                    override fun onMediaItemTransition(item: MediaItem?, reason: Int) {
+                        if (item?.mediaId == current?.id) {
+                            pendingCrossfadeKey = null
+                            crossfadeGuardJob?.cancel()
+                            preparing = false
+                            progress = 0L
+                        }
+                    }
                     override fun onIsPlayingChanged(isPlayingNow: Boolean) {
                         isPlaying = isPlayingNow
                         AurelisWidgetProvider.publish(app, current, isPlayingNow,
@@ -158,7 +168,10 @@ class AurelisState(context: Context) : ViewModel() {
                     }
                     override fun onPlaybackStateChanged(playbackState: Int) {
                         if (playbackState == Player.STATE_ENDED && !preparing) next()
-                        if (playbackState == Player.STATE_READY) preparing = false
+                        if (playbackState == Player.STATE_READY &&
+                            (pendingCrossfadeKey == null ||
+                                player.currentMediaItem?.mediaId == current?.id))
+                            preparing = false
                     }
                     override fun onPlayerError(exception: PlaybackException) {
                         if (settings.audioMode == AudioMode.AUTO && lastResolveUsedNewPipe &&
@@ -337,7 +350,10 @@ class AurelisState(context: Context) : ViewModel() {
             queue = emptyList()
             skippedRecommendations.clear()
         }
+        if (current?.key != song.key) autoCrossfadeForKey = null
         playJob?.cancel()
+        crossfadeGuardJob?.cancel()
+        pendingCrossfadeKey = null
         translationJob?.cancel()
         translatedForKey = null
         translated = emptyMap()
@@ -464,8 +480,25 @@ class AurelisState(context: Context) : ViewModel() {
             c.setMediaItem(item)
             c.prepare()
             c.play()
+            preparing = false
+        } else {
+            pendingCrossfadeKey = song.key
+            val expected = song.key
+            crossfadeGuardJob?.cancel()
+            crossfadeGuardJob = scope.launch {
+                // Never leave the UI locked in preparing if network buffering
+                // stalls or MediaSession handoff fails. Fall back to normal
+                // playback once after the fade plus a bounded grace period.
+                delay(settings.crossfadeSeconds * 1000L + 8500L)
+                if (pendingCrossfadeKey == expected && current?.key == expected) {
+                    pendingCrossfadeKey = null
+                    c.setMediaItem(item)
+                    c.prepare()
+                    c.play()
+                    preparing = false
+                }
+            }
         }
-        preparing = false
     }
     private fun refreshAmbient(song: Song) {
         if (!song.artwork.startsWith("https://")) {
@@ -719,7 +752,8 @@ class AurelisState(context: Context) : ViewModel() {
         settingsSaveJob?.cancel()
         library.updateSettings(settings)
         playJob?.cancel(); lyricJob?.cancel(); translationJob?.cancel(); searchJob?.cancel()
-        recommendationJob?.cancel(); nextJob?.cancel(); scope.cancel()
+        recommendationJob?.cancel(); nextJob?.cancel()
+        crossfadeGuardJob?.cancel(); scope.cancel()
         if (controllerFuture.isDone) runCatching { MediaController.releaseFuture(controllerFuture) }
     }
     override fun onCleared() {
