@@ -3257,11 +3257,12 @@ private fun LandscapeFullPlayer(
                                     verticalArrangement = Arrangement.spacedBy(5.dp)
                                 ) {
                                     items(state.queue.size, key = { i ->
-                                        "landscape-queue-$i-${state.queue[i].key}"
+                                        val item = state.queue[i]
+                                        "landscape-queue-${item.key}-${state.queue.take(i).count { it.key == item.key }}"
                                     }) { index ->
                                         val queued = state.queue[index]
                                         Row(
-                                            Modifier.fillMaxWidth(),
+                                            Modifier.fillMaxWidth().animateItem(),
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
                                             Tactile(Modifier.weight(1f), {
@@ -4237,9 +4238,12 @@ private fun QueueSheet(state: AurelisState, onClose: () -> Unit) {
             Spacer(Modifier.height(22.dp))
             if (state.queue.isEmpty()) EmptyPage(uiText("Antrean kosong"), "Pemutar akan mencari rekomendasi setelah lagu selesai.")
             else LazyColumn(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                items(state.queue.size, key = { i -> "queued-$i-${state.queue[i].key}" }) { i ->
+                items(state.queue.size, key = { i ->
+                    val item = state.queue[i]
+                    "queued-${item.key}-${state.queue.take(i).count { it.key == item.key }}"
+                }) { i ->
                     val song = state.queue[i]
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(Modifier.animateItem(), verticalAlignment = Alignment.CenterVertically) {
                         Box(Modifier.weight(1f)) {
                             SongRow(song, state,
                                 onPlay = { state.playFromQueue(song, i); onClose() },
