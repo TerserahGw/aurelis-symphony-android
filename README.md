@@ -277,3 +277,16 @@ keystore for in-place updates from v1.2.0 Stable.
 **YouTube limitation:** this release reads and plays YouTube playlist contents but does not edit Google-hosted playlists. Removing a track is intentionally available only in *local* Aurelis playlists. Access to remote playlists depends on Google login/session and unofficial InnerTube availability.
 
 As with prior releases, GitHub Actions validates compilation and APK signing. Physical-device animation and remote YouTube behavior need testing on the user's Android device.
+
+
+## v1.2.3 Stable — Landscape navigation and rotation hotfix
+
+- **Portrait ⇄ Landscape playback continuity:** `AurelisState` is now an Android lifecycle `ViewModel`. The media controller, active track, queue, and mini player survive configuration-based Activity recreation. The controller is released only when its ViewModel is actually cleared, rather than during every rotation.
+- **Landscape navigation rail:** Home, Search, and Library are vertically stacked in a left-side frosted capsule with an animated selected-state highlight. Each list gains reserved horizontal space so its content cannot sit underneath the rail. Portrait retains the original bottom navigation.
+- **Landscape top capsules:** Search sits above the left navigation island. Tapping Search expands its input rightward with spring motion. The adjacent mini-player is still visible, compressing from cover + title/controls to an artwork-only capsule while Search is expanded. A small Settings capsule remains accessible on the right.
+- **Landscape music player:** split layout, with permanent cover artwork and timeline/duration/previous/play/next controls on the left, and synchronized lyrics (including romanization and translation) or Up Next on the right. Two vertical mode capsules under the close control switch the right panel with a smooth transition. The right-panel content uses compact spacing, while Portrait keeps the existing three-mode Cover/Lirik/Up Next island.
+- **Compact landscape playback controls:** smaller seek spacing and playback capsules avoid overflows on narrow landscape displays.
+- **Stable signing:** `versionCode 12`, `versionName 1.2.3`, same application ID and persistent release certificate for an in-place update from v1.2.2. No new account access or permissions.
+
+**Testing limitation:** GitHub Actions compilation, release signing, and APK signature verification check package integrity, but device-specific screen insets, rotation behavior, and animated visual balance still require physical Android testing.
+
