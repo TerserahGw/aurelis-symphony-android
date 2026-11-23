@@ -678,6 +678,14 @@ class AurelisState(context: Context) : ViewModel() {
         // Flush stale, previously cached pseudo-station entries before
         // selecting next. A non-playable entry must not trap autoplay.
         if (queue.any { !playable(it) }) queue = queue.filter(::playable)
+        if (activePlaylist == null) {
+            // Old generated suggestions can outlive a genre change. Do not
+            // advance into an incompatible automatically suggested track.
+            queue = queue.filter { candidate ->
+                candidate.key in manuallyQueuedKeys ||
+                    !RecommendationRanker.clashesWith(seed, candidate)
+            }
+        }
         nextJob?.cancel()
         if (activePlaylist != null) {
             val remaining = queue
