@@ -61,16 +61,9 @@ class AurelisState(context: Context) : ViewModel() {
     private var recommendationRevision = 0L
     private val skippedRecommendations = mutableSetOf<String>()
     private val queueTargetSize = 5
-    private fun playable(candidate: Song): Boolean {
-        val title = candidate.title.lowercase()
-        val genericSource = candidate.artist.equals("YouTube Music", ignoreCase = true)
-        val browseOnlyLabel = listOf("start radio", "radio station",
-            "station based on", "personalized station", "start a station")
-            .any(title::contains)
-        return candidate.title.isNotBlank() && !(browseOnlyLabel ||
-            (genericSource && (title.endsWith(" radio") ||
-                title.endsWith(" station"))))
-    }
+    // Central eligibility shared by API results, search, YouTube Music radio,
+    // saved history and the player; do not let any one source bypass it.
+    private fun playable(candidate: Song): Boolean = candidate.isPlayableTrack()
     private var playlistTracks: List<Song> = emptyList()
     private var playlistIndex = -1
     var activePlaylist by mutableStateOf<String?>(null)
@@ -422,17 +415,22 @@ class AurelisState(context: Context) : ViewModel() {
      * Duplicate tracks are preserved. At the end, playback stops.
      */
     fun playPlaylist(name: String, tracks: List<Song>, index: Int = 0) {
-        if (tracks.isEmpty()) {
+        val actualTracks = tracks.filter(::playable)
+        if (actualTracks.isEmpty()) {
             error = "Playlist tidak berisi lagu yang dapat diputar."
             return
         }
-        val safe = index.coerceIn(0, tracks.lastIndex)
-        playlistTracks = tracks.toList()
+        // Preserve the selected track where possible, even if invalid
+        // station tiles appear before it in older playlists.
+        val wanted = tracks.getOrNull(index)?.key
+        val safe = actualTracks.indexOfFirst { it.key == wanted }
+            .takeIf { it >= 0 } ?: index.coerceIn(0, actualTracks.lastIndex)
+        playlistTracks = actualTracks
         playlistIndex = safe
         activePlaylist = name
         queue = playlistTracks.drop(safe + 1)
         skippedRecommendations.clear()
-        play(tracks[safe], preserveQueue = true)
+        play(actualTracks[safe], preserveQueue = true)
     }
 
     fun removeFromPlaylist(name: String, song: Song) {
@@ -457,6 +455,11 @@ class AurelisState(context: Context) : ViewModel() {
     fun playFromQueue(song: Song, position: Int = queue.indexOfFirst { it.key == song.key }) {
         val idx = if (position in queue.indices) position else return
         val selected = queue[idx]
+        if (!playable(selected)) {
+            queue = queue.filter(::playable)
+            error = "Radio/station bukan lagu audio dan telah dilewati."
+            return
+        }
         queue = queue.drop(idx + 1)
         if (activePlaylist != null) {
             val found = playlistTracks.indexOfFirst {
@@ -651,6 +654,9 @@ class AurelisState(context: Context) : ViewModel() {
 
     fun next() {
         val seed = current ?: return
+        // Flush stale, previously cached pseudo-station entries before
+        // selecting next. A non-playable entry must not trap autoplay.
+        if (queue.any { !playable(it) }) queue = queue.filter(::playable)
         nextJob?.cancel()
         if (activePlaylist != null) {
             val remaining = queue
