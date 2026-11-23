@@ -17,9 +17,9 @@
         android:layout_width="match_parent" android:layout_height="match_parent"
         android:gravity="center_vertical" android:orientation="horizontal"
         android:paddingLeft="9dp" android:paddingRight="9dp"
-        android:paddingTop="6dp" android:paddingBottom="6dp">
+        android:paddingTop="4dp" android:paddingBottom="4dp">
         <ImageView android:id="@+id/widget_art"
-            android:layout_width="40dp" android:layout_height="40dp"
+            android:layout_width="50dp" android:layout_height="50dp"
             android:scaleType="centerCrop" android:src="@drawable/widget_music_note"
             android:background="@drawable/widget_album_frame"
             android:clipToOutline="true" android:contentDescription="Cover lagu"/>
@@ -28,9 +28,12 @@
             android:orientation="vertical">
             <TextView android:id="@+id/widget_title"
                 android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:singleLine="true" android:ellipsize="end"
+                android:singleLine="true" android:ellipsize="marquee"
                 android:text="Aurelis Symphony" android:textColor="#FAFFFD"
-                android:textStyle="bold" android:textSize="12sp"/>
+                android:textStyle="bold" android:textSize="12sp" android:marqueeRepeatLimit="marquee_forever"
+            android:requiresFadingEdge="horizontal" android:fadingEdgeLength="9dp"
+            android:focusable="true" android:focusableInTouchMode="true"
+/>
             <TextView android:id="@+id/widget_artist"
                 android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:layout_marginTop="2dp" android:singleLine="true"
