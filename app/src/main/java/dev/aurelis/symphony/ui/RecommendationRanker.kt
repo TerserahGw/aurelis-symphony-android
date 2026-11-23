@@ -52,6 +52,14 @@ internal object RecommendationRanker {
         "nirvana", "queen", "my chemical romance", "bring me the horizon")
     private val edm = setOf("alan walker", "avicii", "zedd", "marshmello",
         "martin garrix", "kygo", "calvin harris", "the chainsmokers")
+    private val genericArtists = setOf(
+        "", "unknown artist", "youtube music", "youtube", "radio",
+        "aurelis symphony", "various artists"
+    )
+    private fun sameKnownArtist(a: Song, b: Song): Boolean {
+        val left = leadArtist(a)
+        return left !in genericArtists && left == leadArtist(b)
+    }
     private val kana = Regex("[\\u3040-\\u30ff]")
     private val hangul = Regex("[\\uac00-\\ud7af]")
     private val devanagari = Regex("[\\u0900-\\u097f]")
@@ -102,7 +110,7 @@ internal object RecommendationRanker {
     }
 
     fun clashesWith(seed: Song, candidate: Song): Boolean {
-        if (leadArtist(seed) == leadArtist(candidate)) return false
+        if (sameKnownArtist(seed, candidate)) return false
         val a = vibe(seed)
         val b = vibe(candidate)
         return (a.scene != Scene.UNKNOWN && b.scene != Scene.UNKNOWN &&
@@ -114,7 +122,7 @@ internal object RecommendationRanker {
         directRadio: Boolean, seedServer: Boolean, accountTaste: Boolean
     ): Boolean {
         if (!candidate.isPlayableTrack() || seed.key == candidate.key) return false
-        if (leadArtist(seed) == leadArtist(candidate)) return true
+        if (sameKnownArtist(seed, candidate)) return true
         if (clashesWith(seed, candidate)) return false
         val a = vibe(seed)
         val b = vibe(candidate)
@@ -176,7 +184,8 @@ internal object RecommendationRanker {
                 directRadio = song.key in radioPosition,
                 seedServer = song.key in serverKeys,
                 accountTaste = song.key in ytSeen ||
-                    (ytArtists[leadArtist(song)] ?: 0) > 0 ||
+                    (leadArtist(song) !in genericArtists &&
+                        (ytArtists[leadArtist(song)] ?: 0) > 0) ||
                     song.key in favored
             ) }
             .take(200)
@@ -188,7 +197,7 @@ internal object RecommendationRanker {
             val titleMatch = if (seedTokens.isEmpty() || tokens.isEmpty()) 0.0 else
                 seedTokens.intersect(tokens).size.toDouble() /
                     min(seedTokens.size, tokens.size).coerceAtLeast(1)
-            val fromSameArtist = leadArtist(song) == leadArtist(seed)
+            val fromSameArtist = sameKnownArtist(song, seed)
             val itemVibe = vibe(song)
             val sameScene = vibeSeed.scene != Scene.UNKNOWN &&
                 vibeSeed.scene == itemVibe.scene
@@ -204,7 +213,8 @@ internal object RecommendationRanker {
             //  - tracks ranked in account Home shelves
             //  - artists listened to by the account
             //  - account history used for taste, but immediate exact repeats penalized
-            val ytArtistPlays = (ytArtists[leadArtist(song)] ?: 0).coerceAtMost(5)
+            val ytArtistPlays = if (leadArtist(song) in genericArtists) 0
+                else (ytArtists[leadArtist(song)] ?: 0).coerceAtMost(5)
             val ytHome = ytShelfOrder[song.key]?.let { (140 - it) / 140.0 } ?: 0.0
             val ytRecentExact = ytPositions[song.key]?.let { (90 - it) / 90.0 } ?: 0.0
             return (if (fromSameArtist) 8.0 else 0.0) +
