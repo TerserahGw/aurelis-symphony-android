@@ -5,6 +5,13 @@ The web/server project remains unchanged: https://github.com/TerserahGw/aurelis-
 
 > Status: **v1.2.10 Stable source**. GitHub Actions builds an ARM64 test APK and, when persistent signing secrets are configured, publishes a stable-signed release APK. Device testing is still recommended.
 
+## v1.2.11 — seamless Player morph + landscape control rail
+
+- Enter/exit transitions no longer scale or slide the **full-screen player background**. The background stays full-bleed and fades continuously; the foreground controls/content gently scale during the morph. This avoids exposed/cropped edges.
+- In **Settings → Interaksi → Landscape**, select **Kiri** or **Kanan** for the full-player vertical control rail (close, Lirik/Up Next navigation, overflow).
+- While the full player is open in landscape, swipe **three fingers horizontally**: left to move the rail left, right to move it right. Single-finger gestures remain dedicated to lyrics, queue and progress. The switch animates and respects **Motion & morph**.
+- The previous v1.2.10 widget fixes (single seamless background, classic icon-only buttons, three real Up Next covers) are preserved.
+
 ## Home Screen widgets — v1.2.10
 
 Four separately selectable **fixed-size** native widget variants follow the app's **Glass Ambient** or **Ambient** theme. Android declares `resizeMode="none"` for each widget (some third-party launchers may override this setting).
