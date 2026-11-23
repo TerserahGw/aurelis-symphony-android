@@ -35,7 +35,8 @@ class AurelisApi(val base: String = "https://aurelis-symphony.go.altare.global")
         val url = "/api/v2/home?mode=balanced&liked=${encode(l)}&recent=${encode(r)}"
         return Song.list(json(url).optJSONArray("tracks"))
     }
-    suspend fun search(q: String): List<Song> = Song.list(json("/api/v1/search?q=${encode(q)}&limit=24").optJSONArray("tracks"))
+    suspend fun search(q: String, offset: Int = 0, limit: Int = 24): List<Song> =
+        Song.list(json("/api/v1/search?q=${encode(q)}&limit=${limit.coerceIn(1, 50)}&offset=${offset.coerceAtLeast(0)}").optJSONArray("tracks"))
     suspend fun recommendations(song: Song): List<Song> = Song.list(json(
         "/api/v1/recommendations?track=${encode(song.title)}&artist=${encode(song.artist)}&exclude=${encode(song.id)}&limit=10"
     ).optJSONArray("tracks"))
