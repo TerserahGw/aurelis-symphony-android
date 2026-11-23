@@ -2,10 +2,12 @@ package dev.aurelis.symphony.ui
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterExitState
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -27,6 +29,8 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
@@ -84,6 +88,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.layout.ContentScale
 import android.content.res.Configuration
 import androidx.compose.ui.platform.LocalConfiguration
@@ -106,6 +111,7 @@ import dev.aurelis.symphony.data.*
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
+import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 
@@ -510,34 +516,29 @@ fun AurelisScreen(state: AurelisState) {
             // expands diagonally from the upper search/mini-player island.
             // The subtle spring overshoot is disabled by Motion & Morph.
             val playerMotion = state.settings.motion
-            val playerOrigin = if (isLandscape)
-                TransformOrigin(.23f, .18f) else TransformOrigin(.50f, .92f)
+            // Never scale or slide the full-screen backdrop: scaling it used
+            // to reveal sharp cropped edges during the player morph. Fade the
+            // seamless full-bleed surface and spring only its foreground UI.
             AnimatedVisibility(
                 visible = expanded && state.current != null,
-                enter = fadeIn(tween(if (playerMotion) 300 else 0,
-                    easing = LinearOutSlowInEasing)) +
-                    scaleIn(initialScale = if (isLandscape) .89f else .87f,
-                        transformOrigin = playerOrigin,
-                        animationSpec = if (playerMotion) spring(
-                            dampingRatio = .80f,
-                            stiffness = Spring.StiffnessMediumLow
-                        ) else tween(0)) +
-                    slideInVertically(
-                        animationSpec = tween(if (playerMotion) 420 else 0,
-                            easing = FastOutSlowInEasing)
-                    ) { height -> if (isLandscape) -height / 13 else height / 6 },
-                exit = fadeOut(tween(if (playerMotion) 255 else 0,
-                    easing = FastOutSlowInEasing)) +
-                    scaleOut(targetScale = if (isLandscape) .90f else .88f,
-                        transformOrigin = playerOrigin,
-                        animationSpec = tween(if (playerMotion) 320 else 0,
-                            easing = FastOutSlowInEasing)) +
-                    slideOutVertically(
-                        animationSpec = tween(if (playerMotion) 305 else 0,
-                            easing = FastOutSlowInEasing)
-                    ) { height -> if (isLandscape) -height / 14 else height / 7 }
+                enter = fadeIn(tween(if (playerMotion) 270 else 0,
+                    easing = LinearOutSlowInEasing)),
+                exit = fadeOut(tween(if (playerMotion) 230 else 0,
+                    easing = FastOutSlowInEasing))
             ) {
-                FullPlayer(state, onClose = { expanded = false }, onQueue = { showQueue = true }, onMenu = { state.current?.let { menuSong = it } })
+                val reveal by transition.animateFloat(
+                    transitionSpec = { tween(if (playerMotion) 360 else 0,
+                        easing = FastOutSlowInEasing) },
+                    label = "fullPlayerForegroundMorph"
+                ) { visibleState ->
+                    if (visibleState == EnterExitState.Visible) 1f else .955f
+                }
+                FullPlayer(
+                    state, onClose = { expanded = false },
+                    onQueue = { showQueue = true },
+                    onMenu = { state.current?.let { menuSong = it } },
+                    presentationScale = reveal
+                )
             }
             UpdateAnnouncement(updater, Modifier.align(Alignment.BottomCenter)
                 .padding(horizontal = 19.dp, vertical = 96.dp))
@@ -2172,7 +2173,7 @@ private fun IslandDock(
 }
 
 @Composable
-private fun FullPlayer(state: AurelisState, onClose: () -> Unit, onQueue: () -> Unit, onMenu: () -> Unit) {
+private fun FullPlayer(state: AurelisState, onClose: () -> Unit, onQueue: () -> Unit, onMenu: () -> Unit, presentationScale: Float = 1f) {
     val song = state.current ?: return
     val stamp = state.libraryStamp
     var pane by rememberSaveable { mutableStateOf("Lirik") }
@@ -2213,7 +2214,8 @@ private fun FullPlayer(state: AurelisState, onClose: () -> Unit, onQueue: () -> 
                 showTranslation = !showTranslation
                 if (showTranslation) state.loadTranslations()
             },
-            onQueue = onQueue
+            onQueue = onQueue,
+            presentationScale = presentationScale
         )
         return
     }
@@ -2257,7 +2259,14 @@ private fun FullPlayer(state: AurelisState, onClose: () -> Unit, onQueue: () -> 
             }
         }
 
-        Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
+        Column(
+            Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()
+                .graphicsLayer {
+                    scaleX = presentationScale
+                    scaleY = presentationScale
+                    transformOrigin = TransformOrigin(.5f, .5f)
+                }
+        ) {
             Row(
                 Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 11.dp),
                 verticalAlignment = Alignment.CenterVertically
@@ -2465,7 +2474,8 @@ private fun LandscapeFullPlayer(
     onRomanToggle: () -> Unit,
     showTranslation: Boolean,
     onTranslationToggle: () -> Unit,
-    onQueue: () -> Unit
+    onQueue: () -> Unit,
+    presentationScale: Float = 1f
 ) {
     val reduced = LocalReducedMotion.current
     val artwork = song.artwork.takeIf { it.startsWith("https://") }
@@ -2474,13 +2484,10 @@ private fun LandscapeFullPlayer(
         androidx.compose.animation.core.MutableTransitionState(false)
     }
     menuTransition.targetState = landscapeMenuExpanded
-    Box(Modifier.fillMaxSize().background(bg)) {
-        Ambient(state)
-        Row(
-            Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()
-                .padding(start = 12.dp, end = 15.dp, top = 8.dp, bottom = 10.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+
+    // Keep every rail action in one composable so moving it between the
+    // two edges never duplicates controls, menus, or navigation state.
+    val playerRail: @Composable () -> Unit = {
             Column(
                 Modifier.width(62.dp).fillMaxHeight(),
                 horizontalAlignment = Alignment.CenterHorizontally
@@ -2526,12 +2533,85 @@ private fun LandscapeFullPlayer(
                         onDismiss = { landscapeMenuExpanded = false },
                         lyricOffset = true,
                         transitionState = menuTransition,
-                        preferRight = true
+                        preferRight = !state.settings.landscapeRailRight
                     )
                 }
             }
 
-            Spacer(Modifier.width(13.dp))
+    }
+    val onRailSwipe by rememberUpdatedState(newValue = { right: Boolean ->
+        landscapeMenuExpanded = false
+        if (state.settings.landscapeRailRight != right) {
+            state.update(state.settings.copy(landscapeRailRight = right))
+        }
+    })
+    Box(
+        Modifier.fillMaxSize().background(bg)
+            .pointerInput(Unit) {
+                // Do not intercept ordinary one/two-finger swipes on lyrics,
+                // seek, artwork or queue. Only a deliberate horizontal THREE
+                // finger gesture can switch the rail from left to right.
+                awaitEachGesture {
+                    awaitFirstDown(requireUnconsumed = false)
+                    var startingPoint: Offset? = null
+                    var performed = false
+                    do {
+                        val event = awaitPointerEvent(PointerEventPass.Initial)
+                        val pressed = event.changes.filter { it.pressed }
+                        if (pressed.size == 3) {
+                            val center = Offset(
+                                pressed.map { it.position.x }.average().toFloat(),
+                                pressed.map { it.position.y }.average().toFloat()
+                            )
+                            if (startingPoint == null) startingPoint = center
+                            val origin = startingPoint ?: center
+                            val dx = center.x - origin.x
+                            val dy = center.y - origin.y
+                            if (!performed && abs(dx) >= 74.dp.toPx() &&
+                                abs(dx) > abs(dy) * 1.4f) {
+                                performed = true
+                                onRailSwipe(dx > 0f)
+                            }
+                        }
+                        if (performed) event.changes.forEach { it.consume() }
+                    } while (event.changes.any { it.pressed })
+                }
+            }
+    ) {
+        Ambient(state)
+        AnimatedContent(
+            targetState = state.settings.landscapeRailRight,
+            label = "landscapeControlRailSwap",
+            modifier = Modifier.fillMaxSize(),
+            transitionSpec = {
+                val toRight = targetState
+                (fadeIn(tween(if (reduced) 0 else 260)) +
+                    slideInHorizontally(
+                        tween(if (reduced) 0 else 340,
+                            easing = FastOutSlowInEasing)
+                    ) { width -> if (toRight) width / 12 else -width / 12 }
+                ) togetherWith
+                (fadeOut(tween(if (reduced) 0 else 200)) +
+                    slideOutHorizontally(
+                        tween(if (reduced) 0 else 255,
+                            easing = FastOutSlowInEasing)
+                    ) { width -> if (toRight) -width / 15 else width / 15 })
+            }
+        ) { railRight ->
+        Row(
+            Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()
+                .padding(start = 12.dp, end = 15.dp, top = 8.dp, bottom = 10.dp)
+                .graphicsLayer {
+                    scaleX = presentationScale
+                    scaleY = presentationScale
+                    transformOrigin = TransformOrigin(.5f, .5f)
+                },
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (!railRight) {
+                playerRail()
+                Spacer(Modifier.width(13.dp))
+            }
 
             // Cover column. Controls remain here while the right panel changes.
             Column(Modifier.weight(1f).fillMaxHeight()) {
@@ -2710,6 +2790,11 @@ private fun LandscapeFullPlayer(
                     }
                 }
             }
+            if (railRight) {
+                Spacer(Modifier.width(13.dp))
+                playerRail()
+            }
+        }
         }
     }
 }
@@ -3274,6 +3359,44 @@ private fun SettingsSheet(
                 SettingsCategory(uiText("INTERAKSI"), uiText("Animasi"))
                 SettingsSwitch(uiText("Motion & morph"), uiText("Transisi spring pada popup, island, dan pemutar"),
                     s.motion, { state.update(s.copy(motion = it)) })
+
+                Spacer(Modifier.height(17.dp))
+                SettingsCategory("LANDSCAPE", "Posisi kontrol Music Player")
+                Text("Pilih sisi tempat tombol Tutup, Lirik / Up Next, dan menu titik tiga ditampilkan.",
+                    color = mist, fontSize = 11.sp, lineHeight = 17.sp)
+                Spacer(Modifier.height(10.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    listOf(false to "Kiri", true to "Kanan").forEach { (right, title) ->
+                        Tactile(Modifier.weight(1f), {
+                            state.update(s.copy(landscapeRailRight = right))
+                        }) {
+                            Glass(
+                                Modifier.fillMaxWidth().height(46.dp),
+                                RoundedCornerShape(18.dp),
+                                tint = if (s.landscapeRailRight == right)
+                                    state.ambientColor else groove,
+                                opacity = if (s.landscapeRailRight == right) .80f else .42f
+                            ) {
+                                Row(Modifier.align(Alignment.Center),
+                                    verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        if (right) Icons.Rounded.KeyboardArrowRight
+                                        else Icons.Rounded.KeyboardArrowLeft,
+                                        null, Modifier.size(18.dp),
+                                        tint = if (s.landscapeRailRight == right) lime else mist
+                                    )
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(title, color = if (s.landscapeRailRight == right) lime else mist,
+                                        fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                                }
+                            }
+                        }
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+                Text("Gesture: saat Music Player landscape terbuka, geser tiga jari bersama-sama ke kiri atau kanan. Perpindahan mengikuti Motion & morph.",
+                    color = mist, fontSize = 11.sp, lineHeight = 17.sp)
+
 
                 DividerSoft()
                 SettingsCategory(uiText("PEMUTAR"), uiText("Sumber musik"))

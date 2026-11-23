@@ -93,5 +93,7 @@ data class AppSettings(
     val ambient: Boolean = true,
     val romanize: Boolean = true,
     val lyricOffsetMs: Int = 0,
-    val checkUpdates: Boolean = true
+    val checkUpdates: Boolean = true,
+    /** Landscape full-player close, lyrics/queue and overflow rail position. */
+    val landscapeRailRight: Boolean = false
 )

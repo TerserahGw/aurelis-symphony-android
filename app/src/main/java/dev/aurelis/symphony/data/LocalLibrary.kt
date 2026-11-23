@@ -25,7 +25,8 @@ class LocalLibrary(context: Context) {
         motion = prefs.getBoolean("motion", true), ambient = prefs.getBoolean("ambient", true),
         romanize = prefs.getBoolean("romanize", true),
         lyricOffsetMs = prefs.getInt("lyricOffsetMs", 0),
-        checkUpdates = prefs.getBoolean("checkUpdates", true)
+        checkUpdates = prefs.getBoolean("checkUpdates", true),
+        landscapeRailRight = prefs.getBoolean("landscapeRailRight", false)
     )
         private set
 
@@ -84,6 +85,7 @@ class LocalLibrary(context: Context) {
             .putBoolean("motion", s.motion).putBoolean("ambient", s.ambient)
             .putBoolean("romanize", s.romanize)
             .putInt("lyricOffsetMs", s.lyricOffsetMs.coerceIn(-5000, 5000))
-            .putBoolean("checkUpdates", s.checkUpdates).apply()
+            .putBoolean("checkUpdates", s.checkUpdates)
+            .putBoolean("landscapeRailRight", s.landscapeRailRight).apply()
     }
 }
