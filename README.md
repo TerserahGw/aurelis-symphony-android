@@ -1,3 +1,10 @@
+## v1.2.16 — one-second scroll hold, full-cover widgets, and stability
+
+- Landscape scrolling: Search + mini player stay merged for **1 second after the last vertical scroll**. Starting another scroll cancels the waiting reset immediately. This applies to both left and right controls; search text editing remains unaffected.
+- **2×2 home widget:** now uses a single large album cover with the lower portion softly preblurred and darkened progressively for the song title, artist and the same unboxed transport controls.
+- **4×2 Up Next home widget** (the wide widget shown on HyperOS): only the **Now Playing half** gets the large artwork with blurred bottom, title and playback controls. The three real Up Next tracks and their individual thumbnails remain in the other half. The 2×1 and 4×1 variants stay unchanged.
+- Stability/performance work is conservative: only re-render backgrounds and preblurred hero artwork when song/theme changes; decode artwork with bounded sample sizes, cache queue thumbnails per update, skip identical widget status broadcasts, and isolate launcher update failures per widget. This reduces memory churn while keeping all visual effects, animations and playback behavior intact.
+
 ## v1.2.15 — scrolling Search/mini morph, HD landscape artwork and smooth carousels
 
 - While **vertically scrolling** Home, Search, or Library in landscape, the mini player springs into the Search capsule: the Search glyph morphs into the currently playing cover, the extra mini capsule smoothly reduces to zero width, and the gap closes. When scrolling stops, the Search icon and full mini player return with the reverse spring. Works whether the main navigation rail is on the left or right. When Search is actively expanded for text input, it remains usable and does not collapse into the cover. Tap the merged cover to open the full player.
