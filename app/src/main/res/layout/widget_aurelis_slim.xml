@@ -39,20 +39,17 @@
         <ImageView android:id="@+id/widget_prev"
             android:layout_width="30dp" android:layout_height="36dp"
             android:padding="6dp" android:src="@drawable/widget_previous"
-            android:tint="#E2F6ED" android:contentDescription="Lagu sebelumnya" android:background="@drawable/widget_control_secondary"
-                android:layout_marginLeft="2dp" android:layout_marginRight="2dp"
+            android:tint="#E2F6ED" android:contentDescription="Lagu sebelumnya"
                 />
         <ImageView android:id="@+id/widget_toggle"
             android:layout_width="34dp" android:layout_height="36dp"
             android:padding="6dp" android:src="@drawable/widget_play"
-            android:tint="#C8FFDF" android:contentDescription="Play atau pause" android:background="@drawable/widget_control_primary"
-                android:layout_marginLeft="2dp" android:layout_marginRight="2dp"
+            android:tint="#C8FFDF" android:contentDescription="Play atau pause"
                 />
         <ImageView android:id="@+id/widget_next"
             android:layout_width="30dp" android:layout_height="36dp"
             android:padding="6dp" android:src="@drawable/widget_next"
-            android:tint="#E2F6ED" android:contentDescription="Lagu berikutnya" android:background="@drawable/widget_control_secondary"
-                android:layout_marginLeft="2dp" android:layout_marginRight="2dp"
+            android:tint="#E2F6ED" android:contentDescription="Lagu berikutnya"
                 />
     </LinearLayout>
 </FrameLayout>
