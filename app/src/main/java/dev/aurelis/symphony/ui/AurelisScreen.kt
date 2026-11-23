@@ -2347,43 +2347,28 @@ private fun LandscapeFullPlayer(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(
-                Modifier.width(57.dp).fillMaxHeight(),
+                Modifier.width(62.dp).fillMaxHeight(),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                CircleAction(Icons.Rounded.KeyboardArrowDown,
-                    "Tutup pemutar", onClose, size = 46.dp)
-                Spacer(Modifier.height(13.dp))
-                listOf(
-                    Triple("Lirik", Icons.Rounded.Mic, "Lirik"),
-                    Triple("Up Next", Icons.Rounded.QueueMusic, "Up Next")
-                ).forEach { (mode, icon, label) ->
-                    val active = selected == mode
-                    Tactile(action = { onSelect(mode) }) {
-                        Glass(
-                            Modifier.size(51.dp),
-                            RoundedCornerShape(22.dp),
-                            tint = if (active) state.ambientColor
-                                else Color(0xFF223D38),
-                            opacity = if (active) .87f else .36f,
-                            backdrop = if (active) artwork else null
-                        ) {
-                            Icon(icon, label,
-                                Modifier.size(22.dp).align(Alignment.Center),
-                                tint = if (active) lime else mist)
-                            if (active) {
-                                Box(
-                                    Modifier.align(Alignment.BottomCenter)
-                                        .padding(bottom = 5.dp)
-                                        .width(15.dp).height(2.dp)
-                                        .clip(RoundedCornerShape(2.dp))
-                                        .background(if (isGlass)
-                                            lime.copy(alpha = .70f) else lime)
-                                )
-                            }
-                        }
+                Tactile(action = onClose) {
+                    Glass(
+                        Modifier.size(62.dp),
+                        RoundedCornerShape(31.dp),
+                        tint = state.ambientColor, opacity = .45f,
+                        backdrop = artwork
+                    ) {
+                        Icon(Icons.Rounded.KeyboardArrowDown, "Tutup pemutar",
+                            Modifier.size(24.dp).align(Alignment.Center),
+                            tint = white)
                     }
-                    Spacer(Modifier.height(10.dp))
                 }
+                Spacer(Modifier.height(10.dp))
+                LandscapePlayerModeRail(
+                    selected = selected,
+                    onSelect = onSelect,
+                    artwork = artwork,
+                    state = state
+                )
             }
 
             Spacer(Modifier.width(13.dp))
@@ -2566,6 +2551,90 @@ private fun LandscapeFullPlayer(
                                 }
                             }
                         }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * One continuous two-cell capsule instead of independent circular buttons.
+ * The accent follows the selected lyrics/queue tab with a vertical spring.
+ */
+@Composable
+private fun LandscapePlayerModeRail(
+    selected: String,
+    onSelect: (String) -> Unit,
+    artwork: String?,
+    state: AurelisState
+) {
+    val reduced = LocalReducedMotion.current
+    val isGlass = LocalVisualStyle.current == VisualStyle.GLASS
+    val choices = listOf("Lirik", "Up Next")
+    val icons = listOf(Icons.Rounded.Mic, Icons.Rounded.QueueMusic)
+    var hovering by remember { mutableIntStateOf(-1) }
+    Glass(
+        Modifier.width(62.dp).height(132.dp),
+        RoundedCornerShape(31.dp),
+        tint = state.ambientColor, opacity = .43f,
+        backdrop = artwork, backdropBlur = 35.dp,
+        backdropOpacity = .59f
+    ) {
+        BoxWithConstraints(
+            Modifier.fillMaxSize().padding(5.dp).pointerInput(selected) {
+                detectDragGestures(
+                    onDragStart = { point ->
+                        hovering = ((point.y / size.height) * 2f)
+                            .toInt().coerceIn(0, 1)
+                    },
+                    onDrag = { change, _ ->
+                        hovering = ((change.position.y / size.height) * 2f)
+                            .toInt().coerceIn(0, 1)
+                        change.consume()
+                    },
+                    onDragEnd = {
+                        if (hovering in 0..1) onSelect(choices[hovering])
+                        hovering = -1
+                    },
+                    onDragCancel = { hovering = -1 }
+                )
+            }
+        ) {
+            val segment = maxHeight / 2
+            val active = if (hovering in 0..1) hovering
+                else choices.indexOf(selected).coerceIn(0, 1)
+            val highlightY by animateDpAsState(
+                segment * active,
+                animationSpec = if (reduced) tween(0)
+                    else spring(dampingRatio = .83f,
+                        stiffness = Spring.StiffnessMediumLow),
+                label = "landscapePlayerModeHighlight"
+            )
+            val highlightStyle = if (isGlass) Modifier
+                .background(Brush.verticalGradient(listOf(
+                    lime.copy(alpha = .32f),
+                    Color(0xFF477A69).copy(alpha = .23f)
+                )))
+                .border(1.dp, lime.copy(alpha = .19f),
+                    RoundedCornerShape(27.dp))
+            else Modifier.background(Color(0xFF365D4D))
+            Box(
+                Modifier.offset(y = highlightY).fillMaxWidth()
+                    .height(segment).clip(RoundedCornerShape(27.dp))
+                    .then(highlightStyle)
+            )
+            Column(Modifier.fillMaxSize()) {
+                choices.forEachIndexed { index, mode ->
+                    Tactile(
+                        Modifier.fillMaxWidth().weight(1f),
+                        { hovering = -1; onSelect(mode) }
+                    ) {
+                        Icon(
+                            icons[index], mode,
+                            Modifier.size(23.dp).align(Alignment.Center),
+                            tint = if (active == index) white else mist
+                        )
                     }
                 }
             }
