@@ -393,28 +393,56 @@ fun AurelisScreen(state: AurelisState) {
                 Row(
                     Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()
                 ) {
-                    Column(
+                    BoxWithConstraints(
                         Modifier.width(79.dp).fillMaxHeight()
-                            .padding(start = 10.dp, top = 73.dp, bottom = 10.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
+                            .padding(start = 10.dp, top = 72.dp, bottom = 8.dp)
                     ) {
-                        LandscapeNavigationRail(
-                            tab = tab,
-                            artwork = state.current?.artwork.orEmpty(),
-                            state = state,
-                            onTab = { next ->
-                                tab = next
-                                searchExpanded = false
+                        val navigationHeight = (maxHeight - 71.dp)
+                            .coerceIn(116.dp, 202.dp)
+                        Column(
+                            Modifier.fillMaxSize(),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            LandscapeNavigationRail(
+                                tab = tab,
+                                artwork = state.current?.artwork.orEmpty(),
+                                state = state,
+                                railHeight = navigationHeight,
+                                onTab = { next ->
+                                    tab = next
+                                    searchExpanded = false
+                                }
+                            )
+                            Spacer(Modifier.weight(1f))
+                            Tactile(action = { showSettings = true }) {
+                                Glass(Modifier.size(62.dp), RoundedCornerShape(31.dp),
+                                    tint = state.ambientColor, opacity = .43f,
+                                    backdrop = state.current?.artwork) {
+                                    Icon(Icons.Rounded.Settings, "Pengaturan",
+                                        Modifier.size(23.dp).align(Alignment.Center),
+                                        tint = white)
+                                }
                             }
-                        )
+                        }
                     }
-                    Box(Modifier.weight(1f).fillMaxHeight().padding(top = 68.dp)) {
+                    Box(Modifier.weight(1f).fillMaxHeight()) {
                         pageContent()
+                        // Real content scrolls behind this atmospheric fade.
+                        // Unlike the old top padding, the next item is not cut
+                        // on a hard line when entering under the top islands.
+                        Box(Modifier.fillMaxWidth().height(94.dp)
+                            .align(Alignment.TopCenter)
+                            .background(Brush.verticalGradient(
+                                0.0f to bg.copy(alpha = .97f),
+                                .40f to bg.copy(alpha = .86f),
+                                .73f to bg.copy(alpha = .32f),
+                                1.0f to Color.Transparent
+                            )))
                     }
                 }
                 LandscapeTopDock(
                     modifier = Modifier.align(Alignment.TopStart)
-                        .statusBarsPadding().padding(start = 11.dp, end = 13.dp, top = 8.dp),
+                        .statusBarsPadding().padding(start = 14.dp, end = 13.dp, top = 8.dp),
                     state = state,
                     query = searchQuery,
                     searchExpanded = searchExpanded,
@@ -424,8 +452,7 @@ fun AurelisScreen(state: AurelisState) {
                         compactDock = false
                     },
                     onQuery = { searchQuery = it },
-                    onExpandPlayer = { expanded = true },
-                    onSettings = { showSettings = true }
+                    onExpandPlayer = { expanded = true }
                 )
             }
             AnimatedVisibility(visible = expanded && state.current != null,
@@ -1596,6 +1623,7 @@ private fun LandscapeNavigationRail(
     tab: String,
     artwork: String,
     state: AurelisState,
+    railHeight: Dp,
     onTab: (String) -> Unit
 ) {
     val tabs = listOf("Home", "Search", "Library")
@@ -1605,7 +1633,7 @@ private fun LandscapeNavigationRail(
     val isGlass = LocalVisualStyle.current == VisualStyle.GLASS
     var dragging by remember { mutableIntStateOf(-1) }
     Glass(
-        Modifier.width(62.dp).height(202.dp),
+        Modifier.width(62.dp).height(railHeight),
         RoundedCornerShape(32.dp),
         tint = state.ambientColor, opacity = .43f, backdrop = artwork,
         backdropBlur = 35.dp, backdropOpacity = .58f
@@ -1684,15 +1712,14 @@ private fun LandscapeTopDock(
     searchExpanded: Boolean,
     onSearchClick: () -> Unit,
     onQuery: (String) -> Unit,
-    onExpandPlayer: () -> Unit,
-    onSettings: () -> Unit
+    onExpandPlayer: () -> Unit
 ) {
     val focus = LocalFocusManager.current
     val reduced = LocalReducedMotion.current
-    BoxWithConstraints(modifier.fillMaxWidth().height(54.dp)) {
+    BoxWithConstraints(modifier.fillMaxWidth().height(62.dp)) {
         val searchTarget = if (searchExpanded)
-            (maxWidth * .44f).coerceAtMost(292.dp) else 54.dp
-        val miniTarget = if (searchExpanded) 54.dp
+            (maxWidth * .44f).coerceAtMost(292.dp) else 62.dp
+        val miniTarget = if (searchExpanded) 62.dp
             else (maxWidth * .35f).coerceAtMost(250.dp)
         val animation = if (reduced) tween<Dp>(0)
             else spring<Dp>(dampingRatio = .91f,
@@ -1777,14 +1804,6 @@ private fun LandscapeTopDock(
                             }
                         }
                     }
-                }
-            }
-            Spacer(Modifier.weight(1f))
-            Tactile(action = onSettings) {
-                Glass(Modifier.size(51.dp), RoundedCornerShape(26.dp),
-                    tint = state.ambientColor, opacity = .36f) {
-                    Icon(Icons.Rounded.Settings, "Pengaturan",
-                        Modifier.size(21.dp).align(Alignment.Center), tint = white)
                 }
             }
         }
