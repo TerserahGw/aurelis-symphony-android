@@ -2157,19 +2157,35 @@ private fun LandscapeTopDock(
             }
         }
 
-        Row(
-            Modifier.offset(x = dockX)
-                .width(groupWidth)
-                .fillMaxHeight(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(gap)
-        ) {
-            if (railRight) {
-                miniCapsule()
-                searchCapsule()
-            } else {
-                searchCapsule()
-                miniCapsule()
+        AnimatedContent(
+            targetState = railRight,
+            modifier = Modifier.offset(x = dockX)
+                .width(groupWidth).fillMaxHeight(),
+            label = "landscapeTopDockMirror",
+            transitionSpec = {
+                (fadeIn(tween(if (reduced) 0 else 260)) +
+                    slideInHorizontally(tween(if (reduced) 0 else 320,
+                        easing = FastOutSlowInEasing)) {
+                        if (targetState) it / 9 else -it / 9
+                    }) togetherWith
+                (fadeOut(tween(if (reduced) 0 else 180)) +
+                    slideOutHorizontally(tween(if (reduced) 0 else 220)) {
+                        if (targetState) -it / 12 else it / 12
+                    })
+            }
+        ) { onRight ->
+            Row(
+                Modifier.fillMaxSize(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(gap)
+            ) {
+                if (onRight) {
+                    miniCapsule()
+                    searchCapsule()
+                } else {
+                    searchCapsule()
+                    miniCapsule()
+                }
             }
         }
     }
