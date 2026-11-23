@@ -1986,6 +1986,24 @@ private fun Artwork(song: Song, size: Dp, radius: Dp) {
     }
 }
 
+/**
+ * Artwork morphing only on foreground player surfaces, not on every card in
+ * the Home feed. Keeps the cover/layout stable while blending old/new songs.
+ */
+@Composable
+private fun MorphArtwork(song: Song, size: Dp, radius: Dp, state: AurelisState) {
+    Crossfade(
+        targetState = song,
+        animationSpec = tween(
+            if (!state.settings.motion) 0
+            else if (state.settings.crossfadeEnabled)
+                (state.settings.crossfadeSeconds * 600).coerceAtMost(3200)
+            else 420
+        ),
+        label = "nowPlayingArtworkBlend"
+    ) { shown -> Artwork(shown, size, radius) }
+}
+
 @Composable
 private fun EmptyPage(title: String, description: String) {
     Column(Modifier.fillMaxWidth().padding(vertical = 46.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -2005,7 +2023,7 @@ private fun MiniPlayer(state: AurelisState, onExpand: () -> Unit) {
             backdropBlur = 38.dp, backdropOpacity = .67f) {
             Column {
                 Row(Modifier.weight(1f).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Artwork(song, 55.dp, 17.dp)
+                    MorphArtwork(song, 55.dp, 17.dp, state)
                     Spacer(Modifier.width(11.dp))
                     Column(Modifier.weight(1f)) {
                         Text(song.title, color = white, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
@@ -3025,15 +3043,23 @@ private fun LandscapeFullPlayer(
                         // Request the highest source image available while
                         // keeping the EXACT same bounds, crop and corner mask.
                         // If high-res isn't provided, retry the original URL.
-                        AsyncImage(
-                            model = highResRequest, contentDescription = null,
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = ContentScale.Crop,
-                            onError = {
-                                if (!highResUnavailable && bestArtwork != artwork)
-                                    highResUnavailable = true
-                            }
-                        )
+                        Crossfade(
+                            targetState = highResRequest,
+                            animationSpec = tween(if (state.settings.motion)
+                                (if (state.settings.crossfadeEnabled)
+                                    state.settings.crossfadeSeconds * 700 else 470) else 0),
+                            label = "landscapeCoverTrackBlend"
+                        ) { coverModel ->
+                            AsyncImage(
+                                model = coverModel, contentDescription = null,
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop,
+                                onError = {
+                                    if (!highResUnavailable && bestArtwork != artwork)
+                                        highResUnavailable = true
+                                }
+                            )
+                        }
                     } else {
                         Box(Modifier.fillMaxSize().background(state.ambientColor))
                     }
@@ -3051,13 +3077,27 @@ private fun LandscapeFullPlayer(
                         Modifier.align(Alignment.BottomStart)
                             .fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp)
                     ) {
-                        Text(song.title, color = white, fontSize = 16.sp,
-                            fontWeight = FontWeight.SemiBold, maxLines = 2,
-                            lineHeight = 19.sp, overflow = TextOverflow.Ellipsis)
-                        Spacer(Modifier.height(3.dp))
-                        Text(song.artist, color = white.copy(alpha = .74f),
-                            fontSize = 11.sp, maxLines = 1,
-                            overflow = TextOverflow.Ellipsis)
+                        AnimatedContent(
+                            targetState = song,
+                            label = "landscapeSongMetadataMorph",
+                            transitionSpec = {
+                                (fadeIn(tween(if (reduced) 0 else 440)) +
+                                    slideInVertically(tween(if (reduced) 0 else 390)) { it / 6 }
+                                ) togetherWith
+                                (fadeOut(tween(if (reduced) 0 else 250)) +
+                                    slideOutVertically(tween(if (reduced) 0 else 310)) { -it / 7 })
+                            }
+                        ) { shown ->
+                            Column {
+                                Text(shown.title, color = white, fontSize = 16.sp,
+                                    fontWeight = FontWeight.SemiBold, maxLines = 2,
+                                    lineHeight = 19.sp, overflow = TextOverflow.Ellipsis)
+                                Spacer(Modifier.height(3.dp))
+                                Text(shown.artist, color = white.copy(alpha = .74f),
+                                    fontSize = 11.sp, maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis)
+                            }
+                        }
                     }
                 }
                 Spacer(Modifier.height(4.dp))
@@ -3358,10 +3398,11 @@ private fun PlayerModeIsland(selected: String, onSelect: (String) -> Unit,
 private fun LyricContent(
     state: AurelisState, modifier: Modifier = Modifier,
     showRoman: Boolean = true, showTranslation: Boolean = false,
-    compact: Boolean = false
+    compact: Boolean = false,
+    shownLyrics: Lyrics = state.lyrics
 ) {
     val currentSec = (state.progress + state.settings.lyricOffsetMs) / 1000.0
-    val lines = state.lyrics.lines
+    val lines = shownLyrics.lines
     val active = lines.indexOfLast { it.time != null && it.time <= currentSec }
     val scroll = rememberLazyListState()
 
