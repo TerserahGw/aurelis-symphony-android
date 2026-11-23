@@ -46,7 +46,7 @@ jobs:
       - name: Upload test APK (signing varies per runner)
         uses: actions/upload-artifact@v4
         with:
-          name: AurelisSymphony-ARM64-v1.2.3-TEST-DEBUG
+          name: AurelisSymphony-ARM64-v1.2.4-TEST-DEBUG
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 14
@@ -94,11 +94,11 @@ jobs:
         if: steps.signing.outputs.enabled == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: AurelisSymphony-ARM64-v1.2.3-SIGNED
+          name: AurelisSymphony-ARM64-v1.2.4-SIGNED
           path: app/build/outputs/apk/release/*.apk
           if-no-files-found: error
 
-      - name: Publish GitHub Release v1.2.3 Stable
+      - name: Publish GitHub Release v1.2.4 Stable
         if: steps.signing.outputs.enabled == 'true' && github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
@@ -106,11 +106,11 @@ jobs:
         run: |
           set -euo pipefail
           cp app/build/outputs/apk/release/app-release.apk \
-            AurelisSymphony-Android-arm64-v1.2.3.apk
-          if ! gh release view v1.2.3 >/dev/null 2>&1; then
-            gh release create v1.2.3 --target "$GITHUB_SHA" \
-              --title "Aurelis Symphony Android v1.2.3 Stable" \
-              --notes "Aurelis Symphony Android v1.2.3 Stable. FIX: Activity rotation now keeps playback and mini-player state alive using Android ViewModel instead of closing the controller on configuration change. Landscape Home/Search/Library reflow into a reserved vertical navigation rail at left with animated vertical capsule highlight. The new top search capsule expands rightward while its adjacent mini-player smoothly reduces to artwork-only; full content margins reserve the left rail. Landscape full player now displays album artwork plus seek/duration/previous/play/next permanently at left and live synchronized Lyrics or Up Next at right, selected using two vertical mode capsules below the close button. Portrait layout retained. Same release signing key; versionCode 12."
+            AurelisSymphony-Android-arm64-v1.2.4.apk
+          if ! gh release view v1.2.4 >/dev/null 2>&1; then
+            gh release create v1.2.4 --target "$GITHUB_SHA" \
+              --title "Aurelis Symphony Android v1.2.4 Stable" \
+              --notes "Aurelis Symphony Android v1.2.4 Stable. Landscape layout polish based on recorded Android footage: align closed Search capsule to the 62dp left navigation rail; make scrollable Home/Search/Library content pass beneath the top islands with an atmospheric gradient fade rather than a hard clip; move Settings into an equally sized left-bottom capsule; present settings in a wider, compact, fully scrollable landscape dialog while keeping the portrait bottom sheet unchanged; unify landscape Lyrics and Up Next navigation into one vertical capsule with animated spring highlight and a matching 62dp Close capsule. Includes prior rotation ViewModel and landscape player fixes. versionCode 13, same permanent signing key."
           fi
-          gh release upload v1.2.3 \
-            AurelisSymphony-Android-arm64-v1.2.3.apk --clobber
+          gh release upload v1.2.4 \
+            AurelisSymphony-Android-arm64-v1.2.4.apk --clobber
