@@ -1,3 +1,7 @@
+## v1.2.13 — Landscape rail crash hotfix
+
+Fixed the Android Compose `IllegalArgumentException: Padding must be non-negative` seen when toggling the landscape menu/player rail from left to right (or vice versa). Spring animations can briefly overshoot below zero; both content insets and the rail offset are now bounded to valid geometry on every frame. No change to the visual spring, three-finger gesture, widgets, or full-player zoom animation. Signed versionCode 22.
+
 ## v1.2.12 — satisfying Player spring, seamless edges & global landscape controls
 
 - Restores the **original spring zoom and diagonal/vertical slide** when opening and closing the Music Player in portrait and landscape. An unscaled artwork-reactive **blurred underlay** fills the exposed perimeter while a temporary GPU alpha feather softens the transitioning player's sharp edges; at rest it is fully sharp.
