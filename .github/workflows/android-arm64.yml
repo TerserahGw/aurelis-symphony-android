@@ -46,7 +46,7 @@ jobs:
       - name: Upload test APK (signing varies per runner)
         uses: actions/upload-artifact@v4
         with:
-          name: AurelisSymphony-ARM64-v1.2.6-TEST-DEBUG
+          name: AurelisSymphony-ARM64-v1.2.7-TEST-DEBUG
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 14
@@ -94,11 +94,11 @@ jobs:
         if: steps.signing.outputs.enabled == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: AurelisSymphony-ARM64-v1.2.6-SIGNED
+          name: AurelisSymphony-ARM64-v1.2.7-SIGNED
           path: app/build/outputs/apk/release/*.apk
           if-no-files-found: error
 
-      - name: Publish GitHub Release v1.2.6 Stable
+      - name: Publish GitHub Release v1.2.7 Stable
         if: steps.signing.outputs.enabled == 'true' && github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
@@ -106,11 +106,11 @@ jobs:
         run: |
           set -euo pipefail
           cp app/build/outputs/apk/release/app-release.apk \
-            AurelisSymphony-Android-arm64-v1.2.6.apk
-          if ! gh release view v1.2.6 >/dev/null 2>&1; then
-            gh release create v1.2.6 --target "$GITHUB_SHA" \
-              --title "Aurelis Symphony Android v1.2.6 Stable" \
-              --notes "Aurelis Symphony Android v1.2.6 Stable. Landscape system-bar/left-top seam fix: unify Compose base and Android theme/window colors (#090D11), render transparent status and navigation bars with dark system icons disabled and OEM contrast enforcement suppressed on supported Android versions. Move the old right-content-only top gradient into a continuous full-width root scrim beneath the navigation/search capsules. Landscape player's lower-left overflow popup now grows and closes from its actual bottom-left origin with a soft vertical glide; portrait three-dot popup keeps its original top-right animation. Retains all v1.2.5 music, scrolling and playback improvements. versionCode 15, signed with the existing permanent release certificate."
+            AurelisSymphony-Android-arm64-v1.2.7.apk
+          if ! gh release view v1.2.7 >/dev/null 2>&1; then
+            gh release create v1.2.7 --target "$GITHUB_SHA" \
+              --title "Aurelis Symphony Android v1.2.7 Stable" \
+              --notes "Aurelis Symphony Android v1.2.7 Stable. Refined full-player opening and closing on Portrait (spring morph from bottom mini player) and Landscape (morph from upper mini player), with eased fade, scale and slide respecting Motion & Morph settings. New native Android Home Screen music widget: standard and compact responsive cards; Glass Ambient mode uses a translucent artwork-reactive softly highlighted gradient while Ambient uses a clean opaque evergreen card. Widget shows cover/title/artist and Play/Pause, Previous, Next controls; connects to Media3 session status, caches artwork, and follows in-app visual theme automatically. Android RemoteViews cannot sample/blur live launcher wallpaper. Skip controls preserve Aurelis queue while its ViewModel is alive; otherwise open app safely. Same permanent signing key; versionCode 16."
           fi
-          gh release upload v1.2.6 \
-            AurelisSymphony-Android-arm64-v1.2.6.apk --clobber
+          gh release upload v1.2.7 \
+            AurelisSymphony-Android-arm64-v1.2.7.apk --clobber
