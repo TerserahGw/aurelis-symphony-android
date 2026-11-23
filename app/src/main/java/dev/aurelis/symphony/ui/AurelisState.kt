@@ -199,7 +199,7 @@ class AurelisState(context: Context) : ViewModel() {
                 // UI lyric and progress still interpolate at 60fps; polling the
                 // service 10 times/sec rather than 15 reduces work.
                 if (isPlaying && !preparing && settings.crossfadeEnabled &&
-                    activePlaylist == null && queue.isNotEmpty() && duration > 0L) {
+                    queue.isNotEmpty() && duration > 0L) {
                     val songKey = current?.key
                     val remaining = duration - progress
                     if (songKey != null && autoCrossfadeForKey != songKey &&
