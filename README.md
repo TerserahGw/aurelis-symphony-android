@@ -305,3 +305,15 @@ This hotfix refines landscape behavior after reviewing a 30-second recording of 
 
 `versionName=1.2.4`, `versionCode=13`, ARM64 signed with the same persistent release keystore. GitHub Actions verifies build and signing, but real-world landscape insets and scrolling should still be checked on device.
 
+
+
+## v1.2.5 Stable — Precise mini-player alignment, player popup, soft scroll edges
+
+- **Mini player:** compact landscape capsule cover now stays geometrically centered as Search expands, using the animated capsule width rather than a row's fixed left padding.
+- **Landscape player overflow:** the three-dot player options moved from the upper-right Lyrics/Up Next panel into an equally sized 62dp bottom-left capsule under the combined vertical mode selector. The menu opens as an inline frosted Glass popup matching Portrait, positioned to the right of the rail rather than showing a disconnected modal bottom sheet.
+- **Responsive popup:** landscape options are wider (up to 380dp) and constrained to the available screen height with internal scrolling, including playlist and lyrics-offset actions. The flat Ambient mode continues to use the corresponding opaque capsule style.
+- **Smooth scroll boundaries:** Home, Search, Library, synchronized Lyrics, and Up Next apply GPU offscreen alpha feathering at both viewport edges. This removes hard horizontal clipping in Portrait and Landscape while preserving the underlying ambient artwork colors and scroll touch handling.
+- **Update continuity:** `versionName 1.2.5`, `versionCode 14`, signed with the same release keystore and installed as an upgrade over v1.2.4 without a data reset.
+
+The gradient feathering is a lightweight GPU opacity transition, not an expensive per-row Gaussian blur; this makes it suitable for scrolling and karaoke word-by-word animations on Android. Device-specific visual checks remain useful after the automated build and APK signing verification.
+
