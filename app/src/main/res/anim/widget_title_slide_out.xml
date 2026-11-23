@@ -1,8 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <set xmlns:android="http://schemas.android.com/apk/res/android"
-    android:interpolator="@android:interpolator/accelerate_quad">
-    <translate android:fromXDelta="0%p" android:toXDelta="-103%p"
-        android:duration="650"/>
-    <alpha android:fromAlpha="1" android:toAlpha="0.15"
-        android:duration="650"/>
+    android:interpolator="@android:interpolator/linear">
+    <!-- Slow right-to-left ticker. Loop is provided by ViewFlipper. -->
+    <translate android:fromXDelta="0%p" android:toXDelta="-100%p"
+        android:duration="6100"/>
 </set>
