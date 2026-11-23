@@ -1,6 +1,7 @@
 package dev.aurelis.symphony.ui
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.Crossfade
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.EnterExitState
 import androidx.compose.animation.animateColorAsState
@@ -312,7 +313,11 @@ private fun Tactile(modifier: Modifier = Modifier, action: () -> Unit, content: 
 private fun Ambient(state: AurelisState) {
     val settings = state.settings
     val c by animateColorAsState(
-        state.ambientColor, animationSpec = tween(if (settings.motion) 1200 else 0),
+        state.ambientColor, animationSpec = tween(
+            if (!settings.motion) 0
+            else if (settings.crossfadeEnabled) settings.crossfadeSeconds * 1000
+            else 900
+        ),
         label = "ambientPalette"
     )
     val strength = if (settings.ambient) settings.ambientIntensity else 0f
@@ -1272,6 +1277,18 @@ private fun SectionHeading(title: String, subtitle: String) {
 private fun SearchPage(state: AurelisState, query: String,
     scrollState: androidx.compose.foundation.lazy.LazyListState,
     onPlay: (Song) -> Unit, onMenu: (Song) -> Unit) {
+    // Detect intentional scrolling near the end, then fetch the next page.
+    // The request guard in state prevents duplicate loads.
+    LaunchedEffect(query, scrollState, state.searchHasMore) {
+        if (query.isBlank() || !state.searchHasMore) return@LaunchedEffect
+        snapshotFlow {
+            val visible = scrollState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+            scrollState.isScrollInProgress &&
+                visible >= scrollState.layoutInfo.totalItemsCount - 4
+        }.distinctUntilChanged().collect { nearEnd ->
+            if (nearEnd) state.loadMoreSearch()
+        }
+    }
     LazyColumn(state = scrollState,
         modifier = Modifier.fillMaxSize().featherScrollEdges(
             top = if (LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE) 32.dp else 30.dp,
@@ -1284,7 +1301,26 @@ private fun SearchPage(state: AurelisState, query: String,
         if (state.searching) item { LinearProgressIndicator(Modifier.fillMaxWidth(), color = lime) }
         if (query.isBlank()) item { EmptyPage("Temukan sesuatu yang baru", "Cari judul, artis, atau musik untuk didengarkan.") }
         else if (!state.searching && state.results.isEmpty()) item { EmptyPage("Belum ada hasil", "Coba kata kunci yang berbeda.") }
-        items(state.results, key = { "result-${it.key}" }) { song -> SongRow(song, state, onPlay = { onPlay(song) }, onMenu = { onMenu(song) }) }
+        items(state.results, key = { "result-${it.key}" }) { song ->
+            SongRow(song, state, onPlay = { onPlay(song) }, onMenu = { onMenu(song) })
+        }
+        if (state.loadingMoreSearch) item("search-pagination-loading") {
+            Row(Modifier.fillMaxWidth().padding(14.dp),
+                horizontalArrangement = Arrangement.Center) {
+                CircularProgressIndicator(Modifier.size(23.dp),
+                    color = lime, strokeWidth = 2.dp)
+                Spacer(Modifier.width(12.dp))
+                Text("Memuat lagu berikutnya…", color = mist, fontSize = 12.sp)
+            }
+        }
+        if (state.searchHasMore && !state.loadingMoreSearch) item("search-pagination-more") {
+            TextButton(onClick = state::loadMoreSearch,
+                modifier = Modifier.fillMaxWidth().padding(8.dp)) {
+                Icon(Icons.Rounded.ExpandMore, null, tint = lime, modifier = Modifier.size(20.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("Geser untuk memuat lebih banyak lagu", color = lime, fontSize = 12.sp)
+            }
+        }
     }
 }
 
@@ -3792,6 +3828,37 @@ private fun SettingsSheet(
                 Spacer(Modifier.height(10.dp))
                 Text(uiText("Auto mencoba NewPipe, lalu server jika sumber gagal."),
                     color = mist, fontSize = 11.sp, lineHeight = 17.sp)
+
+                Spacer(Modifier.height(16.dp))
+                SettingsSwitch("Crossfade antar lagu",
+                    "Lagu selanjutnya mulai pelan saat lagu lama memudar. Default nonaktif.",
+                    s.crossfadeEnabled,
+                    { state.update(s.copy(crossfadeEnabled = it)) })
+                AnimatedVisibility(visible = s.crossfadeEnabled) {
+                    Column(Modifier.fillMaxWidth().padding(top = 12.dp)) {
+                        Row(Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically) {
+                            Text("Durasi transisi", Modifier.weight(1f),
+                                color = white, fontSize = 12.sp)
+                            Text("${s.crossfadeSeconds} detik", color = lime,
+                                fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                        }
+                        Slider(
+                            value = s.crossfadeSeconds.toFloat(),
+                            onValueChange = {
+                                state.update(s.copy(crossfadeSeconds =
+                                    it.roundToInt().coerceIn(1, 12)))
+                            },
+                            valueRange = 1f..12f,
+                            steps = 10,
+                            colors = SliderDefaults.colors(
+                                thumbColor = lime, activeTrackColor = lime,
+                                inactiveTrackColor = white.copy(alpha = .15f))
+                        )
+                        Text("Dua audio diputar bersamaan saat crossfade. Efek otomatis memerlukan lagu berikutnya dalam antrean.",
+                            color = mist, fontSize = 11.sp, lineHeight = 16.sp)
+                    }
+                }
 
                 DividerSoft()
                 SettingsCategory(uiText("AKUN"), "YouTube Music")
