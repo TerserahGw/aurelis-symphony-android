@@ -3,7 +3,22 @@
 **Native Android beta source project**, based on Aurelis Symphony Web 2.7.0 by TerserahGw.
 The web/server project remains unchanged: https://github.com/TerserahGw/aurelis-symphony
 
-> Status: **v0.1.1 Beta**. GitHub Actions builds an ARM64 debug-signed APK and publishes the successful result as a prerelease. Build success does not replace testing on a physical device.
+> Status: **v1.2.8 Stable source**. GitHub Actions builds an ARM64 test APK and, when persistent signing secrets are configured, publishes a stable-signed release APK. Device testing is still recommended.
+
+## Home Screen widgets — v1.2.8
+
+Four separately selectable **fixed-size** native widget variants follow the app's **Glass Ambient** or **Ambient** theme. Android declares `resizeMode="none"` for each widget (some third-party launchers may override this setting).
+
+| Picker size | Layout | Playback controls | Up Next |
+|---|---|---|---|
+| **2×1** | Cover, song title, artist | None — tap to open app | No |
+| **2×2** | Square music card | Previous, Play/Pause, Next | No |
+| **4×1** | Horizontal mini player | Previous, Play/Pause, Next | No |
+| **4×2** | Split Now Playing / Up Next | Previous, Play/Pause, Next | First two real upcoming songs |
+
+These are independent Android widget providers rather than one resizable layout. The fixed `19dp` corner outline clips the artwork-reactive background, so corners do not stretch with width/height. Glass Ambient uses a softer transparent acrylic surface, subtle artwork highlights and a fine outline; Ambient stays opaque and dark. The launcher wallpaper cannot be blurred by normal `RemoteViews` widgets.
+
+If an **older widget** remains resized to a custom footprint, remove it from the Home Screen and add the new **2×1, 2×2, 4×1, or 4×2** entry to get the intended fixed grid size. Up Next reads AurelisState's live queue and is updated when it changes. When Android has killed the UI state, Previous/Next safely open the app rather than guessing a different music queue.
 
 ## Design
 

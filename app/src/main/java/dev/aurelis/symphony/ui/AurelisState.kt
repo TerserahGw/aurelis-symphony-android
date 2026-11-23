@@ -6,6 +6,7 @@ import android.graphics.BitmapFactory
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import dev.aurelis.symphony.widget.AurelisWidgetProvider
@@ -23,6 +24,8 @@ import dev.aurelis.symphony.data.*
 import dev.aurelis.symphony.playback.AudioService
 import dev.aurelis.symphony.playback.NewPipeSource
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.distinctUntilChanged
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.util.concurrent.TimeUnit
@@ -100,6 +103,14 @@ class AurelisState(context: Context) : ViewModel() {
 
     init {
         WidgetPlaybackBridge.attach(this)
+        // Publish exactly the real upcoming queue whenever a playlist,
+        // recommendation or manual queue edit changes it. Widgets show the
+        // two immediate songs even while the Activity is in the background.
+        scope.launch {
+            snapshotFlow { queue }.distinctUntilChanged().collect { upcoming ->
+                AurelisWidgetProvider.publishQueue(app, upcoming)
+            }
+        }
         val token = SessionToken(app, ComponentName(app, AudioService::class.java))
         controllerFuture = MediaController.Builder(app, token).buildAsync()
         controllerFuture.addListener({

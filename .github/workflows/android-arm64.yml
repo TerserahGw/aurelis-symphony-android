@@ -2,6 +2,12 @@ name: Android ARM64 APK
 
 on:
   workflow_dispatch:
+  pull_request:
+    paths:
+      - 'app/**'
+      - '*.gradle.kts'
+      - 'gradle.properties'
+      - '.github/workflows/android-arm64.yml'
   push:
     branches: [main]
     paths:
@@ -46,7 +52,7 @@ jobs:
       - name: Upload test APK (signing varies per runner)
         uses: actions/upload-artifact@v4
         with:
-          name: AurelisSymphony-ARM64-v1.2.7-TEST-DEBUG
+          name: AurelisSymphony-ARM64-v1.2.8-TEST-DEBUG
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 14
@@ -94,11 +100,11 @@ jobs:
         if: steps.signing.outputs.enabled == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: AurelisSymphony-ARM64-v1.2.7-SIGNED
+          name: AurelisSymphony-ARM64-v1.2.8-SIGNED
           path: app/build/outputs/apk/release/*.apk
           if-no-files-found: error
 
-      - name: Publish GitHub Release v1.2.7 Stable
+      - name: Publish GitHub Release v1.2.8 Stable
         if: steps.signing.outputs.enabled == 'true' && github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
@@ -106,11 +112,11 @@ jobs:
         run: |
           set -euo pipefail
           cp app/build/outputs/apk/release/app-release.apk \
-            AurelisSymphony-Android-arm64-v1.2.7.apk
-          if ! gh release view v1.2.7 >/dev/null 2>&1; then
-            gh release create v1.2.7 --target "$GITHUB_SHA" \
-              --title "Aurelis Symphony Android v1.2.7 Stable" \
-              --notes "Aurelis Symphony Android v1.2.7 Stable. Refined full-player opening and closing on Portrait (spring morph from bottom mini player) and Landscape (morph from upper mini player), with eased fade, scale and slide respecting Motion & Morph settings. New native Android Home Screen music widget: standard and compact responsive cards; Glass Ambient mode uses a translucent artwork-reactive softly highlighted gradient while Ambient uses a clean opaque evergreen card. Widget shows cover/title/artist and Play/Pause, Previous, Next controls; connects to Media3 session status, caches artwork, and follows in-app visual theme automatically. Android RemoteViews cannot sample/blur live launcher wallpaper. Skip controls preserve Aurelis queue while its ViewModel is alive; otherwise open app safely. Same permanent signing key; versionCode 16."
+            AurelisSymphony-Android-arm64-v1.2.8.apk
+          if ! gh release view v1.2.8 >/dev/null 2>&1; then
+            gh release create v1.2.8 --target "$GITHUB_SHA" \
+              --title "Aurelis Symphony Android v1.2.8 Stable" \
+              --notes "Aurelis Symphony Android v1.2.8 Stable. Refined full-player opening and closing on Portrait (spring morph from bottom mini player) and Landscape (morph from upper mini player), with eased fade, scale and slide respecting Motion & Morph settings. Reworked native Android Home Screen widgets into four picker variants with resize disabled: 2x1 (no controls), 2x2 (Previous/Play/Next), 4x1 (compact horizontal with controls) and 4x2 (two panes: Now Playing plus two live Up Next entries). Fixed rounded corners through an outline-clipped drawable rather than stretched raster rounding. Improved Glass Ambient translucent acrylic gradient and artwork-reactive highlights; MediaSession playback and live queue updates. Android RemoteViews cannot sample/blur live launcher wallpaper. Skip controls preserve Aurelis queue while its ViewModel is alive; otherwise open app safely. Same permanent signing key; versionCode 17."
           fi
-          gh release upload v1.2.7 \
-            AurelisSymphony-Android-arm64-v1.2.7.apk --clobber
+          gh release upload v1.2.8 \
+            AurelisSymphony-Android-arm64-v1.2.8.apk --clobber

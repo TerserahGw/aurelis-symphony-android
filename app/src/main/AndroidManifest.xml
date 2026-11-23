@@ -21,7 +21,7 @@
         <receiver
             android:name=".widget.AurelisWidgetProvider"
             android:exported="true"
-            android:label="Aurelis Symphony · Music"
+            android:label="Aurelis Symphony · 4×2"
             android:icon="@mipmap/ic_launcher">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
@@ -29,6 +29,39 @@
             <meta-data
                 android:name="android.appwidget.provider"
                 android:resource="@xml/aurelis_widget_info" />
+        </receiver>
+        <receiver
+            android:name=".widget.AurelisWidgetTwoByOneProvider"
+            android:exported="true"
+            android:label="Aurelis Symphony · 2×1"
+            android:icon="@mipmap/ic_launcher">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider"
+                android:resource="@xml/aurelis_widget_2x1" />
+        </receiver>
+        <receiver
+            android:name=".widget.AurelisWidgetTwoByTwoProvider"
+            android:exported="true"
+            android:label="Aurelis Symphony · 2×2"
+            android:icon="@mipmap/ic_launcher">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider"
+                android:resource="@xml/aurelis_widget_2x2" />
+        </receiver>
+        <receiver
+            android:name=".widget.AurelisWidgetFourByOneProvider"
+            android:exported="true"
+            android:label="Aurelis Symphony · 4×1"
+            android:icon="@mipmap/ic_launcher">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider"
+                android:resource="@xml/aurelis_widget_4x1" />
         </receiver>
         <provider
             android:name="androidx.core.content.FileProvider"
