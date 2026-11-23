@@ -156,7 +156,7 @@ internal object RecommendationRanker {
         val ytPositions = youtubeHistory.take(90).mapIndexed { idx, song ->
             song.key to idx
         }.toMap()
-        val ytArtists = youtubeHistory.take(90).groupingBy { artist(it) }.eachCount()
+        val ytArtists = youtubeHistory.take(90).groupingBy(::leadArtist).eachCount()
         val ytSeen = youtubeRecommendations.take(140).map { it.key }.toSet()
         val hasAccountTaste = ytSeen.isNotEmpty() || youtubeHistory.isNotEmpty()
         val ytShelfOrder = youtubeRecommendations.take(140).mapIndexed { idx, song ->
@@ -204,7 +204,7 @@ internal object RecommendationRanker {
             //  - tracks ranked in account Home shelves
             //  - artists listened to by the account
             //  - account history used for taste, but immediate exact repeats penalized
-            val ytArtistPlays = (ytArtists[artist(song)] ?: 0).coerceAtMost(5)
+            val ytArtistPlays = (ytArtists[leadArtist(song)] ?: 0).coerceAtMost(5)
             val ytHome = ytShelfOrder[song.key]?.let { (140 - it) / 140.0 } ?: 0.0
             val ytRecentExact = ytPositions[song.key]?.let { (90 - it) / 90.0 } ?: 0.0
             return (if (fromSameArtist) 8.0 else 0.0) +
@@ -228,8 +228,8 @@ internal object RecommendationRanker {
 
         while (output.size < maxCount && candidates.isNotEmpty()) {
             val chosen = candidates.maxByOrNull { item ->
-                val sameArtistInQueue = output.count { artist(it) == artist(item) }
-                val previousSameArtist = output.lastOrNull()?.let { artist(it) == artist(item) } == true
+                val sameArtistInQueue = output.count { leadArtist(it) == leadArtist(item) }
+                val previousSameArtist = output.lastOrNull()?.let { leadArtist(it) == leadArtist(item) } == true
                 val abruptJump = output.lastOrNull()?.let {
                     clashesWith(it, item)
                 } ?: false
