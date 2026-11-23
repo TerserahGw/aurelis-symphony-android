@@ -30,12 +30,14 @@
             android:clipChildren="true" android:clipToPadding="true">
             <TextView android:id="@+id/widget_title"
                 android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:singleLine="true" android:ellipsize="end"
+                android:singleLine="true" android:ellipsize="marquee"
                 android:text="Aurelis Symphony" android:textColor="#FAFFFD"
                 android:textStyle="bold" android:textSize="12sp"
            
            
-/>
+android:marqueeRepeatLimit="marquee_forever"
+                    android:requiresFadingEdge="horizontal"
+                    android:fadingEdgeLength="10dp"/>
             <ViewFlipper android:id="@+id/widget_title_flipper"
                 android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:visibility="gone"
