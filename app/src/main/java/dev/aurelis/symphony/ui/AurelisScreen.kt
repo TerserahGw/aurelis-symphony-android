@@ -10,6 +10,8 @@ import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
@@ -385,10 +387,23 @@ fun AurelisScreen(state: AurelisState) {
                 state.current?.let {
                     AnimatedVisibility(
                         visible = !expanded && !compactDock,
-                        enter = fadeIn(tween(if (state.settings.motion) 235 else 0)) +
-                            slideInVertically(tween(if (state.settings.motion) 320 else 0)) { it / 3 },
-                        exit = fadeOut(tween(if (state.settings.motion) 190 else 0)) +
-                            slideOutVertically(tween(if (state.settings.motion) 240 else 0)) { it / 3 }
+                        // Mini capsule gracefully merges into the full player
+                        // rather than disappearing abruptly before the cover arrives.
+                        enter = fadeIn(tween(if (state.settings.motion) 230 else 0,
+                                delayMillis = if (state.settings.motion) 85 else 0)) +
+                            scaleIn(initialScale = .91f,
+                                transformOrigin = TransformOrigin(.5f, 1f),
+                                animationSpec = spring(
+                                    dampingRatio = .84f,
+                                    stiffness = Spring.StiffnessMediumLow)) +
+                            slideInVertically(tween(if (state.settings.motion) 325 else 0,
+                                easing = LinearOutSlowInEasing)) { it / 4 },
+                        exit = fadeOut(tween(if (state.settings.motion) 160 else 0)) +
+                            scaleOut(targetScale = .88f,
+                                transformOrigin = TransformOrigin(.5f, 1f),
+                                animationSpec = tween(if (state.settings.motion) 240 else 0,
+                                    easing = FastOutSlowInEasing)) +
+                            slideOutVertically(tween(if (state.settings.motion) 250 else 0)) { it / 4 }
                     ) {
                         MiniPlayer(state, onExpand = { expanded = true })
                     }
@@ -490,13 +505,37 @@ fun AurelisScreen(state: AurelisState) {
                     onExpandPlayer = { expanded = true }
                 )
             }
-            AnimatedVisibility(visible = expanded && state.current != null,
-                enter = fadeIn(tween(if (state.settings.motion) 370 else 0)) +
-                    scaleIn(initialScale = .935f, animationSpec = spring(dampingRatio = .88f, stiffness = Spring.StiffnessLow)) +
-                    slideInVertically(animationSpec = spring(dampingRatio = .92f, stiffness = Spring.StiffnessLow)) { it / 8 },
-                exit = fadeOut(tween(if (state.settings.motion) 240 else 0)) +
-                    scaleOut(targetScale = .95f, animationSpec = tween(300)) +
-                    slideOutVertically(tween(300)) { it / 7 }
+            // One orientation-aware choreography for opening and closing:
+            // Portrait unfolds upward from the bottom mini player, Landscape
+            // expands diagonally from the upper search/mini-player island.
+            // The subtle spring overshoot is disabled by Motion & Morph.
+            val playerMotion = state.settings.motion
+            val playerOrigin = if (isLandscape)
+                TransformOrigin(.23f, .18f) else TransformOrigin(.50f, .92f)
+            AnimatedVisibility(
+                visible = expanded && state.current != null,
+                enter = fadeIn(tween(if (playerMotion) 300 else 0,
+                    easing = LinearOutSlowInEasing)) +
+                    scaleIn(initialScale = if (isLandscape) .89f else .87f,
+                        transformOrigin = playerOrigin,
+                        animationSpec = if (playerMotion) spring(
+                            dampingRatio = .80f,
+                            stiffness = Spring.StiffnessMediumLow
+                        ) else tween(0)) +
+                    slideInVertically(
+                        animationSpec = tween(if (playerMotion) 420 else 0,
+                            easing = FastOutSlowInEasing)
+                    ) { height -> if (isLandscape) -height / 13 else height / 6 },
+                exit = fadeOut(tween(if (playerMotion) 255 else 0,
+                    easing = FastOutSlowInEasing)) +
+                    scaleOut(targetScale = if (isLandscape) .90f else .88f,
+                        transformOrigin = playerOrigin,
+                        animationSpec = tween(if (playerMotion) 320 else 0,
+                            easing = FastOutSlowInEasing)) +
+                    slideOutVertically(
+                        animationSpec = tween(if (playerMotion) 305 else 0,
+                            easing = FastOutSlowInEasing)
+                    ) { height -> if (isLandscape) -height / 14 else height / 7 }
             ) {
                 FullPlayer(state, onClose = { expanded = false }, onQueue = { showQueue = true }, onMenu = { state.current?.let { menuSong = it } })
             }
