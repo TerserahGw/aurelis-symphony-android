@@ -116,7 +116,9 @@ open class AurelisWidgetProvider : AppWidgetProvider() {
             TWO_ONE(R.layout.widget_aurelis_small, 252, 112, false),
             TWO_TWO(R.layout.widget_aurelis_compact, 240, 240, true),
             FOUR_ONE(R.layout.widget_aurelis_slim, 480, 112, true),
-            FOUR_TWO(R.layout.widget_aurelis, 480, 244, true)
+            // Smaller gradient bitmap prevents launcher Binder oversize when
+            // five queue covers and a sharper hero are present.
+            FOUR_TWO(R.layout.widget_aurelis, 360, 184, true)
         }
 
         private val providers = listOf(
@@ -233,7 +235,7 @@ open class AurelisWidgetProvider : AppWidgetProvider() {
         /**
          * Preserve the square crop without distorting album art. The file is
          * high enough resolution for launcher xhdpi/xxhdpi hero cards; only
-         * the fixed-size 240/256px render is sent through RemoteViews.
+         * the fixed-size 320/336px render is sent through RemoteViews.
          */
         private fun squareCover(source: Bitmap, size: Int): Bitmap {
             val output = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
@@ -259,8 +261,8 @@ open class AurelisWidgetProvider : AppWidgetProvider() {
             // Never replace an already fetched HD image with a later,
             // lower-resolution palette image or stale network fallback.
             if (store.getString("cached_artwork", "") == url &&
-                store.getInt("cached_art_version", 0) >= ART_CACHE_VERSION &&
-                oldQuality > sourceQuality) return false
+                store.getInt("cached_art_version", 0) >= cacheVersion &&
+                oldQuality >= sourceQuality) return false
             val square = squareCover(decoded, HERO_CACHE_SIZE)
             val temp = File(app.cacheDir, temporaryName)
             try {
@@ -407,7 +409,7 @@ open class AurelisWidgetProvider : AppWidgetProvider() {
 
         /**
          * Mirror AurelisState's playlist/radio queue, never invent tracks.
-         * Three album cover rows remain readable in a compact 4x2 widget.
+         * Up to five compact, readable covers appear in the 4x2 widget.
          */
         fun publishQueue(context: Context, queue: List<Song>) {
             val prefs = context.getSharedPreferences(STORE, Context.MODE_PRIVATE)
@@ -526,8 +528,8 @@ open class AurelisWidgetProvider : AppWidgetProvider() {
                                 cachedHeroKey = artCacheKey
                             }
                             cachedHeroArt.getOrPut(size) {
-                                if (size == Size.TWO_TWO) renderHeroArtwork(art, 240, 240)
-                                else renderHeroArtwork(art, 256, 244, fadeRight = true)
+                                if (size == Size.TWO_TWO) renderHeroArtwork(art, 320, 320)
+                                else renderHeroArtwork(art, 336, 320, fadeRight = true)
                             }
                         }
                         remote.setImageViewBitmap(R.id.widget_art, heroBitmap)
@@ -568,7 +570,6 @@ open class AurelisWidgetProvider : AppWidgetProvider() {
                         actionIntent(app, id * 10 + 3, ACTION_NEXT))
                 }
                 if (size == Size.FOUR_TWO) {
-                    val count = store.getInt("next_queue_total", 0)
                     remote.setTextViewText(R.id.widget_queue_header, "UP NEXT")
                     queueCoverIds.forEachIndexed { index, (name, coverId, rowId) ->
                         val nextTitle = store.getString("next_$name", "").orEmpty()
@@ -600,13 +601,15 @@ open class AurelisWidgetProvider : AppWidgetProvider() {
                         val thumbFile = File(app.cacheDir, "aurelis_widget_next_$name.jpg")
                         val valid = nextUrl.isNotBlank() && thumbFile.isFile &&
                             store.getString("cached_next_${name}_art", "") == nextUrl
+                        val needsThumbRefresh =
+                            store.getInt("cached_next_${name}_version", 0) < ART_CACHE_VERSION
                         val thumb = if (valid) queueThumbs.getOrPut("$name:$nextUrl") {
                             BitmapFactory.decodeFile(thumbFile.absolutePath)
                         } else null
                         if (thumb != null) remote.setImageViewBitmap(coverId, thumb)
                         else remote.setImageViewResource(coverId, R.drawable.widget_music_note)
                         if (nextTitle.isNotBlank() && nextUrl.startsWith("https://")
-                            && thumb == null) {
+                            && (thumb == null || needsThumbRefresh)) {
                             queuedArtToFetch.add(Triple(name, nextUrl, nextVideo))
                         }
                     }
@@ -738,19 +741,21 @@ open class AurelisWidgetProvider : AppWidgetProvider() {
                 try {
                     val prefs = context.getSharedPreferences(STORE, Context.MODE_PRIVATE)
                     if (prefs.getString("next_${name}_art", "") != url) return@execute
-                    val fallback = if (videoPattern.matches(videoId))
-                        "https://i.ytimg.com/vi/$videoId/hqdefault.jpg" else ""
                     var cached = false
-                    for (candidate in listOf(url, fallback).filter {
-                        it.startsWith("https://")
-                    }.distinct()) {
+                    for (candidate in artworkCandidates(url, videoId)) {
                         val bytes = runCatching { downloadArtwork(candidate) }.getOrNull()
                             ?: continue
+                        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+                        val longest = maxOf(bounds.outWidth, bounds.outHeight)
+                        if (longest <= 0 || longest > 16000) continue
+                        var sample = 1
+                        while (longest / sample > 480) sample *= 2
                         val decoded = BitmapFactory.decodeByteArray(
                             bytes, 0, bytes.size,
-                            BitmapFactory.Options().apply { inSampleSize = 2 }
+                            BitmapFactory.Options().apply { inSampleSize = sample }
                         ) ?: continue
-                        val thumb = squareCover(decoded, 128)
+                        val thumb = squareCover(decoded, 104)
                         if (thumb !== decoded) decoded.recycle()
                         if (prefs.getString("next_${name}_art", "") != url) {
                             thumb.recycle()
@@ -768,7 +773,10 @@ open class AurelisWidgetProvider : AppWidgetProvider() {
                         if (temporary.renameTo(
                                 File(context.cacheDir, "aurelis_widget_next_$name.jpg")
                             )) {
-                            prefs.edit().putString("cached_next_${name}_art", url).apply()
+                            prefs.edit()
+                                .putString("cached_next_${name}_art", url)
+                                .putInt("cached_next_${name}_version", ART_CACHE_VERSION)
+                                .apply()
                             cached = true
                             updateWidgets(context)
                             break
