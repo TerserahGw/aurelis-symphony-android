@@ -104,7 +104,9 @@ class AudioService : MediaSessionService() {
                 if (playbackState != Player.STATE_READY || started ||
                     generation != fadeGeneration || incoming !== next) return
                 started = true
-                next.play()
+                // The user may have paused while the incoming stream was
+                // buffering, so never force an unexpected resume.
+                if (outgoing.isPlaying) next.play() else next.pause()
                 val tick = object : Runnable {
                     private var activeElapsedMs = 0L
                     private var lastTick = SystemClock.uptimeMillis()
