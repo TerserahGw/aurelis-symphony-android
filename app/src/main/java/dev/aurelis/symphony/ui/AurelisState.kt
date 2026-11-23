@@ -45,11 +45,30 @@ class AurelisState(context: Context) : ViewModel() {
     private var searchJob: Job? = null
     private var settingsSaveJob: Job? = null
     private var searchRevision = 0L
+    private var searchQueryActive = ""
+    private var searchOffset = 0
+    private var searchApiHasMore = true
+    private var searchYoutubeToken: String? = null
+    private var autoCrossfadeForKey: String? = null
+    var searchHasMore by mutableStateOf(false)
+        private set
+    var loadingMoreSearch by mutableStateOf(false)
+        private set
     private var recommendationJob: Job? = null
     private var nextJob: Job? = null
     private var recommendationRevision = 0L
     private val skippedRecommendations = mutableSetOf<String>()
     private val queueTargetSize = 5
+    private fun playable(candidate: Song): Boolean {
+        val title = candidate.title.lowercase()
+        val genericSource = candidate.artist.equals("YouTube Music", ignoreCase = true)
+        val browseOnlyLabel = listOf("start radio", "radio station",
+            "station based on", "personalized station", "start a station")
+            .any(title::contains)
+        return candidate.title.isNotBlank() && !(browseOnlyLabel ||
+            (genericSource && (title.endsWith(" radio") ||
+                title.endsWith(" station"))))
+    }
     private var playlistTracks: List<Song> = emptyList()
     private var playlistIndex = -1
     var activePlaylist by mutableStateOf<String?>(null)
@@ -138,7 +157,7 @@ class AurelisState(context: Context) : ViewModel() {
                             ambientColor.toArgb())
                     }
                     override fun onPlaybackStateChanged(playbackState: Int) {
-                        if (playbackState == Player.STATE_ENDED) next()
+                        if (playbackState == Player.STATE_ENDED && !preparing) next()
                         if (playbackState == Player.STATE_READY) preparing = false
                     }
                     override fun onPlayerError(exception: PlaybackException) {
@@ -164,7 +183,19 @@ class AurelisState(context: Context) : ViewModel() {
                     progress = c.currentPosition.coerceAtLeast(0)
                     duration = c.duration.takeIf { it > 0 } ?: current?.duration?.times(1000) ?: 0
                 }
-                delay(if (isPlaying) 65 else 500)
+                // UI lyric and progress still interpolate at 60fps; polling the
+                // service 10 times/sec rather than 15 reduces work.
+                if (isPlaying && !preparing && settings.crossfadeEnabled &&
+                    activePlaylist == null && queue.isNotEmpty() && duration > 0L) {
+                    val songKey = current?.key
+                    val remaining = duration - progress
+                    if (songKey != null && autoCrossfadeForKey != songKey &&
+                        remaining in 1L..(settings.crossfadeSeconds * 1000L + 1400L)) {
+                        autoCrossfadeForKey = songKey
+                        next()
+                    }
+                }
+                delay(if (isPlaying) 110 else 600)
             }
         }
         refreshHome()
@@ -192,13 +223,24 @@ class AurelisState(context: Context) : ViewModel() {
         searchJob = null
         results = emptyList()
         searching = false
+        loadingMoreSearch = false
+        searchHasMore = false
+        searchYoutubeToken = null
+        searchOffset = 0
     }
 
     fun search(q: String) {
+        val normalized = q.trim().take(160)
         searchRevision++
         val revision = searchRevision
         searchJob?.cancel()
-        if (q.isBlank()) {
+        searchQueryActive = normalized
+        searchOffset = 0
+        searchApiHasMore = true
+        searchYoutubeToken = null
+        searchHasMore = false
+        loadingMoreSearch = false
+        if (normalized.isBlank()) {
             searching = false
             results = emptyList()
             return
@@ -206,8 +248,25 @@ class AurelisState(context: Context) : ViewModel() {
         searchJob = scope.launch {
             searching = true
             try {
-                val found = api.search(q.trim().take(160))
-                if (revision == searchRevision) results = found
+                val data = coroutineScope {
+                    val catalog = async { runCatching {
+                        api.search(normalized, 0, 24)
+                    }.getOrDefault(emptyList()) }
+                    val youtubePage = async {
+                        if (youtube.isConnected) runCatching {
+                            youtube.searchPage(normalized)
+                        }.getOrNull() else null
+                    }
+                    catalog.await() to youtubePage.await()
+                }
+                if (revision != searchRevision) return@launch
+                val (catalog, youtubePage) = data
+                results = (youtubePage?.tracks.orEmpty() + catalog)
+                    .filter(::playable).distinctBy { it.key }
+                searchOffset = catalog.size
+                searchApiHasMore = catalog.size >= 24
+                searchYoutubeToken = youtubePage?.continuation
+                searchHasMore = searchApiHasMore || searchYoutubeToken != null
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (failure: Exception) {
@@ -220,6 +279,51 @@ class AurelisState(context: Context) : ViewModel() {
             }
         }
     }
+
+    fun loadMoreSearch() {
+        if (searching || loadingMoreSearch || !searchHasMore ||
+            searchQueryActive.isBlank()) return
+        val revision = searchRevision
+        scope.launch {
+            loadingMoreSearch = true
+            try {
+                val oldKeys = results.map { it.key }.toSet()
+                val currentQuery = searchQueryActive
+                val page = coroutineScope {
+                    val catalog = async {
+                        if (searchApiHasMore) runCatching {
+                            api.search(currentQuery, searchOffset, 24)
+                        }.getOrDefault(emptyList()) else emptyList()
+                    }
+                    val yt = async {
+                        searchYoutubeToken?.let { token ->
+                            runCatching { youtube.searchPage(currentQuery, token) }
+                                .getOrNull()
+                        }
+                    }
+                    catalog.await() to yt.await()
+                }
+                if (revision != searchRevision) return@launch
+                val (catalog, youtubePage) = page
+                searchOffset += catalog.size
+                val newCatalog = catalog.filter { it.key !in oldKeys }
+                searchApiHasMore = catalog.size >= 24 && newCatalog.isNotEmpty()
+                searchYoutubeToken = youtubePage?.continuation
+                val combined = (youtubePage?.tracks.orEmpty() + newCatalog)
+                    .filter(::playable).filterNot { it.key in oldKeys }
+                results = (results + combined).distinctBy { it.key }.take(600)
+                searchHasMore = (searchApiHasMore || searchYoutubeToken != null) &&
+                    results.size < 600
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                if (revision == searchRevision) searchHasMore = false
+            } finally {
+                if (revision == searchRevision) loadingMoreSearch = false
+            }
+        }
+    }
+
     fun play(song: Song, addHistory: Boolean = true, preserveQueue: Boolean = false) {
         if (!preserveQueue) {
             activePlaylist = null
@@ -240,6 +344,10 @@ class AurelisState(context: Context) : ViewModel() {
         translating = false
         translationError = null
         playJob = scope.launch {
+            if (!playable(song)) {
+                error = "Item radio/station ini bukan trek audio. Pilih lagu individual."
+                return@launch
+            }
             current = song; preparing = true; progress = 0; lyrics = Lyrics("", emptyList()); romanized = emptyMap()
             AurelisWidgetProvider.publish(app, song, isPlaying, ambientColor.toArgb())
             replenishQueue(song)
@@ -345,8 +453,19 @@ class AurelisState(context: Context) : ViewModel() {
         val c = controller ?: run { error = "Pemutar belum siap. Coba ketuk lagi."; preparing = false; return }
         val meta = MediaMetadata.Builder().setTitle(song.title).setArtist(song.artist)
             .apply { if (song.artwork.startsWith("https://")) setArtworkUri(android.net.Uri.parse(song.artwork)) }.build()
-        c.setMediaItem(MediaItem.Builder().setMediaId(song.id).setUri(stream).setMediaMetadata(meta).build())
-        c.prepare(); c.play()
+        val item = MediaItem.Builder().setMediaId(song.id)
+            .setUri(stream).setMediaMetadata(meta).build()
+        // Crossfade only when the old source is actively playing. The service
+        // uses an independent ExoPlayer for overlap; the MediaSession is
+        // handed over when the transition completes. The default remains OFF.
+        val didCrossfade = settings.crossfadeEnabled && c.isPlaying &&
+            AudioService.crossfadeTo(item, settings.crossfadeSeconds * 1000L)
+        if (!didCrossfade) {
+            c.setMediaItem(item)
+            c.prepare()
+            c.play()
+        }
+        preparing = false
     }
     private fun refreshAmbient(song: Song) {
         if (!song.artwork.startsWith("https://")) {
@@ -421,11 +540,19 @@ class AurelisState(context: Context) : ViewModel() {
     private fun makeRecommendationPool(seed: Song, remotelyRecommended: List<Song>): List<Song> {
         // The server ranks candidates first; local signals improve relevance and
         // diversify them. Use catalog/history fallback if the backend is offline.
-        return remotelyRecommended +
-            youtube.shelves.flatMap { it.tracks }.take(60) +
-            youtube.history.take(25) +
-            home.take(30) + originals.take(20) +
-            library.favorites.take(40) + library.history.take(100)
+        val ytTaste = (youtube.shelves.flatMap { it.tracks } +
+            youtube.history + library.favorites + library.history)
+            .filter(::playable).distinctBy { it.key }
+        return if (youtube.isConnected) {
+            // A signed-in account's recommendations and actual listening
+            // history outrank public server picks and generic catalog items.
+            (remotelyRecommended.filter { it.isYouTube } + ytTaste +
+                remotelyRecommended.filterNot { it.isYouTube } +
+                home.take(15)).filter(::playable)
+        } else {
+            (remotelyRecommended + library.favorites + library.history.take(75) +
+                home.take(30) + originals.take(20)).filter(::playable)
+        }
     }
 
     private fun rankQueue(seed: Song, remote: List<Song>, want: Int): List<Song> {
@@ -460,20 +587,22 @@ class AurelisState(context: Context) : ViewModel() {
                 }
                 // Prefer related YouTube Music radio, then existing Aurelis
                 // suggestions; both are requested concurrently.
-                radio.await() + fromAurelis.await()
+                (radio.await() + fromAurelis.await()).filter(::playable)
             }
             if (revision != recommendationRevision || current?.key != seed.key) return@launch
             val needed = (queueTargetSize - queue.size).coerceAtLeast(0)
             if (needed == 0) return@launch
             val additions = rankQueue(seed, candidates, needed)
             if (additions.isNotEmpty()) {
-                queue = (queue + additions).distinctBy { it.key }.take(10)
+                queue = (queue + additions.filter(::playable))
+                    .distinctBy { it.key }.take(10)
             }
         }
     }
 
     fun enqueue(song: Song) {
-        if (song.key != current?.key && queue.none { it.key == song.key }) {
+        if (playable(song) && song.key != current?.key &&
+            queue.none { it.key == song.key }) {
             skippedRecommendations.remove(song.key)
             queue = (queue + song).take(20)
         }
@@ -516,7 +645,7 @@ class AurelisState(context: Context) : ViewModel() {
                     catch (cancelled: CancellationException) { throw cancelled }
                     catch (_: Exception) { emptyList() }
                 }
-                yt.await() + server.await()
+                (yt.await() + server.await()).filter(::playable)
             }
             if (current?.key != seed.key) return@launch
             val picked = queue.firstOrNull() ?: rankQueue(seed, remote, 1).firstOrNull()
