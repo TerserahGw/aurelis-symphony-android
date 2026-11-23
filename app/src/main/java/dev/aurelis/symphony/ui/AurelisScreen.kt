@@ -1586,6 +1586,211 @@ private fun MiniPlayerProgress(state: AurelisState) {
     }
 }
 
+/**
+ * Landscape rail is deliberately separate from the search bar. The selected
+ * capsule highlight follows Home/Search/Library vertically, while the main
+ * page starts beyond its 79dp reserved left inset.
+ */
+@Composable
+private fun LandscapeNavigationRail(
+    tab: String,
+    artwork: String,
+    state: AurelisState,
+    onTab: (String) -> Unit
+) {
+    val tabs = listOf("Home", "Search", "Library")
+    val icons = listOf(Icons.Rounded.Home, Icons.Rounded.Search,
+        Icons.Rounded.LibraryMusic)
+    val reduced = LocalReducedMotion.current
+    val isGlass = LocalVisualStyle.current == VisualStyle.GLASS
+    var dragging by remember { mutableIntStateOf(-1) }
+    Glass(
+        Modifier.width(62.dp).height(202.dp),
+        RoundedCornerShape(32.dp),
+        tint = state.ambientColor, opacity = .43f, backdrop = artwork,
+        backdropBlur = 35.dp, backdropOpacity = .58f
+    ) {
+        BoxWithConstraints(
+            Modifier.fillMaxSize().padding(5.dp).pointerInput(tab) {
+                detectDragGestures(
+                    onDragStart = { p ->
+                        dragging = ((p.y / size.height) * 3).toInt().coerceIn(0, 2)
+                    },
+                    onDrag = { change, _ ->
+                        dragging = ((change.position.y / size.height) * 3)
+                            .toInt().coerceIn(0, 2)
+                        change.consume()
+                    },
+                    onDragEnd = {
+                        val selected = dragging
+                        dragging = -1
+                        if (selected in 0..2) onTab(tabs[selected])
+                    },
+                    onDragCancel = { dragging = -1 }
+                )
+            }
+        ) {
+            val segment = maxHeight / 3
+            val selected = if (dragging in 0..2) dragging
+                else tabs.indexOf(tab).coerceAtLeast(0)
+            val offset by animateDpAsState(
+                targetValue = segment * selected,
+                animationSpec = if (reduced) tween(0)
+                else spring(dampingRatio = .83f,
+                    stiffness = Spring.StiffnessMediumLow),
+                label = "landscapeNavHighlight"
+            )
+            val highlight = if (isGlass) Modifier.background(
+                Brush.verticalGradient(listOf(
+                    lime.copy(alpha = .28f), Color(0xFF547C69).copy(alpha = .20f)
+                ))
+            ).border(1.dp, lime.copy(alpha = .19f),
+                RoundedCornerShape(27.dp))
+            else Modifier.background(Color(0xFF365D4D))
+            Box(Modifier.offset(y = offset).fillMaxWidth()
+                .height(segment).clip(RoundedCornerShape(27.dp))
+                .then(highlight))
+            Column(Modifier.fillMaxSize()) {
+                tabs.forEachIndexed { index, name ->
+                    Tactile(Modifier.fillMaxWidth().weight(1f), {
+                        dragging = -1
+                        onTab(name)
+                    }) {
+                        Column(Modifier.fillMaxSize(),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center) {
+                            Icon(icons[index], name, Modifier.size(21.dp),
+                                tint = if (selected == index) white else mist)
+                            Spacer(Modifier.height(3.dp))
+                            Text(uiText(name), fontSize = 8.sp, maxLines = 1,
+                                color = if (selected == index) white else mist)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Search grows rightward in landscape, pushing the adjacent mini player down
+ * to artwork-only instead of hiding it. This is independent of scroll mode.
+ */
+@Composable
+private fun LandscapeTopDock(
+    modifier: Modifier = Modifier,
+    state: AurelisState,
+    query: String,
+    searchExpanded: Boolean,
+    onSearchClick: () -> Unit,
+    onQuery: (String) -> Unit,
+    onExpandPlayer: () -> Unit,
+    onSettings: () -> Unit
+) {
+    val focus = LocalFocusManager.current
+    val reduced = LocalReducedMotion.current
+    BoxWithConstraints(modifier.fillMaxWidth().height(54.dp)) {
+        val searchTarget = if (searchExpanded)
+            (maxWidth * .44f).coerceAtMost(292.dp) else 54.dp
+        val miniTarget = if (searchExpanded) 54.dp
+            else (maxWidth * .35f).coerceAtMost(250.dp)
+        val animation = if (reduced) tween<Dp>(0)
+            else spring<Dp>(dampingRatio = .91f,
+                stiffness = Spring.StiffnessMediumLow)
+        val searchWidth by animateDpAsState(searchTarget, animation,
+            label = "landscapeSearchWidth")
+        val miniWidth by animateDpAsState(miniTarget, animation,
+            label = "landscapeMiniPlayerWidth")
+        Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+            Glass(Modifier.width(searchWidth).fillMaxHeight(),
+                RoundedCornerShape(28.dp), tint = state.ambientColor,
+                opacity = .39f, backdrop = state.current?.artwork,
+                backdropBlur = 36.dp, backdropOpacity = .61f) {
+                if (searchExpanded) {
+                    Row(Modifier.fillMaxSize().padding(start = 12.dp, end = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Rounded.Search, null, Modifier.size(20.dp), tint = lime)
+                        Spacer(Modifier.width(7.dp))
+                        BasicTextField(value = query, onValueChange = onQuery,
+                            modifier = Modifier.weight(1f), singleLine = true,
+                            cursorBrush = SolidColor(lime),
+                            textStyle = LocalTextStyle.current.copy(
+                                color = white, fontSize = 13.sp),
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                            keyboardActions = KeyboardActions(
+                                onSearch = { focus.clearFocus() }),
+                            decorationBox = { inner ->
+                                Box {
+                                    if (query.isBlank())
+                                        Text(uiText("Lagu, artis, album…"),
+                                            color = mist, fontSize = 12.sp)
+                                    inner()
+                                }
+                            })
+                        IconButton(onClick = {
+                            if (query.isNotEmpty()) onQuery("")
+                            else {
+                                focus.clearFocus()
+                                onSearchClick()
+                            }
+                        }, modifier = Modifier.size(34.dp)) {
+                            Icon(Icons.Rounded.Close, "Tutup pencarian",
+                                Modifier.size(18.dp), tint = mist)
+                        }
+                    }
+                } else {
+                    Tactile(Modifier.fillMaxSize(), onSearchClick) {
+                        Icon(Icons.Rounded.Search, "Buka pencarian",
+                            Modifier.size(23.dp).align(Alignment.Center),
+                            tint = white)
+                    }
+                }
+            }
+            state.current?.let { track ->
+                Tactile(Modifier.width(miniWidth).fillMaxHeight(), onExpandPlayer) {
+                    Glass(Modifier.fillMaxSize(), RoundedCornerShape(28.dp),
+                        tint = state.ambientColor, opacity = .42f,
+                        backdrop = track.artwork,
+                        backdropBlur = 37.dp, backdropOpacity = .61f) {
+                        Row(Modifier.fillMaxSize().padding(horizontal = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically) {
+                            Artwork(track, 41.dp, 14.dp)
+                            if (!searchExpanded && miniWidth > 110.dp) {
+                                Spacer(Modifier.width(9.dp))
+                                Column(Modifier.weight(1f)) {
+                                    Text(track.title, color = white, fontSize = 11.sp,
+                                        fontWeight = FontWeight.SemiBold, maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis)
+                                    Text(track.artist, color = mist, fontSize = 9.sp,
+                                        maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                }
+                                if (miniWidth >= 185.dp) {
+                                    IconButton(onClick = state::togglePlay,
+                                        enabled = !state.preparing,
+                                        modifier = Modifier.size(35.dp)) {
+                                        Icon(if (state.isPlaying) Icons.Rounded.Pause
+                                            else Icons.Rounded.PlayArrow,
+                                            "Putar atau jeda", Modifier.size(21.dp), tint = lime)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            Spacer(Modifier.weight(1f))
+            Tactile(action = onSettings) {
+                Glass(Modifier.size(51.dp), RoundedCornerShape(26.dp),
+                    tint = state.ambientColor, opacity = .36f) {
+                    Icon(Icons.Rounded.Settings, "Pengaturan",
+                        Modifier.size(21.dp).align(Alignment.Center), tint = white)
+                }
+            }
+        }
+    }
+}
+
 @Composable
 private fun IslandDock(
     tab: String,
