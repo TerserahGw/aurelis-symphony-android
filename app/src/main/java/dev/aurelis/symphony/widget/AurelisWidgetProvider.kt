@@ -192,9 +192,11 @@ open class AurelisWidgetProvider : AppWidgetProvider() {
                 entries.add("next_${name}_art" to (song?.let(::primaryArtwork).orEmpty()))
                 entries.add("next_${name}_video" to (song?.let(::videoId).orEmpty()))
             }
-            if (entries.all { (key, value) -> prefs.getString(key, "") == value }) return
+            if (entries.all { (key, value) -> prefs.getString(key, "") == value } &&
+                prefs.getInt("next_queue_total", 0) == queue.size) return
             val editor = prefs.edit()
             entries.forEach { (key, value) -> editor.putString(key, value) }
+            editor.putInt("next_queue_total", queue.size)
             editor.apply()
             updateWidgets(context)
         }
@@ -291,6 +293,10 @@ open class AurelisWidgetProvider : AppWidgetProvider() {
                         actionIntent(app, id * 10 + 3, ACTION_NEXT))
                 }
                 if (size == Size.FOUR_TWO) {
+                    val count = store.getInt("next_queue_total", 0)
+                    remote.setTextViewText(R.id.widget_queue_header,
+                        if (count > 3) "UP NEXT  ·  3 / $count"
+                        else "UP NEXT")
                     queueCoverIds.forEachIndexed { index, (name, coverId, rowId) ->
                         val nextTitle = store.getString("next_$name", "").orEmpty()
                         val nextArtist = store.getString("next_${name}_artist", "").orEmpty()
