@@ -3,9 +3,9 @@
 **Native Android beta source project**, based on Aurelis Symphony Web 2.7.0 by TerserahGw.
 The web/server project remains unchanged: https://github.com/TerserahGw/aurelis-symphony
 
-> Status: **v1.2.9 Stable source**. GitHub Actions builds an ARM64 test APK and, when persistent signing secrets are configured, publishes a stable-signed release APK. Device testing is still recommended.
+> Status: **v1.2.10 Stable source**. GitHub Actions builds an ARM64 test APK and, when persistent signing secrets are configured, publishes a stable-signed release APK. Device testing is still recommended.
 
-## Home Screen widgets — v1.2.9
+## Home Screen widgets — v1.2.10
 
 Four separately selectable **fixed-size** native widget variants follow the app's **Glass Ambient** or **Ambient** theme. Android declares `resizeMode="none"` for each widget (some third-party launchers may override this setting).
 
@@ -16,7 +16,7 @@ Four separately selectable **fixed-size** native widget variants follow the app'
 | **4×1** | Horizontal mini player | Previous, Play/Pause, Next | No |
 | **4×2** | Split Now Playing / Up Next | Previous, Play/Pause, Next | First two real upcoming songs |
 
-v1.2.9 fixes the 4×2 launcher inflation bug by using only Android RemoteViews-supported layout classes. Album art now shares the main player's downloaded artwork cache and falls back to an alternate thumbnail when needed. The four designs have improved glass lighting, cover emphasis and rounded transport controls.
+v1.2.10 keeps the 4×2 RemoteViews and album-art fixes but removes the hard-edged artwork rectangle that appeared on some HyperOS launchers. The wallpaper-facing background now uses only continuous full-surface gradients and soft radial glow. Icon-only playback controls are restored for a cleaner appearance; the 4×2 Up Next pane shows **up to three actual queue tracks with cached artwork**, hides absent tracks instead of filling the area with fake placeholders, and indicates when more remain in the queue.
 
 These are independent Android widget providers rather than one resizable layout. The fixed `19dp` corner outline clips the artwork-reactive background, so corners do not stretch with width/height. Glass Ambient uses a softer transparent acrylic surface, subtle artwork highlights and a fine outline; Ambient stays opaque and dark. The launcher wallpaper cannot be blurred by normal `RemoteViews` widgets.
 
