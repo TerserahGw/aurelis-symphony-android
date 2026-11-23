@@ -14,6 +14,8 @@ import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.RadialGradient
 import android.graphics.Rect
+import android.graphics.PorterDuff
+import android.graphics.PorterDuffXfermode
 import android.graphics.Shader
 import android.util.Log
 import android.view.View
@@ -93,6 +95,16 @@ open class AurelisWidgetProvider : AppWidgetProvider() {
         private const val COVER_CACHE = "aurelis_widget_cover.jpg"
         private const val TAG = "AurelisWidget"
         private val images = Executors.newSingleThreadExecutor()
+        // Cached per active song and theme. Frequent play/pause, queue and
+        // launcher callbacks reuse the same modest-sized bitmaps instead of
+        // recomputing multiple gradients, JPEG decodes and bottom blur layers.
+        private val bitmapCacheLock = Any()
+        private var cachedCoverKey: String? = null
+        private var cachedCoverBitmap: Bitmap? = null
+        private var cachedBackdropKey: String? = null
+        private val cachedBackdrops = mutableMapOf<Size, Bitmap>()
+        private var cachedHeroKey: String? = null
+        private val cachedHeroArt = mutableMapOf<Size, Bitmap>()
         private val queueArtLock = Any()
         private val pendingQueueArt = mutableSetOf<String>()
         private val failedQueueArt = mutableMapOf<String, Long>()
@@ -133,16 +145,98 @@ open class AurelisWidgetProvider : AppWidgetProvider() {
 
         fun publish(context: Context, song: Song?, playing: Boolean, accent: Int) {
             val prefs = context.getSharedPreferences(STORE, Context.MODE_PRIVATE)
+            // Avoid waking launchers and sending RemoteViews repeatedly when
+            // a session callback re-publishes exactly the same information.
+            val artworkUrl = song?.let(::primaryArtwork)
+            val video = song?.let(::videoId)
+            val trackChanged = song != null && (
+                prefs.getString("title", "") != song.title ||
+                prefs.getString("artist", "") != song.artist ||
+                prefs.getString("artwork", "") != artworkUrl ||
+                prefs.getString("video_id", "") != video ||
+                prefs.getString("song_key", "") != song.key
+            )
+            val statusChanged =
+                prefs.getBoolean("playing", false) != playing ||
+                prefs.getInt("accent", 0xFF315A4C.toInt()) != accent
+            if (!trackChanged && !statusChanged) return
             val editor = prefs.edit()
-            if (song != null) {
+            if (song != null && trackChanged) {
                 editor.putString("title", song.title)
                     .putString("artist", song.artist)
-                    .putString("artwork", primaryArtwork(song))
-                    .putString("video_id", videoId(song))
+                    .putString("artwork", artworkUrl)
+                    .putString("video_id", video)
                     .putString("song_key", song.key)
             }
             editor.putBoolean("playing", playing).putInt("accent", accent).apply()
             updateWidgets(context)
+        }
+
+
+        /** Decode toward ~700px before scaling, with bounded peak memory. */
+        private fun decodeArtwork(bytes: ByteArray): Bitmap? {
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+            val longest = maxOf(bounds.outWidth, bounds.outHeight)
+            if (longest <= 0 || longest > 16000) return null
+            var sample = 1
+            while (longest / sample > 720) sample *= 2
+            return BitmapFactory.decodeByteArray(
+                bytes, 0, bytes.size,
+                BitmapFactory.Options().apply { inSampleSize = sample }
+            )
+        }
+
+        /**
+         * 2x2 and 4x2 Now Playing: keep source artwork crisp up top, but
+         * gently blur only the lower half under white controls and title.
+         * A low-res blurred pass is alpha-feathered in, so no horizontal seam.
+         * Final sizes are fixed per widget and cached until the cover changes.
+         */
+        private fun renderHeroArtwork(source: Bitmap, width: Int, height: Int): Bitmap {
+            val result = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+            val canvas = Canvas(result)
+            val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+            val sourceRatio = source.width.toFloat() / source.height.coerceAtLeast(1)
+            val targetRatio = width.toFloat() / height.coerceAtLeast(1)
+            val srcRect = if (sourceRatio > targetRatio) {
+                val crop = (source.height * targetRatio).toInt().coerceIn(1, source.width)
+                val x = (source.width - crop) / 2
+                Rect(x, 0, x + crop, source.height)
+            } else {
+                val crop = (source.width / targetRatio).toInt().coerceIn(1, source.height)
+                val y = (source.height - crop) / 2
+                Rect(0, y, source.width, y + crop)
+            }
+            canvas.drawBitmap(source, srcRect, Rect(0, 0, width, height), paint)
+
+            val bottomStart = (height * .38f).toInt()
+            val bottomHeight = (height - bottomStart).coerceAtLeast(1)
+            val portion = Bitmap.createBitmap(result, 0, bottomStart, width, bottomHeight)
+            val low = Bitmap.createScaledBitmap(
+                portion, (width / 17).coerceAtLeast(12),
+                (bottomHeight / 17).coerceAtLeast(10), true
+            )
+            val blurredLayer = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+            val blurredCanvas = Canvas(blurredLayer)
+            blurredCanvas.drawBitmap(low, null, Rect(0, bottomStart, width, height), paint)
+            val mask = Paint(Paint.ANTI_ALIAS_FLAG)
+            mask.shader = LinearGradient(
+                0f, bottomStart.toFloat(), 0f, height.toFloat(),
+                intArrayOf(Color.TRANSPARENT, 0xCFFFFFFF.toInt(), Color.WHITE),
+                floatArrayOf(0f, .63f, 1f), Shader.TileMode.CLAMP
+            )
+            mask.xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_IN)
+            blurredCanvas.drawRect(
+                0f, bottomStart.toFloat(), width.toFloat(), height.toFloat(), mask
+            )
+            mask.xfermode = null
+            mask.shader = null
+            canvas.drawBitmap(blurredLayer, 0f, 0f, paint)
+            portion.recycle()
+            low.recycle()
+            blurredLayer.recycle()
+            return result
         }
 
         /**
@@ -156,10 +250,8 @@ open class AurelisWidgetProvider : AppWidgetProvider() {
             if (url.isBlank() || prefs.getString("song_key", "") != song.key) return
             runCatching {
                 if (bytes.size > 5_000_000) return
-                val options = BitmapFactory.Options().apply { inSampleSize = 2 }
-                val decoded = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
-                    ?: return
-                val small = Bitmap.createScaledBitmap(decoded, 192, 192, true)
+                val decoded = decodeArtwork(bytes) ?: return
+                val small = Bitmap.createScaledBitmap(decoded, 384, 384, true)
                 if (small !== decoded) decoded.recycle()
                 val tmp = File(app.cacheDir, "$COVER_CACHE.player.tmp")
                 tmp.outputStream().use { small.compress(Bitmap.CompressFormat.JPEG, 89, it) }
@@ -234,9 +326,17 @@ open class AurelisWidgetProvider : AppWidgetProvider() {
             val artUrl = store.getString("artwork", "").orEmpty()
             val videoId = store.getString("video_id", "").orEmpty()
             val file = File(app.cacheDir, COVER_CACHE)
-            val art = if (artUrl.isNotBlank() &&
-                artUrl == store.getString("cached_artwork", "") && file.isFile) {
-                BitmapFactory.decodeFile(file.absolutePath)
+            val validArt = artUrl.isNotBlank() &&
+                artUrl == store.getString("cached_artwork", "") && file.isFile
+            val artCacheKey = if (validArt) {
+                "$artUrl:${file.lastModified()}:${file.length()}"
+            } else "none"
+            val art = if (validArt) synchronized(bitmapCacheLock) {
+                if (cachedCoverKey != artCacheKey) {
+                    cachedCoverBitmap = BitmapFactory.decodeFile(file.absolutePath)
+                    cachedCoverKey = artCacheKey
+                }
+                cachedCoverBitmap
             } else null
             val accent = store.getInt("accent", 0xFF315A4C.toInt())
             val playing = store.getBoolean("playing", false)
@@ -244,7 +344,8 @@ open class AurelisWidgetProvider : AppWidgetProvider() {
             val artist = store.getString("artist", "Musik untuk harimu").orEmpty()
             val first = store.getString("next_one", "").orEmpty()
             val second = store.getString("next_two", "").orEmpty()
-            val backdrops = mutableMapOf<Size, Bitmap>()
+            val backdropKey = "$glass:$accent:$artCacheKey"
+            val queueThumbs = mutableMapOf<String, Bitmap?>()
             val queuedArtToFetch = mutableSetOf<Triple<String, String, String>>()
             val queueCoverIds = listOf(
                 Triple("one", R.id.widget_next_one_art, R.id.widget_next_one_row),
@@ -261,12 +362,43 @@ open class AurelisWidgetProvider : AppWidgetProvider() {
                     else -> Size.FOUR_TWO // Existing widget IDs remain valid.
                 }
                 val remote = RemoteViews(app.packageName, size.layout)
-                val background = backdrops.getOrPut(size) {
-                    renderBackground(glass, accent, art, size.width, size.height)
+                val background = synchronized(bitmapCacheLock) {
+                    if (cachedBackdropKey != backdropKey) {
+                        cachedBackdrops.clear()
+                        cachedBackdropKey = backdropKey
+                    }
+                    cachedBackdrops.getOrPut(size) {
+                        renderBackground(glass, accent, art, size.width, size.height)
+                    }
                 }
                 remote.setImageViewBitmap(R.id.widget_background, background)
-                if (art != null) remote.setImageViewBitmap(R.id.widget_art, art)
-                else remote.setImageViewResource(R.id.widget_art, R.drawable.widget_music_note)
+                val hero = size == Size.TWO_TWO || size == Size.FOUR_TWO
+                if (hero && art == null) {
+                    // Let the unbroken tinted ambient background stand in
+                    // instead of scaling a music-note vector to card size.
+                    remote.setViewVisibility(R.id.widget_art, View.GONE)
+                } else {
+                    remote.setViewVisibility(R.id.widget_art, View.VISIBLE)
+                    if (art != null && hero) {
+                        val heroBitmap = synchronized(bitmapCacheLock) {
+                            if (cachedHeroKey != artCacheKey) {
+                                cachedHeroArt.clear()
+                                cachedHeroKey = artCacheKey
+                            }
+                            cachedHeroArt.getOrPut(size) {
+                                if (size == Size.TWO_TWO) renderHeroArtwork(art, 240, 240)
+                                else renderHeroArtwork(art, 256, 244)
+                            }
+                        }
+                        remote.setImageViewBitmap(R.id.widget_art, heroBitmap)
+                    } else if (art != null) {
+                        remote.setImageViewBitmap(R.id.widget_art, art)
+                    } else {
+                        remote.setImageViewResource(
+                            R.id.widget_art, R.drawable.widget_music_note
+                        )
+                    }
+                }
                 remote.setTextViewText(R.id.widget_title, title)
                 remote.setTextViewText(R.id.widget_artist, artist)
 
@@ -322,7 +454,9 @@ open class AurelisWidgetProvider : AppWidgetProvider() {
                         val thumbFile = File(app.cacheDir, "aurelis_widget_next_$name.jpg")
                         val valid = nextUrl.isNotBlank() && thumbFile.isFile &&
                             store.getString("cached_next_${name}_art", "") == nextUrl
-                        val thumb = if (valid) BitmapFactory.decodeFile(thumbFile.absolutePath) else null
+                        val thumb = if (valid) queueThumbs.getOrPut("$name:$nextUrl") {
+                            BitmapFactory.decodeFile(thumbFile.absolutePath)
+                        } else null
                         if (thumb != null) remote.setImageViewBitmap(coverId, thumb)
                         else remote.setImageViewResource(coverId, R.drawable.widget_music_note)
                         if (nextTitle.isNotBlank() && nextUrl.startsWith("https://")
@@ -331,7 +465,8 @@ open class AurelisWidgetProvider : AppWidgetProvider() {
                         }
                     }
                 }
-                manager.updateAppWidget(id, remote)
+                runCatching { manager.updateAppWidget(id, remote) }
+                    .onFailure { Log.w(TAG, "Failed to update widget $id", it) }
             }
             if (artUrl.startsWith("https://") && art == null) loadArtwork(app, artUrl, videoId)
             queuedArtToFetch.forEach { (name, url, video) ->
@@ -402,9 +537,8 @@ open class AurelisWidgetProvider : AppWidgetProvider() {
                             Log.w(TAG, "Artwork unavailable from " + URL(candidate).host, e)
                             null
                         } ?: continue
-                        val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size,
-                            BitmapFactory.Options().apply { inSampleSize = 2 }) ?: continue
-                        val small = Bitmap.createScaledBitmap(bitmap, 192, 192, true)
+                        val bitmap = decodeArtwork(bytes) ?: continue
+                        val small = Bitmap.createScaledBitmap(bitmap, 384, 384, true)
                         if (small !== bitmap) bitmap.recycle()
                         val prefs = context.getSharedPreferences(STORE, Context.MODE_PRIVATE)
                         if (prefs.getString("artwork", "") != url) {
