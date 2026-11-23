@@ -52,7 +52,7 @@ jobs:
       - name: Upload test APK (signing varies per runner)
         uses: actions/upload-artifact@v4
         with:
-          name: AurelisSymphony-ARM64-v1.2.14-TEST-DEBUG
+          name: AurelisSymphony-ARM64-v1.2.15-TEST-DEBUG
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 14
@@ -100,11 +100,11 @@ jobs:
         if: steps.signing.outputs.enabled == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: AurelisSymphony-ARM64-v1.2.14-SIGNED
+          name: AurelisSymphony-ARM64-v1.2.15-SIGNED
           path: app/build/outputs/apk/release/*.apk
           if-no-files-found: error
 
-      - name: Publish GitHub Release v1.2.14 Stable
+      - name: Publish GitHub Release v1.2.15 Stable
         if: steps.signing.outputs.enabled == 'true' && github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
@@ -112,11 +112,11 @@ jobs:
         run: |
           set -euo pipefail
           cp app/build/outputs/apk/release/app-release.apk \
-            AurelisSymphony-Android-arm64-v1.2.14.apk
-          if ! gh release view v1.2.14 >/dev/null 2>&1; then
-            gh release create v1.2.14 --target "$GITHUB_SHA" \
-              --title "Aurelis Symphony Android v1.2.14 Stable" \
-              --notes "Aurelis Symphony Android v1.2.14 Stable. Fixed right-side landscape navigation layout: Search capsule now sits above the right vertical navigation rail while mini player appears immediately to its left. In right mode, Search expands leftward and mini player smoothly morphs down to centered cover; in left mode, Search expands rightward as before. A single mirrored floating top-dock tracks the same saved Kiri/Kanan setting and three-finger gesture as both rails, with spring side travel and fade/slide content reordering. Uses bounded coordinates to avoid negative padding, retains v1.2.13 crash fix, restored spring zoom and blur player effects, right-side popup pivot, artwork and widgets. Signed release versionCode 23."
+            AurelisSymphony-Android-arm64-v1.2.15.apk
+          if ! gh release view v1.2.15 >/dev/null 2>&1; then
+            gh release create v1.2.15 --target "$GITHUB_SHA" \
+              --title "Aurelis Symphony Android v1.2.15 Stable" \
+              --notes "Aurelis Symphony Android v1.2.15 Stable. Landscape mini-player now morphs into the Search capsule only during vertical scrolling, replacing the Search icon with the playing song cover; mini-player width and gap spring smoothly to zero and restore instantly when scrolling stops (both left and right navigation). Tapping merged cover opens the music player; expanded search editing is not interrupted. Landscape full-player artwork now requests larger original-source images where provided (1080x1080 target, YouTube and Google thumbnail URL upgrade), falls back automatically, and keeps its existing shape and bounds. Home's horizontal music, playlists and mood carousels now use GPU alpha feathering on scrollable edges in both orientations rather than hard clipping. Includes v1.2.14 mirrored landscape dock and v1.2.13 crash fix. Signed APK versionCode 24."
           fi
-          gh release upload v1.2.14 \
-            AurelisSymphony-Android-arm64-v1.2.14.apk --clobber
+          gh release upload v1.2.15 \
+            AurelisSymphony-Android-arm64-v1.2.15.apk --clobber

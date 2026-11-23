@@ -1,3 +1,10 @@
+## v1.2.15 — scrolling Search/mini morph, HD landscape artwork and smooth carousels
+
+- While **vertically scrolling** Home, Search, or Library in landscape, the mini player springs into the Search capsule: the Search glyph morphs into the currently playing cover, the extra mini capsule smoothly reduces to zero width, and the gap closes. When scrolling stops, the Search icon and full mini player return with the reverse spring. Works whether the main navigation rail is on the left or right. When Search is actively expanded for text input, it remains usable and does not collapse into the cover. Tap the merged cover to open the full player.
+- Landscape Music Player album artwork requests a **higher-resolution original source** where the upstream service offers it (up to 1080px for Google/YouTube thumbnails), with fallback to the normal artwork URL if the high-res request fails. The cover's alignment, crop and rounded corners remain unchanged; this cannot add genuine detail if the provider only serves low-res imagery.
+- Home's **horizontal music card carousels**, mood selector and playlist carousel have gradual left/right GPU alpha fades **only where additional items can scroll off-screen**, in portrait and landscape. No hard-cut last cards or background-colored overlays.
+- Retains previous spring player opening/closing, themed Glass Ambient widgets, mirrored landscape rail, settings, and negative-padding crash fix.
+
 ## v1.2.14 — mirrored landscape Search + mini player
 
 - In landscape **Kiri**, the upper-left Search capsule and adjacent mini-player retain their existing order. Expanding Search grows rightward while the mini-player shrinks into a centered album-cover capsule.
