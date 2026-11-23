@@ -2160,7 +2160,6 @@ private fun FullPlayer(state: AurelisState, onClose: () -> Unit, onQueue: () -> 
                 showTranslation = !showTranslation
                 if (showTranslation) state.loadTranslations()
             },
-            onSongMenu = onMenu,
             onQueue = onQueue
         )
         return
@@ -2413,12 +2412,15 @@ private fun LandscapeFullPlayer(
     onRomanToggle: () -> Unit,
     showTranslation: Boolean,
     onTranslationToggle: () -> Unit,
-    onSongMenu: () -> Unit,
     onQueue: () -> Unit
 ) {
     val reduced = LocalReducedMotion.current
-    val isGlass = LocalVisualStyle.current == VisualStyle.GLASS
     val artwork = song.artwork.takeIf { it.startsWith("https://") }
+    var landscapeMenuExpanded by remember { mutableStateOf(false) }
+    val menuTransition = remember {
+        androidx.compose.animation.core.MutableTransitionState(false)
+    }
+    menuTransition.targetState = landscapeMenuExpanded
     Box(Modifier.fillMaxSize().background(bg)) {
         Ambient(state)
         Row(
@@ -2449,6 +2451,31 @@ private fun LandscapeFullPlayer(
                     artwork = artwork,
                     state = state
                 )
+                Spacer(Modifier.weight(1f))
+                Box(Modifier.size(62.dp)) {
+                    Tactile(Modifier.fillMaxSize(), {
+                        landscapeMenuExpanded = !landscapeMenuExpanded
+                    }) {
+                        Glass(Modifier.fillMaxSize(), RoundedCornerShape(31.dp),
+                            tint = state.ambientColor, opacity = .43f,
+                            backdrop = artwork) {
+                            Icon(
+                                if (landscapeMenuExpanded) Icons.Rounded.Close
+                                    else Icons.Rounded.MoreHoriz,
+                                "Opsi lagu", Modifier.size(24.dp)
+                                    .align(Alignment.Center), tint = white
+                            )
+                        }
+                    }
+                    InlineGlassSongMenu(
+                        state = state, song = song,
+                        expanded = landscapeMenuExpanded,
+                        onDismiss = { landscapeMenuExpanded = false },
+                        lyricOffset = true,
+                        transitionState = menuTransition,
+                        preferRight = true
+                    )
+                }
             }
 
             Spacer(Modifier.width(13.dp))
@@ -2525,11 +2552,6 @@ private fun LandscapeFullPlayer(
                                     tint = if (showTranslation) lime else mist)
                             }
                         }
-                    }
-                    IconButton(onClick = onSongMenu,
-                        modifier = Modifier.size(37.dp)) {
-                        Icon(Icons.Rounded.MoreHoriz, "Opsi lagu",
-                            Modifier.size(21.dp), tint = mist)
                     }
                 }
                 AnimatedContent(
