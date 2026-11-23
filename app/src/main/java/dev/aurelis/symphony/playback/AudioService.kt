@@ -3,6 +3,9 @@ package dev.aurelis.symphony.playback
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
+import androidx.media3.common.MediaItem
+import androidx.media3.common.Player
+import dev.aurelis.symphony.widget.AurelisWidgetProvider
 
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
@@ -17,9 +20,22 @@ class AudioService : MediaSessionService() {
             setHandleAudioBecomingNoisy(true)
         }
         session = MediaSession.Builder(this, player).build()
+        // The homescreen widget must continue receiving media changes even
+        // when MainActivity/its ViewModel is no longer visible.
+        player.addListener(object : Player.Listener {
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                AurelisWidgetProvider.publishFromSession(
+                    this@AudioService, player.currentMediaItem, isPlaying)
+            }
+            override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                AurelisWidgetProvider.publishFromSession(
+                    this@AudioService, mediaItem, player.isPlaying)
+            }
+        })
     }
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = session
     override fun onDestroy() {
+        AurelisWidgetProvider.publishFromSession(this, null, false)
         session?.run { player.release(); release() }
         session = null
         super.onDestroy()
