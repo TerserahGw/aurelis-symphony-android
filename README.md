@@ -1,3 +1,12 @@
+## v1.2.17 — sharper widgets, smooth title slides and five Up Next songs
+
+- **Sharper cover art:** prefer larger source images on Google-hosted artwork and YouTube (with quality fallback); cache album art at 768×768 JPEG quality 94, preserve centre crop instead of stretching, and pre-render sharper 320×320 / 336×320 hero layers. Only small final bitmaps reach Android's launcher to keep RemoteViews memory bounded. If the source itself has no extra detail, true resolution cannot be invented.
+- **2×1 / 4×1:** increase cover from 40/44dp to **50/54dp**, keeping left margin and playback-button layout as before.
+- **4×2:** feather and subtly blur the *right edge of the Now Playing album-cover panel* into the continuous Up Next background; the existing bottom blur and control positions remain.
+- **Long titles:** use a lightweight, system-supported **ViewFlipper** with gentle alternating slide/fade segments on overflow titles in all four widgets and the queue rows. Short text stays motionless, and Android fading edges soften clipping. The animation depends on launcher support and may be throttled by HyperOS.
+- **Up Next:** keep the heading **UP NEXT** without a 3/5 counter, show up to **five real queued songs** (hiding missing slots), enlarge covers to **36dp**, and tighten vertical spacing for 4×2's two-row grid footprint.
+- Preserve existing playback, Glass Ambient/Ambient styles, gesture and Music Player animations. Signed release v1.2.17, versionCode 26.
+
 ## v1.2.16 — one-second scroll hold, full-cover widgets, and stability
 
 - Landscape scrolling: Search + mini player stay merged for **1 second after the last vertical scroll**. Starting another scroll cancels the waiting reset immediately. This applies to both left and right controls; search text editing remains unaffected.
