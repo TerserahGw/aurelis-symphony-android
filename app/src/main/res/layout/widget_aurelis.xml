@@ -28,10 +28,39 @@
                     android:textStyle="bold" android:textSize="8sp" android:singleLine="true"/>
                 <FrameLayout android:layout_width="match_parent" android:layout_height="0dp"
                     android:layout_weight="1"/>
-                <TextView android:id="@+id/widget_title"
+                <FrameLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:clipChildren="true" android:clipToPadding="true">
+            <TextView android:id="@+id/widget_title"
                     android:layout_width="match_parent" android:layout_height="wrap_content"
-                    android:maxLines="1" android:ellipsize="end" android:text="Aurelis Symphony"
-                    android:textColor="#FFFFFFFF" android:textStyle="bold" android:textSize="12sp"/>
+                    android:singleLine="true" android:ellipsize="end" android:text="Aurelis Symphony"
+                    android:textColor="#FFFFFFFF" android:textStyle="bold" android:textSize="12sp"
+                   
+                   
+                    />
+            <ViewFlipper android:id="@+id/widget_title_flipper"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:visibility="gone"
+                android:flipInterval="5000" android:autoStart="true"
+                android:animateFirstView="false"
+                android:inAnimation="@anim/widget_title_slide_in"
+                android:outAnimation="@anim/widget_title_slide_out">
+            <TextView android:id="@+id/widget_title_slide_one"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:singleLine="true" android:ellipsize="end"
+                android:requiresFadingEdge="horizontal"
+                android:fadingEdgeLength="9dp"
+                android:textColor="#FAFFFD" android:textSize="12sp"
+                android:textStyle="bold" android:text=""/>
+            <TextView android:id="@+id/widget_title_slide_two"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:singleLine="true" android:ellipsize="end"
+                android:requiresFadingEdge="horizontal"
+                android:fadingEdgeLength="9dp"
+                android:textColor="#FAFFFD" android:textSize="12sp"
+                android:textStyle="bold" android:text=""/>
+
+            </ViewFlipper>
+        </FrameLayout>
                 <TextView android:id="@+id/widget_artist"
                     android:layout_width="match_parent" android:layout_height="wrap_content"
                     android:layout_marginTop="2dp" android:layout_marginBottom="5dp"
@@ -58,89 +87,288 @@
             </LinearLayout>
             </LinearLayout>
         </FrameLayout>
-        <!-- Preserve the three real Up Next rows and artwork as before. -->
+        <!-- Five responsive slots: hidden rows redistribute the remaining
+             space and the album thumbs stay comfortably readable. -->
         <LinearLayout android:layout_width="0dp" android:layout_weight=".93"
             android:layout_height="match_parent" android:orientation="vertical"
-            android:paddingLeft="10dp">
+            android:paddingLeft="9dp" android:paddingRight="6dp"
+            android:paddingTop="8dp" android:paddingBottom="5dp">
             <TextView android:id="@+id/widget_queue_header"
                 android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:text="UP NEXT" android:textColor="#BDDFD0"
                 android:textSize="9sp" android:textStyle="bold"/>
-                        <LinearLayout android:id="@+id/widget_next_one_row"
+            <LinearLayout android:id="@+id/widget_next_one_row"
                 android:layout_width="match_parent" android:layout_height="0dp"
                 android:layout_weight="1" android:orientation="horizontal"
-                android:gravity="center_vertical" android:paddingTop="2dp"
-                android:paddingBottom="2dp">
+                android:gravity="center_vertical" android:paddingTop="1dp"
+                android:paddingBottom="1dp">
                 <ImageView android:id="@+id/widget_next_one_art"
-                    android:layout_width="29dp" android:layout_height="29dp"
+                    android:layout_width="36dp" android:layout_height="36dp"
                     android:src="@drawable/widget_music_note"
                     android:background="@drawable/widget_album_frame"
                     android:clipToOutline="true" android:scaleType="centerCrop"
-                    android:contentDescription="Cover lagu"/>
+                    android:contentDescription="Cover lagu berikutnya"/>
                 <LinearLayout android:layout_width="0dp" android:layout_weight="1"
                     android:layout_height="wrap_content" android:orientation="vertical"
                     android:layout_marginLeft="7dp">
-                    <TextView android:id="@+id/widget_next_one"
+                    <FrameLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:clipChildren="true" android:clipToPadding="true">
+            <TextView android:id="@+id/widget_next_one"
                         android:layout_width="match_parent" android:layout_height="wrap_content"
                         android:text="Lagu berikutnya" android:textColor="#F0F8F5"
-                        android:textStyle="bold" android:textSize="10sp"
-                        android:singleLine="true" android:ellipsize="end"/>
+                        android:textStyle="bold" android:textSize="9sp"
+                        android:singleLine="true" android:ellipsize="end"
+                       
+                       
+                       />
+            <ViewFlipper android:id="@+id/widget_next_one_flipper"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:visibility="gone"
+                android:flipInterval="5000" android:autoStart="true"
+                android:animateFirstView="false"
+                android:inAnimation="@anim/widget_title_slide_in"
+                android:outAnimation="@anim/widget_title_slide_out">
+            <TextView android:id="@+id/widget_next_one_slide_one"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:singleLine="true" android:ellipsize="end"
+                android:requiresFadingEdge="horizontal"
+                android:fadingEdgeLength="9dp"
+                android:textColor="#F0F8F5" android:textSize="9sp"
+                android:textStyle="bold" android:text=""/>
+            <TextView android:id="@+id/widget_next_one_slide_two"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:singleLine="true" android:ellipsize="end"
+                android:requiresFadingEdge="horizontal"
+                android:fadingEdgeLength="9dp"
+                android:textColor="#F0F8F5" android:textSize="9sp"
+                android:textStyle="bold" android:text=""/>
+
+            </ViewFlipper>
+        </FrameLayout>
                     <TextView android:id="@+id/widget_next_one_artist"
                         android:layout_width="match_parent" android:layout_height="wrap_content"
                         android:layout_marginTop="1dp" android:text="Artis"
-                        android:textColor="#B5CAC4" android:textSize="9sp"
+                        android:textColor="#B5CAC4" android:textSize="8sp"
                         android:singleLine="true" android:ellipsize="end"/>
                 </LinearLayout>
             </LinearLayout>
-                        <LinearLayout android:id="@+id/widget_next_two_row"
+            <LinearLayout android:id="@+id/widget_next_two_row"
                 android:layout_width="match_parent" android:layout_height="0dp"
                 android:layout_weight="1" android:orientation="horizontal"
-                android:gravity="center_vertical" android:paddingTop="2dp"
-                android:paddingBottom="2dp">
+                android:gravity="center_vertical" android:paddingTop="1dp"
+                android:paddingBottom="1dp">
                 <ImageView android:id="@+id/widget_next_two_art"
-                    android:layout_width="29dp" android:layout_height="29dp"
+                    android:layout_width="36dp" android:layout_height="36dp"
                     android:src="@drawable/widget_music_note"
                     android:background="@drawable/widget_album_frame"
                     android:clipToOutline="true" android:scaleType="centerCrop"
-                    android:contentDescription="Cover lagu"/>
+                    android:contentDescription="Cover lagu berikutnya"/>
                 <LinearLayout android:layout_width="0dp" android:layout_weight="1"
                     android:layout_height="wrap_content" android:orientation="vertical"
                     android:layout_marginLeft="7dp">
-                    <TextView android:id="@+id/widget_next_two"
+                    <FrameLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:clipChildren="true" android:clipToPadding="true">
+            <TextView android:id="@+id/widget_next_two"
                         android:layout_width="match_parent" android:layout_height="wrap_content"
                         android:text="Lagu berikutnya" android:textColor="#F0F8F5"
-                        android:textStyle="bold" android:textSize="10sp"
-                        android:singleLine="true" android:ellipsize="end"/>
+                        android:textStyle="bold" android:textSize="9sp"
+                        android:singleLine="true" android:ellipsize="end"
+                       
+                       
+                       />
+            <ViewFlipper android:id="@+id/widget_next_two_flipper"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:visibility="gone"
+                android:flipInterval="5000" android:autoStart="true"
+                android:animateFirstView="false"
+                android:inAnimation="@anim/widget_title_slide_in"
+                android:outAnimation="@anim/widget_title_slide_out">
+            <TextView android:id="@+id/widget_next_two_slide_one"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:singleLine="true" android:ellipsize="end"
+                android:requiresFadingEdge="horizontal"
+                android:fadingEdgeLength="9dp"
+                android:textColor="#F0F8F5" android:textSize="9sp"
+                android:textStyle="bold" android:text=""/>
+            <TextView android:id="@+id/widget_next_two_slide_two"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:singleLine="true" android:ellipsize="end"
+                android:requiresFadingEdge="horizontal"
+                android:fadingEdgeLength="9dp"
+                android:textColor="#F0F8F5" android:textSize="9sp"
+                android:textStyle="bold" android:text=""/>
+
+            </ViewFlipper>
+        </FrameLayout>
                     <TextView android:id="@+id/widget_next_two_artist"
                         android:layout_width="match_parent" android:layout_height="wrap_content"
                         android:layout_marginTop="1dp" android:text="Artis"
-                        android:textColor="#B5CAC4" android:textSize="9sp"
+                        android:textColor="#B5CAC4" android:textSize="8sp"
                         android:singleLine="true" android:ellipsize="end"/>
                 </LinearLayout>
             </LinearLayout>
-                        <LinearLayout android:id="@+id/widget_next_three_row"
+            <LinearLayout android:id="@+id/widget_next_three_row"
                 android:layout_width="match_parent" android:layout_height="0dp"
                 android:layout_weight="1" android:orientation="horizontal"
-                android:gravity="center_vertical" android:paddingTop="2dp"
-                android:paddingBottom="2dp">
+                android:gravity="center_vertical" android:paddingTop="1dp"
+                android:paddingBottom="1dp">
                 <ImageView android:id="@+id/widget_next_three_art"
-                    android:layout_width="29dp" android:layout_height="29dp"
+                    android:layout_width="36dp" android:layout_height="36dp"
                     android:src="@drawable/widget_music_note"
                     android:background="@drawable/widget_album_frame"
                     android:clipToOutline="true" android:scaleType="centerCrop"
-                    android:contentDescription="Cover lagu"/>
+                    android:contentDescription="Cover lagu berikutnya"/>
                 <LinearLayout android:layout_width="0dp" android:layout_weight="1"
                     android:layout_height="wrap_content" android:orientation="vertical"
                     android:layout_marginLeft="7dp">
-                    <TextView android:id="@+id/widget_next_three"
+                    <FrameLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:clipChildren="true" android:clipToPadding="true">
+            <TextView android:id="@+id/widget_next_three"
                         android:layout_width="match_parent" android:layout_height="wrap_content"
                         android:text="Lagu berikutnya" android:textColor="#F0F8F5"
-                        android:textStyle="bold" android:textSize="10sp"
-                        android:singleLine="true" android:ellipsize="end"/>
+                        android:textStyle="bold" android:textSize="9sp"
+                        android:singleLine="true" android:ellipsize="end"
+                       
+                       
+                       />
+            <ViewFlipper android:id="@+id/widget_next_three_flipper"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:visibility="gone"
+                android:flipInterval="5000" android:autoStart="true"
+                android:animateFirstView="false"
+                android:inAnimation="@anim/widget_title_slide_in"
+                android:outAnimation="@anim/widget_title_slide_out">
+            <TextView android:id="@+id/widget_next_three_slide_one"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:singleLine="true" android:ellipsize="end"
+                android:requiresFadingEdge="horizontal"
+                android:fadingEdgeLength="9dp"
+                android:textColor="#F0F8F5" android:textSize="9sp"
+                android:textStyle="bold" android:text=""/>
+            <TextView android:id="@+id/widget_next_three_slide_two"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:singleLine="true" android:ellipsize="end"
+                android:requiresFadingEdge="horizontal"
+                android:fadingEdgeLength="9dp"
+                android:textColor="#F0F8F5" android:textSize="9sp"
+                android:textStyle="bold" android:text=""/>
+
+            </ViewFlipper>
+        </FrameLayout>
                     <TextView android:id="@+id/widget_next_three_artist"
                         android:layout_width="match_parent" android:layout_height="wrap_content"
                         android:layout_marginTop="1dp" android:text="Artis"
-                        android:textColor="#B5CAC4" android:textSize="9sp"
+                        android:textColor="#B5CAC4" android:textSize="8sp"
+                        android:singleLine="true" android:ellipsize="end"/>
+                </LinearLayout>
+            </LinearLayout>
+            <LinearLayout android:id="@+id/widget_next_four_row"
+                android:layout_width="match_parent" android:layout_height="0dp"
+                android:layout_weight="1" android:orientation="horizontal"
+                android:gravity="center_vertical" android:paddingTop="1dp"
+                android:paddingBottom="1dp">
+                <ImageView android:id="@+id/widget_next_four_art"
+                    android:layout_width="36dp" android:layout_height="36dp"
+                    android:src="@drawable/widget_music_note"
+                    android:background="@drawable/widget_album_frame"
+                    android:clipToOutline="true" android:scaleType="centerCrop"
+                    android:contentDescription="Cover lagu berikutnya"/>
+                <LinearLayout android:layout_width="0dp" android:layout_weight="1"
+                    android:layout_height="wrap_content" android:orientation="vertical"
+                    android:layout_marginLeft="7dp">
+                    <FrameLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:clipChildren="true" android:clipToPadding="true">
+            <TextView android:id="@+id/widget_next_four"
+                        android:layout_width="match_parent" android:layout_height="wrap_content"
+                        android:text="Lagu berikutnya" android:textColor="#F0F8F5"
+                        android:textStyle="bold" android:textSize="9sp"
+                        android:singleLine="true" android:ellipsize="end"
+                       
+                       
+                       />
+            <ViewFlipper android:id="@+id/widget_next_four_flipper"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:visibility="gone"
+                android:flipInterval="5000" android:autoStart="true"
+                android:animateFirstView="false"
+                android:inAnimation="@anim/widget_title_slide_in"
+                android:outAnimation="@anim/widget_title_slide_out">
+            <TextView android:id="@+id/widget_next_four_slide_one"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:singleLine="true" android:ellipsize="end"
+                android:requiresFadingEdge="horizontal"
+                android:fadingEdgeLength="9dp"
+                android:textColor="#F0F8F5" android:textSize="9sp"
+                android:textStyle="bold" android:text=""/>
+            <TextView android:id="@+id/widget_next_four_slide_two"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:singleLine="true" android:ellipsize="end"
+                android:requiresFadingEdge="horizontal"
+                android:fadingEdgeLength="9dp"
+                android:textColor="#F0F8F5" android:textSize="9sp"
+                android:textStyle="bold" android:text=""/>
+
+            </ViewFlipper>
+        </FrameLayout>
+                    <TextView android:id="@+id/widget_next_four_artist"
+                        android:layout_width="match_parent" android:layout_height="wrap_content"
+                        android:layout_marginTop="1dp" android:text="Artis"
+                        android:textColor="#B5CAC4" android:textSize="8sp"
+                        android:singleLine="true" android:ellipsize="end"/>
+                </LinearLayout>
+            </LinearLayout>
+            <LinearLayout android:id="@+id/widget_next_five_row"
+                android:layout_width="match_parent" android:layout_height="0dp"
+                android:layout_weight="1" android:orientation="horizontal"
+                android:gravity="center_vertical" android:paddingTop="1dp"
+                android:paddingBottom="1dp">
+                <ImageView android:id="@+id/widget_next_five_art"
+                    android:layout_width="36dp" android:layout_height="36dp"
+                    android:src="@drawable/widget_music_note"
+                    android:background="@drawable/widget_album_frame"
+                    android:clipToOutline="true" android:scaleType="centerCrop"
+                    android:contentDescription="Cover lagu berikutnya"/>
+                <LinearLayout android:layout_width="0dp" android:layout_weight="1"
+                    android:layout_height="wrap_content" android:orientation="vertical"
+                    android:layout_marginLeft="7dp">
+                    <FrameLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:clipChildren="true" android:clipToPadding="true">
+            <TextView android:id="@+id/widget_next_five"
+                        android:layout_width="match_parent" android:layout_height="wrap_content"
+                        android:text="Lagu berikutnya" android:textColor="#F0F8F5"
+                        android:textStyle="bold" android:textSize="9sp"
+                        android:singleLine="true" android:ellipsize="end"
+                       
+                       
+                       />
+            <ViewFlipper android:id="@+id/widget_next_five_flipper"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:visibility="gone"
+                android:flipInterval="5000" android:autoStart="true"
+                android:animateFirstView="false"
+                android:inAnimation="@anim/widget_title_slide_in"
+                android:outAnimation="@anim/widget_title_slide_out">
+            <TextView android:id="@+id/widget_next_five_slide_one"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:singleLine="true" android:ellipsize="end"
+                android:requiresFadingEdge="horizontal"
+                android:fadingEdgeLength="9dp"
+                android:textColor="#F0F8F5" android:textSize="9sp"
+                android:textStyle="bold" android:text=""/>
+            <TextView android:id="@+id/widget_next_five_slide_two"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:singleLine="true" android:ellipsize="end"
+                android:requiresFadingEdge="horizontal"
+                android:fadingEdgeLength="9dp"
+                android:textColor="#F0F8F5" android:textSize="9sp"
+                android:textStyle="bold" android:text=""/>
+
+            </ViewFlipper>
+        </FrameLayout>
+                    <TextView android:id="@+id/widget_next_five_artist"
+                        android:layout_width="match_parent" android:layout_height="wrap_content"
+                        android:layout_marginTop="1dp" android:text="Artis"
+                        android:textColor="#B5CAC4" android:textSize="8sp"
                         android:singleLine="true" android:ellipsize="end"/>
                 </LinearLayout>
             </LinearLayout>
