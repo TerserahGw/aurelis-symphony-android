@@ -52,7 +52,7 @@ jobs:
       - name: Upload test APK (signing varies per runner)
         uses: actions/upload-artifact@v4
         with:
-          name: AurelisSymphony-ARM64-v1.2.10-TEST-DEBUG
+          name: AurelisSymphony-ARM64-v1.2.11-TEST-DEBUG
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 14
@@ -100,11 +100,11 @@ jobs:
         if: steps.signing.outputs.enabled == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: AurelisSymphony-ARM64-v1.2.10-SIGNED
+          name: AurelisSymphony-ARM64-v1.2.11-SIGNED
           path: app/build/outputs/apk/release/*.apk
           if-no-files-found: error
 
-      - name: Publish GitHub Release v1.2.10 Stable
+      - name: Publish GitHub Release v1.2.11 Stable
         if: steps.signing.outputs.enabled == 'true' && github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
@@ -112,11 +112,11 @@ jobs:
         run: |
           set -euo pipefail
           cp app/build/outputs/apk/release/app-release.apk \
-            AurelisSymphony-Android-arm64-v1.2.10.apk
-          if ! gh release view v1.2.10 >/dev/null 2>&1; then
-            gh release create v1.2.10 --target "$GITHUB_SHA" \
-              --title "Aurelis Symphony Android v1.2.10 Stable" \
-              --notes "Aurelis Symphony Android v1.2.10 Stable. Refined full-player opening and closing on Portrait (spring morph from bottom mini player) and Landscape (morph from upper mini player), with eased fade, scale and slide respecting Motion & Morph settings. Fixed 4x2 Home Screen widget inflation with RemoteViews-compatible FrameLayout dividers. Album artwork is now shared from the main player's successful download, with HTTPS fallback to YouTube thumbnail and retry/caching. Refined four fixed-size widgets using a completely continuous gradient instead of a harsh rectangular artwork band. Restored the clean icon-only playback buttons preferred in v1.2.8. 4x2 now shows up to 3 real Up Next songs with their own asynchronously cached cover art, hides unused rows and reports queue length if there are more songs. 2x1 remains without transport buttons. Android RemoteViews cannot sample/blur live launcher wallpaper. Skip controls preserve Aurelis queue while its ViewModel is alive; otherwise open app safely. Same permanent signing key; versionCode 19."
+            AurelisSymphony-Android-arm64-v1.2.11.apk
+          if ! gh release view v1.2.11 >/dev/null 2>&1; then
+            gh release create v1.2.11 --target "$GITHUB_SHA" \
+              --title "Aurelis Symphony Android v1.2.11 Stable" \
+              --notes "Aurelis Symphony Android v1.2.11 Stable. Fix player morph edge clipping: full-screen background remains unscaled while only foreground content animates. Landscape music-player control rail can be moved left or right via a persistent setting in Interaction, or swipe horizontally with three fingers while landscape player is visible. Animated spring-like rail relocation respects Motion & morph; one-finger lyrics, queue, seeking and other gestures are unaffected. Retains v1.2.10 seamless widget background, minimalist transport controls and three real Up Next covers. Signed release using persistent keystore; versionCode 20."
           fi
-          gh release upload v1.2.10 \
-            AurelisSymphony-Android-arm64-v1.2.10.apk --clobber
+          gh release upload v1.2.11 \
+            AurelisSymphony-Android-arm64-v1.2.11.apk --clobber
