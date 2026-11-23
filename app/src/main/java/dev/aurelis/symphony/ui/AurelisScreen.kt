@@ -1429,7 +1429,8 @@ private fun GlassPopupItem(icon: androidx.compose.ui.graphics.vector.ImageVector
 
 private class AdaptiveGlassMenuPosition(
     private val preferDown: Boolean,
-    private val inset: Int
+    private val inset: Int,
+    private val preferRight: Boolean = false
 ) : PopupPositionProvider {
     override fun calculatePosition(
         anchorBounds: IntRect, windowSize: IntSize,
@@ -1446,10 +1447,12 @@ private class AdaptiveGlassMenuPosition(
         }
         // Anchor the glass to the SAME top-right corner as the three-dot capsule.
         // This does not move the popup off-screen when a row is near the edges.
-        val y = if (putBelow) anchorBounds.top else anchorBounds.bottom - height
+        val y = if (preferRight) anchorBounds.bottom - height
+            else if (putBelow) anchorBounds.top else anchorBounds.bottom - height
+        val x = if (preferRight) anchorBounds.right + inset
+            else anchorBounds.right - width
         return IntOffset(
-            (anchorBounds.right - width).coerceIn(inset,
-                max(inset, windowSize.width - width - inset)),
+            x.coerceIn(inset, max(inset, windowSize.width - width - inset)),
             y.coerceIn(inset, max(inset, windowSize.height - height - inset))
         )
     }
@@ -1478,7 +1481,8 @@ private fun InlineGlassSongMenu(
     state: AurelisState, song: Song, expanded: Boolean, onDismiss: () -> Unit,
     lyricOffset: Boolean = false,
     transitionState: androidx.compose.animation.core.MutableTransitionState<Boolean>? = null,
-    localPlaylist: String? = null
+    localPlaylist: String? = null,
+    preferRight: Boolean = false
 ) {
     val isGlass = LocalVisualStyle.current == VisualStyle.GLASS
     val visibility = transitionState ?: remember {
@@ -1488,8 +1492,18 @@ private fun InlineGlassSongMenu(
     if (!visibility.currentState && !visibility.targetState) return
     val density = LocalDensity.current
     val margin = with(density) { 9.dp.roundToPx() }
-    val provider = remember(lyricOffset, margin) {
-        AdaptiveGlassMenuPosition(preferDown = lyricOffset, inset = margin)
+    val configuration = LocalConfiguration.current
+    val isLandscapeMenu = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+    val popupWidth = if (isLandscapeMenu)
+        (configuration.screenWidthDp.dp * .45f).coerceIn(260.dp, 380.dp)
+    else 252.dp
+    val popupHeight = (configuration.screenHeightDp.dp - 32.dp)
+        .coerceAtLeast(160.dp)
+    val provider = remember(lyricOffset, margin, preferRight) {
+        AdaptiveGlassMenuPosition(
+            preferDown = lyricOffset, inset = margin,
+            preferRight = preferRight
+        )
     }
     Popup(
         popupPositionProvider = provider,
@@ -1513,7 +1527,7 @@ private fun InlineGlassSongMenu(
             ) + fadeOut(tween(195))
         ) {
         Glass(
-            Modifier.width(252.dp).shadow(
+            Modifier.width(popupWidth).shadow(
                 if (isGlass) 15.dp else 0.dp, RoundedCornerShape(23.dp)
             ),
             RoundedCornerShape(topStart = 25.dp, topEnd = 20.dp,
@@ -1521,7 +1535,10 @@ private fun InlineGlassSongMenu(
             tint = state.ambientColor, opacity = .83f,
             backdrop = song.artwork
         ) {
-            Column(Modifier.fillMaxWidth().padding(7.dp)) {
+            Column(Modifier.fillMaxWidth()
+                .heightIn(max = popupHeight)
+                .verticalScroll(androidx.compose.foundation.rememberScrollState())
+                .padding(7.dp)) {
                 Row(Modifier.fillMaxWidth().padding(start = 13.dp, end = 4.dp, top = 2.dp),
                     verticalAlignment = Alignment.CenterVertically) {
                     Text(song.title, Modifier.weight(1f), color = white, fontSize = 12.sp,
