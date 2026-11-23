@@ -506,23 +506,26 @@ open class AurelisWidgetProvider : AppWidgetProvider() {
          * and loops from the beginning after a short pause.
          */
         /**
-         * A real TextView marquee has one continuous piece of text and only
-         * resets after the END has been shown. The previous ViewFlipper
-         * replaced the full title every 7.8s, before long titles could finish.
-         * Disable those old duplicate pages completely.
+         * Full-title scroll, one text copy VISIBLE at a time. Unlike the old
+         * flipper, the incoming text travels by 100% of its own measured width
+         * over 12.6 seconds. The previous copy disappears immediately so a
+         * new title cannot overwrite the end of an unfinished old title.
+         * ViewFlipper.setFlipInterval is RemotableViewMethod and safe in
+         * Android launchers; View.setSelected is NOT, so avoid that API.
          */
         private fun updateSlidingTitle(
             views: RemoteViews, originalId: Int, flipperId: Int,
             firstId: Int, secondId: Int, title: String, maxCharacters: Int
         ) {
             val text = title.trim()
-            val animate = text.codePointCount(0, text.length) > maxCharacters
-            views.setViewVisibility(flipperId, View.GONE)
-            views.setViewVisibility(originalId, View.VISIBLE)
-            views.setTextViewText(originalId, text)
-            // Selected TextView is eligible for marquee even when the launcher
-            // does not grant ordinary focus to a home-screen widget.
-            views.setBoolean(originalId, "setSelected", animate)
+            val shouldScroll = text.codePointCount(0, text.length) > maxCharacters
+            views.setViewVisibility(originalId, if (shouldScroll) View.GONE else View.VISIBLE)
+            views.setViewVisibility(flipperId, if (shouldScroll) View.VISIBLE else View.GONE)
+            if (shouldScroll) {
+                views.setTextViewText(firstId, text)
+                views.setTextViewText(secondId, text)
+                views.setInt(flipperId, "setFlipInterval", 13_800)
+            }
         }
 
         fun updateWidgets(context: Context, widgetIds: IntArray? = null) {
