@@ -552,13 +552,21 @@ class AurelisState(context: Context) : ViewModel() {
             settingsSaveJob = scope.launch {
                 delay(220L)
                 library.updateSettings(settings)
+                // Avoid generating GPU/canvas widget RemoteViews 60 times per
+                // second while the user drags a visual intensity slider.
+                AurelisWidgetProvider.publish(app, current, isPlaying,
+                    ambientColor.toArgb())
             }
         } else {
             library.updateSettings(s)
+            // Switching Glass Ambient <-> Ambient re-themes the launcher
+            // widget immediately without waiting for the next song.
+            if (previous.visualStyle != s.visualStyle ||
+                previous.ambient != s.ambient) {
+                AurelisWidgetProvider.publish(app, current, isPlaying,
+                    ambientColor.toArgb())
+            }
         }
-        // Widget is immediately re-themed from the saved preference, even
-        // when the same track remains playing.
-        AurelisWidgetProvider.publish(app, current, isPlaying, ambientColor.toArgb())
         if (s.romanize && romanized.isEmpty() && lyrics.lines.isNotEmpty()) {
             scope.launch { romanized = runCatching { api.romanize(lyrics) }.getOrDefault(emptyMap()) }
         }
