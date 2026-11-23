@@ -317,3 +317,14 @@ This hotfix refines landscape behavior after reviewing a 30-second recording of 
 
 The gradient feathering is a lightweight GPU opacity transition, not an expensive per-row Gaussian blur; this makes it suitable for scrolling and karaoke word-by-word animations on Android. Device-specific visual checks remain useful after the automated build and APK signing verification.
 
+
+
+## v1.2.6 Stable — System-bar continuity & correctly anchored overflow morph
+
+- **Status-bar seam:** synchronizes Android window/theme base with Compose background (`#090D11`), requests genuinely transparent edge-to-edge status/navigation bars, dark-on-light system icons disabled, and disables extra bar-contrast enforcement where the OS supports it. This addresses the noticeably different color band at the top of the landscape display.
+- **Upper-left landscape seam:** moves the top atmospheric scrim from the *right-hand page box* to one full-width root overlay (beneath the interactive search and navigation capsules), so the left rail and the adjacent Home/Search/Library content share the same gradient rather than showing a hard transition at the 79dp boundary.
+- **Landscape player popup origin:** the bottom-left three-dot capsule opens a frosted Glass popup rightward and upward, now scaling from its bottom-left corner (`TransformOrigin(0f, 1f)`) with a slight upward glide. Closing reverses toward the same anchor. Portrait and regular song-row popup morphs remain top-right anchored as before.
+- **Versioning:** `versionCode 15`, `versionName 1.2.6`, and the same stable signing key for in-place upgrades.
+
+Build validation checks compilation and signing; final system-bar appearance can vary with HyperOS and Android's window contrast behavior, so confirm on-device after installing the signed APK.
+
