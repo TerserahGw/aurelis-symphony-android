@@ -2006,8 +2006,19 @@ private fun LandscapeNavigationRail(
 }
 
 /**
- * Search grows rightward in landscape, pushing the adjacent mini player down
- * to artwork-only instead of hiding it. This is independent of scroll mode.
+ * Mirrored landscape search/mini-player dock.
+ *
+ * LEFT rail:  [Search][Mini Player] anchored at the top-left.
+ * RIGHT rail: [Mini Player][Search] anchored at the top-right, with Search
+ * centered immediately ABOVE the right navigation rail.
+ *
+ * Expanding Search grows toward the content on the opposite side:
+ * to the right for the left rail, or to the left for the right rail. The mini
+ * player smoothly shrinks to its album artwork in either direction.
+ *
+ * Side progress is animated independently from capsule widths, then the
+ * horizontal anchor is derived from the CURRENT widths every frame. This
+ * keeps the right edge pinned to the rail while Search morphs open and shut.
  */
 @Composable
 private fun LandscapeTopDock(
@@ -2021,20 +2032,38 @@ private fun LandscapeTopDock(
 ) {
     val focus = LocalFocusManager.current
     val reduced = LocalReducedMotion.current
+    val railRight = state.settings.landscapeRailRight
     BoxWithConstraints(modifier.fillMaxWidth().height(62.dp)) {
+        val hasMini = state.current != null
         val searchTarget = if (searchExpanded)
             (maxWidth * .44f).coerceAtMost(292.dp) else 62.dp
         val miniTarget = if (searchExpanded) 62.dp
             else (maxWidth * .35f).coerceAtMost(250.dp)
-        val animation = if (reduced) tween<Dp>(0)
+        val capsuleAnimation = if (reduced) tween<Dp>(0)
             else spring<Dp>(dampingRatio = .91f,
                 stiffness = Spring.StiffnessMediumLow)
-        val searchWidth by animateDpAsState(searchTarget, animation,
+        val searchWidth by animateDpAsState(searchTarget, capsuleAnimation,
             label = "landscapeSearchWidth")
-        val miniWidth by animateDpAsState(miniTarget, animation,
+        val miniWidth by animateDpAsState(miniTarget, capsuleAnimation,
             label = "landscapeMiniPlayerWidth")
-        Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+
+        // Animate one normalized side, not a fixed pixel X position. The
+        // changing capsule widths automatically shift the group so Search
+        // remains right-aligned while it expands leftward.
+        val sideProgress by animateFloatAsState(
+            targetValue = if (railRight) 1f else 0f,
+            animationSpec = if (reduced) tween(0)
+                else spring(dampingRatio = .86f,
+                    stiffness = Spring.StiffnessMediumLow),
+            label = "landscapeTopDockSide"
+        )
+        val gap = if (hasMini) 9.dp else 0.dp
+        val groupWidth = (searchWidth + if (hasMini) miniWidth + gap else 0.dp)
+            .coerceIn(62.dp, maxWidth.coerceAtLeast(62.dp))
+        val travel = (maxWidth - groupWidth).coerceAtLeast(0.dp)
+        val dockX = travel * sideProgress.coerceIn(0f, 1f)
+
+        val searchCapsule: @Composable () -> Unit = {
             Glass(Modifier.width(searchWidth).fillMaxHeight(),
                 RoundedCornerShape(28.dp), tint = state.ambientColor,
                 opacity = .39f, backdrop = state.current?.artwork,
@@ -2079,16 +2108,15 @@ private fun LandscapeTopDock(
                     }
                 }
             }
+        }
+
+        val miniCapsule: @Composable () -> Unit = {
             state.current?.let { track ->
                 Tactile(Modifier.width(miniWidth).fillMaxHeight(), onExpandPlayer) {
                     Glass(Modifier.fillMaxSize(), RoundedCornerShape(28.dp),
                         tint = state.ambientColor, opacity = .42f,
                         backdrop = track.artwork,
                         backdropBlur = 37.dp, backdropOpacity = .61f) {
-                        // Artwork coordinates are based on the capsule's real
-                        // animated width, not the row's 6dp left padding.
-                        // In compact mode the 41dp cover stays precisely
-                        // centered throughout the width morph to 62dp.
                         Box(Modifier.fillMaxSize()) {
                             val coverX = if (searchExpanded)
                                 ((miniWidth - 41.dp) / 2f).coerceAtLeast(0.dp)
@@ -2126,6 +2154,22 @@ private fun LandscapeTopDock(
                         }
                     }
                 }
+            }
+        }
+
+        Row(
+            Modifier.offset(x = dockX)
+                .width(groupWidth)
+                .fillMaxHeight(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(gap)
+        ) {
+            if (railRight) {
+                miniCapsule()
+                searchCapsule()
+            } else {
+                searchCapsule()
+                miniCapsule()
             }
         }
     }
