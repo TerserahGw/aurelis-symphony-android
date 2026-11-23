@@ -52,17 +52,19 @@ class AudioService : MediaSessionService() {
             addListener(object : Player.Listener {
                 override fun onIsPlayingChanged(isPlaying: Boolean) {
                     if (this@apply === player) {
-                        // A system headset/notification/lock-screen Pause must
-                        // pause BOTH overlapping decoders. Resume both.
+                        // EOF is not a user Pause: keep the next track going.
+                        // The outgoing player must not publish a false Pause
+                        // state after the MediaSession has switched songs.
+                        if (this@apply.playbackState == Player.STATE_ENDED &&
+                            incoming != null) {
+                            finishCrossfade?.invoke()
+                            return
+                        }
+                        // Headset/notification/lock-screen Pause synchronizes
+                        // both decoders and freezes the fade clock.
                         incoming?.let { fading ->
                             if (fading !== player) {
-                                if (playbackState == Player.STATE_ENDED) {
-                                    // Outgoing media can finish before the
-                                    // overlap duration or while next buffers.
-                                    // Never pause the incoming track on EOF.
-                                    finishCrossfade?.invoke()
-                                } else if (isPlaying) fading.play()
-                                else fading.pause()
+                                if (isPlaying) fading.play() else fading.pause()
                             }
                         }
                         AurelisWidgetProvider.publishFromSession(
@@ -129,6 +131,8 @@ class AudioService : MediaSessionService() {
                                 .setUsage(C.USAGE_MEDIA)
                                 .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
                                 .build(), true)
+                            AurelisWidgetProvider.publishFromSession(
+                                this@AudioService, next.currentMediaItem, next.isPlaying)
                         }.onFailure { Log.e(TAG, "Crossfade handoff failed", it) }
                     }
                 }
