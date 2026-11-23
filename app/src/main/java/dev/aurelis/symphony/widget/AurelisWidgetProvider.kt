@@ -373,13 +373,6 @@ open class AurelisWidgetProvider : AppWidgetProvider() {
                     result, (width / 15).coerceAtLeast(12),
                     (height / 15).coerceAtLeast(12), true
                 )
-                val softPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
-                    shader = LinearGradient(
-                        width * .40f, 0f, width * .80f, 0f,
-                        intArrayOf(0x00FFFFFF, 0x88FFFFFF.toInt()),
-                        null, Shader.TileMode.CLAMP
-                    )
-                }
                 // Draw soft image into a temporary layer so its alpha can be
                 // used as the blend rather than replacing sharp cover pixels.
                 val temp = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
