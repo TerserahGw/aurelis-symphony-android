@@ -294,25 +294,6 @@ fun AurelisScreen(state: AurelisState) {
     // One page hierarchy is reused in both orientations. LazyListStates are
     // retained across rotations, avoiding list jumps and duplicate network loads.
     val pageContent: @Composable () -> Unit = {
-                    pageContent()
-    }
-
-    CompositionLocalProvider(
-        LocalGlassDensity provides state.settings.glassOpacity,
-        LocalReducedMotion provides !state.settings.motion,
-        LocalVisualStyle provides state.settings.visualStyle,
-        LocalAppLanguage provides state.settings.language
-    ) {
-    MaterialTheme(colorScheme = darkColorScheme(
-        primary = lime, secondary = Color(0xFF98CDB9), background = bg,
-        surface = Color(0xFF15221F), onSurface = white, onBackground = white
-    )) {
-        Box(Modifier.fillMaxSize()) {
-            Ambient(state)
-            if (!isLandscape) {
-            Column(Modifier.fillMaxSize().statusBarsPadding()) {
-                Header(tab, onSettings = { showSettings = true }, onLibrary = { tab = "Library" })
-                Box(Modifier.weight(1f)) {
                     AnimatedContent(targetState = tab, label = "page", transitionSpec = {
                         (
                             fadeIn(tween(if (state.settings.motion) 270 else 0)) +
@@ -347,6 +328,25 @@ fun AurelisScreen(state: AurelisState) {
                                 onOpenPlayer = { expanded = true })
                         }
                     }
+    }
+
+    CompositionLocalProvider(
+        LocalGlassDensity provides state.settings.glassOpacity,
+        LocalReducedMotion provides !state.settings.motion,
+        LocalVisualStyle provides state.settings.visualStyle,
+        LocalAppLanguage provides state.settings.language
+    ) {
+    MaterialTheme(colorScheme = darkColorScheme(
+        primary = lime, secondary = Color(0xFF98CDB9), background = bg,
+        surface = Color(0xFF15221F), onSurface = white, onBackground = white
+    )) {
+        Box(Modifier.fillMaxSize()) {
+            Ambient(state)
+            if (!isLandscape) {
+            Column(Modifier.fillMaxSize().statusBarsPadding()) {
+                Header(tab, onSettings = { showSettings = true }, onLibrary = { tab = "Library" })
+                Box(Modifier.weight(1f)) {
+                    pageContent()
                 }
                 // Bottom capsules float over scrollable content. Each LazyColumn
                 // supplies its own bottom padding to keep the final row reachable.
