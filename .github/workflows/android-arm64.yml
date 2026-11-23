@@ -52,7 +52,7 @@ jobs:
       - name: Upload test APK (signing varies per runner)
         uses: actions/upload-artifact@v4
         with:
-          name: AurelisSymphony-ARM64-v1.2.17-TEST-DEBUG
+          name: AurelisSymphony-ARM64-v1.3.0-TEST-DEBUG
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 14
@@ -100,11 +100,11 @@ jobs:
         if: steps.signing.outputs.enabled == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: AurelisSymphony-ARM64-v1.2.17-SIGNED
+          name: AurelisSymphony-ARM64-v1.3.0-SIGNED
           path: app/build/outputs/apk/release/*.apk
           if-no-files-found: error
 
-      - name: Publish GitHub Release v1.2.17 Stable
+      - name: Publish GitHub Release v1.3.0 Stable
         if: steps.signing.outputs.enabled == 'true' && github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
@@ -112,11 +112,11 @@ jobs:
         run: |
           set -euo pipefail
           cp app/build/outputs/apk/release/app-release.apk \
-            AurelisSymphony-Android-arm64-v1.2.17.apk
-          if ! gh release view v1.2.17 >/dev/null 2>&1; then
-            gh release create v1.2.17 --target "$GITHUB_SHA" \
-              --title "Aurelis Symphony Android v1.2.17 Stable" \
-              --notes "Aurelis Symphony Android v1.2.17 Stable. Home widget album art uses higher-resolution source URLs where supported (Google 1080px and YouTube maxres/sd/hq fallbacks), a 768px quality cache with square crop, and sharper but memory-bounded hero renders. Covers for 2x1 and 4x1 are slightly larger with left spacing preserved. The 4x2 Now Playing cover now softly blurs and fades into its right Up Next pane without a hard vertical edge. Long widget titles use safe looping native ViewFlipper slides with subtle faded margins instead of unsupported RemoteViews setters. Up Next has five compact dynamic slots with larger 36dp covers, no counter, and hides unused entries. All widget variants preserve previous buttons and themed Glass Ambient backgrounds. Release-signed versionCode 26."
+            AurelisSymphony-Android-arm64-v1.3.0.apk
+          if ! gh release view v1.3.0 >/dev/null 2>&1; then
+            gh release create v1.3.0 --target "$GITHUB_SHA" \
+              --title "Aurelis Symphony Android v1.3.0 Stable" \
+              --notes "Aurelis Symphony Android v1.3.0: improved widget cover edge blending and four spacious Up Next cards, leftward looping long-title ticker; personalized YouTube Music queue with browse-only radio/station filtering; paged search with automatic scroll loading; optional dual-player equal-power audio crossfade (default OFF, adjustable 1-12 seconds); smoother track visuals and queue changes; conservative performance improvements. Signed Android arm64 release, versionCode 27."
           fi
-          gh release upload v1.2.17 \
-            AurelisSymphony-Android-arm64-v1.2.17.apk --clobber
+          gh release upload v1.3.0 \
+            AurelisSymphony-Android-arm64-v1.3.0.apk --clobber

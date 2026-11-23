@@ -30,6 +30,7 @@ import javax.crypto.spec.GCMParameterSpec
 
 data class YouTubePlaylist(val id: String, val title: String, val artwork: String)
 data class YouTubeShelf(val title: String, val tracks: List<Song>)
+data class YouTubeSearchPage(val tracks: List<Song>, val continuation: String?)
 data class YouTubeSession(
     val cookies: String,
     val version: String,
@@ -196,7 +197,28 @@ class YouTubeMusicHub(context: Context) {
         return title to artist
     }
 
+    private fun browseOnlyRadio(item: JSONObject): Boolean {
+        val endpoint = item.optJSONObject("navigationEndpoint")
+        val overlay = item.optJSONObject("overlay")
+            ?.optJSONObject("musicItemThumbnailOverlayRenderer")
+            ?.optJSONObject("content")?.optJSONObject("musicPlayButtonRenderer")
+            ?.optJSONObject("playNavigationEndpoint")
+        val explicitWatch = endpoint?.optJSONObject("watchEndpoint") != null ||
+            overlay?.optJSONObject("watchEndpoint") != null ||
+            item.optJSONObject("playlistItemData")?.optString("videoId").orEmpty().isNotBlank()
+        val browse = endpoint?.optJSONObject("browseEndpoint") != null ||
+            endpoint?.optJSONObject("watchPlaylistEndpoint") != null
+        if (browse && !explicitWatch) return true
+        val label = (titleAndArtist(item).first + " " +
+            runs(item.optJSONObject("title"))).lowercase(Locale.ROOT)
+        return !explicitWatch && (
+            label.contains("radio station") || label.contains("music station") ||
+            label.contains("station based on") || label.contains("start radio")
+        )
+    }
+
     private fun songFromItem(item: JSONObject): Song? {
+        if (browseOnlyRadio(item)) return null
         val playlistItem = item.optJSONObject("playlistItemData")
         val playEndpoint = item.optJSONObject("overlay")
             ?.optJSONObject("musicItemThumbnailOverlayRenderer")
@@ -220,6 +242,7 @@ class YouTubeMusicHub(context: Context) {
     }
 
     private fun songFromTwoRow(item: JSONObject): Song? {
+        if (browseOnlyRadio(item)) return null
         val nav = item.optJSONObject("navigationEndpoint")
             ?.optJSONObject("watchEndpoint")
         val titleRun = item.optJSONObject("title")
@@ -286,6 +309,14 @@ class YouTubeMusicHub(context: Context) {
             if (song != null) found.putIfAbsent(song.key, song)
         }
         return found.values.take(max)
+    }
+
+    suspend fun searchPage(query: String, token: String? = null): YouTubeSearchPage {
+        val params = if (token.isNullOrBlank()) JSONObject().put("query", query.take(160))
+        else JSONObject().put("continuation", token)
+        val root = post("search", params)
+        val next = continuation(root)?.takeUnless { it == token }
+        return YouTubeSearchPage(parseSongs(root, 70), next)
     }
 
     private fun parsePlaylists(root: JSONObject): List<YouTubePlaylist> {

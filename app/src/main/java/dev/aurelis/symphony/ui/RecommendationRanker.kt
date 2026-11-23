@@ -48,6 +48,7 @@ internal object RecommendationRanker {
         }.toMap()
         val ytArtists = youtubeHistory.take(90).groupingBy { artist(it) }.eachCount()
         val ytSeen = youtubeRecommendations.take(140).map { it.key }.toSet()
+        val hasAccountTaste = ytSeen.isNotEmpty() || youtubeHistory.isNotEmpty()
         val ytShelfOrder = youtubeRecommendations.take(140).mapIndexed { idx, song ->
             song.key to idx
         }.toMap()
@@ -79,9 +80,15 @@ internal object RecommendationRanker {
             return (if (fromSameArtist) 2.5 else 0.0) +
                 titleMatch * 1.6 +
                 (if (song.key in favored) 1.2 else 0.0) +
-                (if (song.key in ytSeen) 2.5 + ytHome * 2.1 else 0.0) +
-                ytArtistPlays * .74 -
-                ytRecentExact * 1.4 -
+                // The account Home shelves/history are weighted well above
+                // anonymous search/catalog matches, so recommendations feel
+                // like the actual signed-in YouTube Music taste.
+                (if (song.key in ytSeen) 8.0 + ytHome * 3.8 else 0.0) +
+                ytArtistPlays * 1.35 +
+                (if (hasAccountTaste && song.isYouTube) 1.4 else 0.0) -
+                (if (hasAccountTaste && song.key !in ytSeen &&
+                    ytArtists[artist(song)] == null) 2.3 else 0.0) -
+                ytRecentExact * 2.1 -
                 recentlyPlayed * 3.2 -
                 repeat * 0.7 -
                 (if (song.duration in 1L..35L) 1.5 else 0.0)

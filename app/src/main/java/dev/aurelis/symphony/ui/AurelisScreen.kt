@@ -1,6 +1,7 @@
 package dev.aurelis.symphony.ui
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.Crossfade
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.EnterExitState
 import androidx.compose.animation.animateColorAsState
@@ -312,7 +313,11 @@ private fun Tactile(modifier: Modifier = Modifier, action: () -> Unit, content: 
 private fun Ambient(state: AurelisState) {
     val settings = state.settings
     val c by animateColorAsState(
-        state.ambientColor, animationSpec = tween(if (settings.motion) 1200 else 0),
+        state.ambientColor, animationSpec = tween(
+            if (!settings.motion) 0
+            else if (settings.crossfadeEnabled) settings.crossfadeSeconds * 1000
+            else 900
+        ),
         label = "ambientPalette"
     )
     val strength = if (settings.ambient) settings.ambientIntensity else 0f
@@ -1272,6 +1277,18 @@ private fun SectionHeading(title: String, subtitle: String) {
 private fun SearchPage(state: AurelisState, query: String,
     scrollState: androidx.compose.foundation.lazy.LazyListState,
     onPlay: (Song) -> Unit, onMenu: (Song) -> Unit) {
+    // Detect intentional scrolling near the end, then fetch the next page.
+    // The request guard in state prevents duplicate loads.
+    LaunchedEffect(query, scrollState, state.searchHasMore) {
+        if (query.isBlank() || !state.searchHasMore) return@LaunchedEffect
+        snapshotFlow {
+            val visible = scrollState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+            scrollState.isScrollInProgress &&
+                visible >= scrollState.layoutInfo.totalItemsCount - 4
+        }.distinctUntilChanged().collect { nearEnd ->
+            if (nearEnd) state.loadMoreSearch()
+        }
+    }
     LazyColumn(state = scrollState,
         modifier = Modifier.fillMaxSize().featherScrollEdges(
             top = if (LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE) 32.dp else 30.dp,
@@ -1284,7 +1301,26 @@ private fun SearchPage(state: AurelisState, query: String,
         if (state.searching) item { LinearProgressIndicator(Modifier.fillMaxWidth(), color = lime) }
         if (query.isBlank()) item { EmptyPage("Temukan sesuatu yang baru", "Cari judul, artis, atau musik untuk didengarkan.") }
         else if (!state.searching && state.results.isEmpty()) item { EmptyPage("Belum ada hasil", "Coba kata kunci yang berbeda.") }
-        items(state.results, key = { "result-${it.key}" }) { song -> SongRow(song, state, onPlay = { onPlay(song) }, onMenu = { onMenu(song) }) }
+        items(state.results, key = { "result-${it.key}" }) { song ->
+            SongRow(song, state, onPlay = { onPlay(song) }, onMenu = { onMenu(song) })
+        }
+        if (state.loadingMoreSearch) item("search-pagination-loading") {
+            Row(Modifier.fillMaxWidth().padding(14.dp),
+                horizontalArrangement = Arrangement.Center) {
+                CircularProgressIndicator(Modifier.size(23.dp),
+                    color = lime, strokeWidth = 2.dp)
+                Spacer(Modifier.width(12.dp))
+                Text("Memuat lagu berikutnya…", color = mist, fontSize = 12.sp)
+            }
+        }
+        if (state.searchHasMore && !state.loadingMoreSearch) item("search-pagination-more") {
+            TextButton(onClick = state::loadMoreSearch,
+                modifier = Modifier.fillMaxWidth().padding(8.dp)) {
+                Icon(Icons.Rounded.ExpandMore, null, tint = lime, modifier = Modifier.size(20.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("Geser untuk memuat lebih banyak lagu", color = lime, fontSize = 12.sp)
+            }
+        }
     }
 }
 
@@ -1950,6 +1986,24 @@ private fun Artwork(song: Song, size: Dp, radius: Dp) {
     }
 }
 
+/**
+ * Artwork morphing only on foreground player surfaces, not on every card in
+ * the Home feed. Keeps the cover/layout stable while blending old/new songs.
+ */
+@Composable
+private fun MorphArtwork(song: Song, size: Dp, radius: Dp, state: AurelisState) {
+    Crossfade(
+        targetState = song,
+        animationSpec = tween(
+            if (!state.settings.motion) 0
+            else if (state.settings.crossfadeEnabled)
+                (state.settings.crossfadeSeconds * 600).coerceAtMost(3200)
+            else 420
+        ),
+        label = "nowPlayingArtworkBlend"
+    ) { shown -> Artwork(shown, size, radius) }
+}
+
 @Composable
 private fun EmptyPage(title: String, description: String) {
     Column(Modifier.fillMaxWidth().padding(vertical = 46.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -1969,12 +2023,29 @@ private fun MiniPlayer(state: AurelisState, onExpand: () -> Unit) {
             backdropBlur = 38.dp, backdropOpacity = .67f) {
             Column {
                 Row(Modifier.weight(1f).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Artwork(song, 55.dp, 17.dp)
+                    MorphArtwork(song, 55.dp, 17.dp, state)
                     Spacer(Modifier.width(11.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(song.title, color = white, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                        Spacer(Modifier.height(3.dp))
-                        Text(if (state.preparing) "Menyiapkan audio…" else song.artist, color = mist, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 11.sp)
+                    AnimatedContent(
+                        targetState = song,
+                        modifier = Modifier.weight(1f),
+                        label = "miniPlayerTitleArtistBlend",
+                        transitionSpec = {
+                            (fadeIn(tween(if (state.settings.motion) 360 else 0)) +
+                                slideInVertically(tween(if (state.settings.motion) 360 else 0)) { it / 5 }
+                            ) togetherWith
+                            (fadeOut(tween(if (state.settings.motion) 230 else 0)) +
+                                slideOutVertically(tween(if (state.settings.motion) 280 else 0)) { -it / 5 })
+                        }
+                    ) { track ->
+                        Column {
+                            Text(track.title, color = white, maxLines = 1,
+                                overflow = TextOverflow.Ellipsis, fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold)
+                            Spacer(Modifier.height(3.dp))
+                            Text(if (state.preparing) "Menyiapkan audio…" else track.artist,
+                                color = mist, maxLines = 1,
+                                overflow = TextOverflow.Ellipsis, fontSize = 11.sp)
+                        }
                     }
                     IconButton(onClick = { state.togglePlay() }, enabled = !state.preparing) {
                         Icon(if (state.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, "Putar atau jeda", tint = white, modifier = Modifier.size(26.dp))
@@ -2616,14 +2687,22 @@ private fun FullPlayer(state: AurelisState, onClose: () -> Unit, onQueue: () -> 
             if (pane == "Cover") {
                 // A SINGLE full-bleed cover, with no fit-size rectangle or seams.
                 // Keep texture at the top and fade only where text/controls need contrast.
-                AsyncImage(
-                    model = coverUrl,
-                    contentDescription = null,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop,
-                    alignment = Alignment.Center,
-                    onError = { if (useMaxres) useMaxres = false }
-                )
+                Crossfade(
+                    targetState = coverUrl,
+                    animationSpec = tween(if (state.settings.motion)
+                        (if (state.settings.crossfadeEnabled)
+                            state.settings.crossfadeSeconds * 700 else 480) else 0),
+                    label = "portraitCoverCrossfade"
+                ) { requestUrl ->
+                    AsyncImage(
+                        model = requestUrl,
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop,
+                        alignment = Alignment.Center,
+                        onError = { if (useMaxres) useMaxres = false }
+                    )
+                }
                 Box(Modifier.fillMaxSize().background(
                     Brush.verticalGradient(colorStops = arrayOf(
                         0f to bg.copy(alpha = .59f),
@@ -2702,11 +2781,26 @@ private fun FullPlayer(state: AurelisState, onClose: () -> Unit, onQueue: () -> 
                                     fontSize = 10.sp, letterSpacing = 1.5.sp,
                                     fontWeight = FontWeight.SemiBold)
                                 Spacer(Modifier.height(10.dp))
-                                Text(song.title, color = white, fontSize = 29.sp,
-                                    lineHeight = 33.sp, fontWeight = FontWeight.SemiBold,
-                                    maxLines = 3, overflow = TextOverflow.Ellipsis)
-                                Spacer(Modifier.height(7.dp))
-                                Text(song.artist, color = white.copy(alpha = .74f), fontSize = 15.sp)
+                                AnimatedContent(
+                                    targetState = song,
+                                    label = "portraitTrackDetailsMorph",
+                                    transitionSpec = {
+                                        (fadeIn(tween(if (state.settings.motion) 420 else 0)) +
+                                            slideInVertically(tween(if (state.settings.motion) 380 else 0)) { it / 6 }
+                                        ) togetherWith
+                                        (fadeOut(tween(if (state.settings.motion) 240 else 0)) +
+                                            slideOutVertically(tween(if (state.settings.motion) 310 else 0)) { -it / 7 })
+                                    }
+                                ) { shown ->
+                                    Column {
+                                        Text(shown.title, color = white, fontSize = 29.sp,
+                                            lineHeight = 33.sp, fontWeight = FontWeight.SemiBold,
+                                            maxLines = 3, overflow = TextOverflow.Ellipsis)
+                                        Spacer(Modifier.height(7.dp))
+                                        Text(shown.artist, color = white.copy(alpha = .74f),
+                                            fontSize = 15.sp)
+                                    }
+                                }
                                 Spacer(Modifier.height(10.dp))
                                 IconButton(onClick = { state.like(song) }) {
                                     Icon(if (state.isLiked(song)) Icons.Rounded.Favorite
@@ -2777,8 +2871,17 @@ private fun FullPlayer(state: AurelisState, onClose: () -> Unit, onQueue: () -> 
                                 )
                             }
                             // There is deliberately NO separate glass lyric panel.
-                            LyricContent(state, Modifier.fillMaxWidth().weight(1f),
-                                showRoman = showRoman, showTranslation = showTranslation)
+                            Crossfade(
+                                targetState = state.lyrics,
+                                modifier = Modifier.fillMaxWidth().weight(1f),
+                                animationSpec = tween(if (state.settings.motion) 400 else 0),
+                                label = "portraitLyricsTrackCrossfade"
+                            ) { snapshot ->
+                                LyricContent(state, Modifier.fillMaxSize(),
+                                    showRoman = showRoman,
+                                    showTranslation = showTranslation,
+                                    shownLyrics = snapshot)
+                            }
                         }
                     }
                     else -> {
@@ -2817,10 +2920,16 @@ private fun FullPlayer(state: AurelisState, onClose: () -> Unit, onQueue: () -> 
                                     verticalArrangement = Arrangement.spacedBy(12.dp)
                                 ) {
                                     items(state.queue.size,
-                                        key = { i -> "player-queue-$i-${state.queue[i].key}" }
+                                        key = { i ->
+                                            val item = state.queue[i]
+                                            "player-queue-${item.key}-${state.queue.take(i).count { it.key == item.key }}"
+                                        }
                                     ) { i ->
                                         val queued = state.queue[i]
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Row(
+                                            Modifier.animateItem(),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
                                             Box(Modifier.weight(1f)) {
                                                 SongRow(queued, state,
                                                     onPlay = { state.playFromQueue(queued, i) },
@@ -2989,15 +3098,23 @@ private fun LandscapeFullPlayer(
                         // Request the highest source image available while
                         // keeping the EXACT same bounds, crop and corner mask.
                         // If high-res isn't provided, retry the original URL.
-                        AsyncImage(
-                            model = highResRequest, contentDescription = null,
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = ContentScale.Crop,
-                            onError = {
-                                if (!highResUnavailable && bestArtwork != artwork)
-                                    highResUnavailable = true
-                            }
-                        )
+                        Crossfade(
+                            targetState = highResRequest,
+                            animationSpec = tween(if (state.settings.motion)
+                                (if (state.settings.crossfadeEnabled)
+                                    state.settings.crossfadeSeconds * 700 else 470) else 0),
+                            label = "landscapeCoverTrackBlend"
+                        ) { coverModel ->
+                            AsyncImage(
+                                model = coverModel, contentDescription = null,
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop,
+                                onError = {
+                                    if (!highResUnavailable && bestArtwork != artwork)
+                                        highResUnavailable = true
+                                }
+                            )
+                        }
                     } else {
                         Box(Modifier.fillMaxSize().background(state.ambientColor))
                     }
@@ -3015,13 +3132,27 @@ private fun LandscapeFullPlayer(
                         Modifier.align(Alignment.BottomStart)
                             .fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp)
                     ) {
-                        Text(song.title, color = white, fontSize = 16.sp,
-                            fontWeight = FontWeight.SemiBold, maxLines = 2,
-                            lineHeight = 19.sp, overflow = TextOverflow.Ellipsis)
-                        Spacer(Modifier.height(3.dp))
-                        Text(song.artist, color = white.copy(alpha = .74f),
-                            fontSize = 11.sp, maxLines = 1,
-                            overflow = TextOverflow.Ellipsis)
+                        AnimatedContent(
+                            targetState = song,
+                            label = "landscapeSongMetadataMorph",
+                            transitionSpec = {
+                                (fadeIn(tween(if (reduced) 0 else 440)) +
+                                    slideInVertically(tween(if (reduced) 0 else 390)) { it / 6 }
+                                ) togetherWith
+                                (fadeOut(tween(if (reduced) 0 else 250)) +
+                                    slideOutVertically(tween(if (reduced) 0 else 310)) { -it / 7 })
+                            }
+                        ) { shown ->
+                            Column {
+                                Text(shown.title, color = white, fontSize = 16.sp,
+                                    fontWeight = FontWeight.SemiBold, maxLines = 2,
+                                    lineHeight = 19.sp, overflow = TextOverflow.Ellipsis)
+                                Spacer(Modifier.height(3.dp))
+                                Text(shown.artist, color = white.copy(alpha = .74f),
+                                    fontSize = 11.sp, maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis)
+                            }
+                        }
                     }
                 }
                 Spacer(Modifier.height(4.dp))
@@ -3087,12 +3218,20 @@ private fun LandscapeFullPlayer(
                                     fontSize = 10.sp
                                 )
                             }
-                            LyricContent(
-                                state, Modifier.fillMaxWidth().weight(1f),
-                                showRoman = showRoman,
-                                showTranslation = showTranslation,
-                                compact = true
-                            )
+                            Crossfade(
+                                targetState = state.lyrics,
+                                modifier = Modifier.fillMaxWidth().weight(1f),
+                                animationSpec = tween(if (state.settings.motion) 400 else 0),
+                                label = "landscapeLyricsTrackCrossfade"
+                            ) { snapshot ->
+                                LyricContent(
+                                    state, Modifier.fillMaxSize(),
+                                    showRoman = showRoman,
+                                    showTranslation = showTranslation,
+                                    compact = true,
+                                    shownLyrics = snapshot
+                                )
+                            }
                         }
                     } else {
                         Column(Modifier.fillMaxSize()) {
@@ -3118,11 +3257,12 @@ private fun LandscapeFullPlayer(
                                     verticalArrangement = Arrangement.spacedBy(5.dp)
                                 ) {
                                     items(state.queue.size, key = { i ->
-                                        "landscape-queue-$i-${state.queue[i].key}"
+                                        val item = state.queue[i]
+                                        "landscape-queue-${item.key}-${state.queue.take(i).count { it.key == item.key }}"
                                     }) { index ->
                                         val queued = state.queue[index]
                                         Row(
-                                            Modifier.fillMaxWidth(),
+                                            Modifier.fillMaxWidth().animateItem(),
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
                                             Tactile(Modifier.weight(1f), {
@@ -3322,10 +3462,11 @@ private fun PlayerModeIsland(selected: String, onSelect: (String) -> Unit,
 private fun LyricContent(
     state: AurelisState, modifier: Modifier = Modifier,
     showRoman: Boolean = true, showTranslation: Boolean = false,
-    compact: Boolean = false
+    compact: Boolean = false,
+    shownLyrics: Lyrics = state.lyrics
 ) {
     val currentSec = (state.progress + state.settings.lyricOffsetMs) / 1000.0
-    val lines = state.lyrics.lines
+    val lines = shownLyrics.lines
     val active = lines.indexOfLast { it.time != null && it.time <= currentSec }
     val scroll = rememberLazyListState()
 
@@ -3793,6 +3934,37 @@ private fun SettingsSheet(
                 Text(uiText("Auto mencoba NewPipe, lalu server jika sumber gagal."),
                     color = mist, fontSize = 11.sp, lineHeight = 17.sp)
 
+                Spacer(Modifier.height(16.dp))
+                SettingsSwitch("Crossfade antar lagu",
+                    "Lagu selanjutnya mulai pelan saat lagu lama memudar. Default nonaktif.",
+                    s.crossfadeEnabled,
+                    { state.update(s.copy(crossfadeEnabled = it)) })
+                AnimatedVisibility(visible = s.crossfadeEnabled) {
+                    Column(Modifier.fillMaxWidth().padding(top = 12.dp)) {
+                        Row(Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically) {
+                            Text("Durasi transisi", Modifier.weight(1f),
+                                color = white, fontSize = 12.sp)
+                            Text("${s.crossfadeSeconds} detik", color = lime,
+                                fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                        }
+                        Slider(
+                            value = s.crossfadeSeconds.toFloat(),
+                            onValueChange = {
+                                state.update(s.copy(crossfadeSeconds =
+                                    it.roundToInt().coerceIn(1, 12)))
+                            },
+                            valueRange = 1f..12f,
+                            steps = 10,
+                            colors = SliderDefaults.colors(
+                                thumbColor = lime, activeTrackColor = lime,
+                                inactiveTrackColor = white.copy(alpha = .15f))
+                        )
+                        Text("Dua audio diputar bersamaan saat crossfade. Efek otomatis memerlukan lagu berikutnya dalam antrean.",
+                            color = mist, fontSize = 11.sp, lineHeight = 16.sp)
+                    }
+                }
+
                 DividerSoft()
                 SettingsCategory(uiText("AKUN"), "YouTube Music")
                 Text(if (state.youtube.isConnected)
@@ -4066,9 +4238,12 @@ private fun QueueSheet(state: AurelisState, onClose: () -> Unit) {
             Spacer(Modifier.height(22.dp))
             if (state.queue.isEmpty()) EmptyPage(uiText("Antrean kosong"), "Pemutar akan mencari rekomendasi setelah lagu selesai.")
             else LazyColumn(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                items(state.queue.size, key = { i -> "queued-$i-${state.queue[i].key}" }) { i ->
+                items(state.queue.size, key = { i ->
+                    val item = state.queue[i]
+                    "queued-${item.key}-${state.queue.take(i).count { it.key == item.key }}"
+                }) { i ->
                     val song = state.queue[i]
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(Modifier.animateItem(), verticalAlignment = Alignment.CenterVertically) {
                         Box(Modifier.weight(1f)) {
                             SongRow(song, state,
                                 onPlay = { state.playFromQueue(song, i); onClose() },

@@ -353,7 +353,9 @@ open class AurelisWidgetProvider : AppWidgetProvider() {
                 // and the Up Next card. A second blurred right-side strip
                 // avoids a hard crop; alpha then feathers it gradually into
                 // the widget's existing continuous glass background.
-                val featherStart = width * .74f
+                // Start the blend before the middle so the cover never
+                // ends as a clearly straight chopped rectangle.
+                val featherStart = width * .53f
                 val blurred = Bitmap.createScaledBitmap(
                     result, (width / 14).coerceAtLeast(12),
                     (height / 14).coerceAtLeast(12), true
@@ -366,7 +368,7 @@ open class AurelisWidgetProvider : AppWidgetProvider() {
                 val softMask = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                     shader = LinearGradient(
                         featherStart, 0f, width.toFloat(), 0f,
-                        intArrayOf(Color.TRANSPARENT, 0xAAFFFFFF.toInt()),
+                        intArrayOf(Color.TRANSPARENT, 0xDAFFFFFF.toInt()),
                         null, Shader.TileMode.CLAMP
                     )
                     xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_IN)
@@ -426,8 +428,8 @@ open class AurelisWidgetProvider : AppWidgetProvider() {
          */
         fun publishQueue(context: Context, queue: List<Song>) {
             val prefs = context.getSharedPreferences(STORE, Context.MODE_PRIVATE)
-            val tracks = (0 until 5).map(queue::getOrNull)
-            val names = listOf("one", "two", "three", "four", "five")
+            val tracks = (0 until 4).map(queue::getOrNull)
+            val names = listOf("one", "two", "three", "four")
             val entries = mutableListOf<Pair<String, String>>()
             tracks.forEachIndexed { i, song ->
                 val name = names[i]
@@ -466,32 +468,24 @@ open class AurelisWidgetProvider : AppWidgetProvider() {
         }
 
         /**
-         * Native widget TextView.setSelected is not a safe RemoteViews action
-         * on every Android launcher. ViewFlipper is a supported remote view,
-         * so long titles slide between two readable overlapping segments.
-         * Short titles remain static (no unnecessary looping/recomposition).
+         * Launchers do not reliably honor TextView's live marquee selection
+         * through RemoteViews. Use the preexisting supported ViewFlipper but
+         * feed the SAME whole title to both children. Its animation now moves
+         * continuously LEFT (rather than paging between two title fragments)
+         * and loops from the beginning after a short pause.
          */
         private fun updateSlidingTitle(
             views: RemoteViews, originalId: Int, flipperId: Int,
             firstId: Int, secondId: Int, title: String, maxCharacters: Int
         ) {
             val text = title.trim()
-            val codePoints = text.codePointCount(0, text.length)
-            val shouldSlide = codePoints > maxCharacters
-            views.setViewVisibility(originalId, if (shouldSlide) View.GONE else View.VISIBLE)
-            views.setViewVisibility(flipperId, if (shouldSlide) View.VISIBLE else View.GONE)
-            if (!shouldSlide) return
-            val estimatedEnd = text.offsetByCodePoints(
-                0, minOf(maxCharacters, codePoints)
-            )
-            val lastSpace = text.lastIndexOf(' ', estimatedEnd.coerceAtMost(text.lastIndex))
-            val split = if (lastSpace in (estimatedEnd - 10)..estimatedEnd &&
-                lastSpace > 0) lastSpace else estimatedEnd
-            val overlapStart = (split - 7).coerceAtLeast(0)
-            val first = text.substring(0, split).trim()
-            val second = text.substring(overlapStart).trim()
-            views.setTextViewText(firstId, first)
-            views.setTextViewText(secondId, second)
+            val shouldScroll = text.codePointCount(0, text.length) > maxCharacters
+            views.setViewVisibility(originalId, if (shouldScroll) View.GONE else View.VISIBLE)
+            views.setViewVisibility(flipperId, if (shouldScroll) View.VISIBLE else View.GONE)
+            if (shouldScroll) {
+                views.setTextViewText(firstId, text)
+                views.setTextViewText(secondId, text)
+            }
         }
 
         fun updateWidgets(context: Context, widgetIds: IntArray? = null) {
@@ -534,8 +528,7 @@ open class AurelisWidgetProvider : AppWidgetProvider() {
                 Triple("one", R.id.widget_next_one_art, R.id.widget_next_one_row),
                 Triple("two", R.id.widget_next_two_art, R.id.widget_next_two_row),
                 Triple("three", R.id.widget_next_three_art, R.id.widget_next_three_row),
-                Triple("four", R.id.widget_next_four_art, R.id.widget_next_four_row),
-                Triple("five", R.id.widget_next_five_art, R.id.widget_next_five_row)
+                Triple("four", R.id.widget_next_four_art, R.id.widget_next_four_row)
             )
 
             ids.forEach { id ->
@@ -641,15 +634,13 @@ open class AurelisWidgetProvider : AppWidgetProvider() {
                             0 -> R.id.widget_next_one
                             1 -> R.id.widget_next_two
                             2 -> R.id.widget_next_three
-                            3 -> R.id.widget_next_four
-                            else -> R.id.widget_next_five
+                            else -> R.id.widget_next_four
                         }
                         val artistId = when (index) {
                             0 -> R.id.widget_next_one_artist
                             1 -> R.id.widget_next_two_artist
                             2 -> R.id.widget_next_three_artist
-                            3 -> R.id.widget_next_four_artist
-                            else -> R.id.widget_next_five_artist
+                            else -> R.id.widget_next_four_artist
                         }
                         // Empty queue: show one honest status instead of
                         // multiple fake or duplicated suggestions.
@@ -660,22 +651,19 @@ open class AurelisWidgetProvider : AppWidgetProvider() {
                             0 -> R.id.widget_next_one_flipper
                             1 -> R.id.widget_next_two_flipper
                             2 -> R.id.widget_next_three_flipper
-                            3 -> R.id.widget_next_four_flipper
-                            else -> R.id.widget_next_five_flipper
+                            else -> R.id.widget_next_four_flipper
                         }
                         val titlePageOneId = when (index) {
                             0 -> R.id.widget_next_one_slide_one
                             1 -> R.id.widget_next_two_slide_one
                             2 -> R.id.widget_next_three_slide_one
-                            3 -> R.id.widget_next_four_slide_one
-                            else -> R.id.widget_next_five_slide_one
+                            else -> R.id.widget_next_four_slide_one
                         }
                         val titlePageTwoId = when (index) {
                             0 -> R.id.widget_next_one_slide_two
                             1 -> R.id.widget_next_two_slide_two
                             2 -> R.id.widget_next_three_slide_two
-                            3 -> R.id.widget_next_four_slide_two
-                            else -> R.id.widget_next_five_slide_two
+                            else -> R.id.widget_next_four_slide_two
                         }
                         updateSlidingTitle(remote, titleId, titleFlipperId,
                             titlePageOneId, titlePageTwoId, nextTitle, 23)

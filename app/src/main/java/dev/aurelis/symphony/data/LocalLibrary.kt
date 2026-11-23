@@ -26,7 +26,9 @@ class LocalLibrary(context: Context) {
         romanize = prefs.getBoolean("romanize", true),
         lyricOffsetMs = prefs.getInt("lyricOffsetMs", 0),
         checkUpdates = prefs.getBoolean("checkUpdates", true),
-        landscapeRailRight = prefs.getBoolean("landscapeRailRight", false)
+        landscapeRailRight = prefs.getBoolean("landscapeRailRight", false),
+        crossfadeEnabled = prefs.getBoolean("crossfadeEnabled", false),
+        crossfadeSeconds = prefs.getInt("crossfadeSeconds", 5).coerceIn(1, 12)
     )
         private set
 
@@ -86,6 +88,8 @@ class LocalLibrary(context: Context) {
             .putBoolean("romanize", s.romanize)
             .putInt("lyricOffsetMs", s.lyricOffsetMs.coerceIn(-5000, 5000))
             .putBoolean("checkUpdates", s.checkUpdates)
-            .putBoolean("landscapeRailRight", s.landscapeRailRight).apply()
+            .putBoolean("landscapeRailRight", s.landscapeRailRight)
+            .putBoolean("crossfadeEnabled", s.crossfadeEnabled)
+            .putInt("crossfadeSeconds", s.crossfadeSeconds.coerceIn(1, 12)).apply()
     }
 }
