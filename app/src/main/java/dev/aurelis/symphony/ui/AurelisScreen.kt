@@ -553,11 +553,23 @@ fun AurelisScreen(state: AurelisState) {
                                 stiffness = Spring.StiffnessMediumLow),
                         label = "mainLandscapeRightInset"
                     )
-                    Box(Modifier.fillMaxSize().padding(start = leftInset, end = rightInset)) {
+                    // A spring can temporarily overshoot *below zero* when
+                    // moving either inset toward 0.dp. Compose PaddingKt
+                    // rejects negative values and crashed HyperOS with
+                    // "Padding must be non-negative". Bound only the
+                    // geometry; keep the rail's spring motion untouched.
+                    val safeLeftInset = leftInset.coerceIn(0.dp, railWidth)
+                    val safeRightInset = rightInset.coerceIn(0.dp, railWidth)
+                    val safeRailTravel = railTravel.coerceIn(
+                        0.dp, (maxWidth - railWidth).coerceAtLeast(0.dp)
+                    )
+                    Box(Modifier.fillMaxSize().padding(
+                        start = safeLeftInset, end = safeRightInset
+                    )) {
                         pageContent()
                     }
                     BoxWithConstraints(
-                        Modifier.offset(x = railTravel)
+                        Modifier.offset(x = safeRailTravel)
                             .width(railWidth).fillMaxHeight()
                             .padding(
                                 start = if (rightRail) 7.dp else 10.dp,
