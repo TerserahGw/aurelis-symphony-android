@@ -51,6 +51,13 @@ class AudioService : MediaSessionService() {
             addListener(object : Player.Listener {
                 override fun onIsPlayingChanged(isPlaying: Boolean) {
                     if (this@apply === player) {
+                        // A system headset/notification/lock-screen Pause must
+                        // pause BOTH overlapping decoders. Resume both.
+                        incoming?.let { fading ->
+                            if (fading !== player) {
+                                if (isPlaying) fading.play() else fading.pause()
+                            }
+                        }
                         AurelisWidgetProvider.publishFromSession(
                             this@AudioService, currentMediaItem, isPlaying)
                     }
@@ -98,11 +105,18 @@ class AudioService : MediaSessionService() {
                     generation != fadeGeneration || incoming !== next) return
                 started = true
                 next.play()
-                val startedAt = SystemClock.uptimeMillis()
                 val tick = object : Runnable {
+                    private var activeElapsedMs = 0L
+                    private var lastTick = SystemClock.uptimeMillis()
                     override fun run() {
                         if (generation != fadeGeneration || incoming !== next) return
-                        val progress = ((SystemClock.uptimeMillis() - startedAt).toFloat() /
+                        val now = SystemClock.uptimeMillis()
+                        // Freeze the fade while paused; no silent completion
+                        // and no volume jump after a long pause.
+                        if (outgoing.isPlaying && next.isPlaying)
+                            activeElapsedMs += (now - lastTick).coerceAtLeast(0L)
+                        lastTick = now
+                        val progress = (activeElapsedMs.toFloat() /
                             durationMs).coerceIn(0f, 1f)
                         // Equal-power blend keeps the perceived loudness more
                         // consistent than simply dipping both volume values.
