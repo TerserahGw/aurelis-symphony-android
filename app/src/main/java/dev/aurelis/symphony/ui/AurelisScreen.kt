@@ -2403,7 +2403,7 @@ private fun LandscapeFullPlayer(
                 }
                 Spacer(Modifier.height(4.dp))
                 // Seek/duration, previous, play and next sit below the artwork.
-                PlayerControls(state)
+                PlayerControls(state, compact = true)
             }
 
             Spacer(Modifier.width(14.dp))
@@ -2772,7 +2772,7 @@ private fun KaraokeToken(word: String, target: Float) {
 }
 
 @Composable
-private fun PlayerControls(state: AurelisState) {
+private fun PlayerControls(state: AurelisState, compact: Boolean = false) {
     val fraction = if (state.duration > 0)
         (state.progress.toFloat() / state.duration).coerceIn(0f, 1f) else 0f
     var scrubbing by remember { mutableFloatStateOf(-1f) }
@@ -2783,9 +2783,9 @@ private fun PlayerControls(state: AurelisState) {
         label = "glowLineProgress"
     )
     val song = state.current
-    Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp)) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = if (compact) 7.dp else 24.dp)) {
         Canvas(
-            Modifier.fillMaxWidth().height(38.dp)
+            Modifier.fillMaxWidth().height(if (compact) 27.dp else 38.dp)
                 .pointerInput(state.duration) {
                     detectTapGestures { location ->
                         if (size.width > 0) state.seek(
@@ -2838,20 +2838,20 @@ private fun PlayerControls(state: AurelisState) {
             Text(formatMs(state.progress), color = white.copy(alpha = .84f), fontSize = 11.sp)
             Text(formatMs(state.duration), color = mist, fontSize = 11.sp)
         }
-        Spacer(Modifier.height(13.dp))
-        Row(Modifier.fillMaxWidth().height(70.dp),
+        Spacer(Modifier.height(if (compact) 1.dp else 13.dp))
+        Row(Modifier.fillMaxWidth().height(if (compact) 49.dp else 70.dp),
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically) {
             Tactile(action = state::previous) {
-                Glass(Modifier.size(49.dp), RoundedCornerShape(25.dp),
+                Glass(Modifier.size(if (compact) 38.dp else 49.dp), RoundedCornerShape(25.dp),
                     tint = state.ambientColor, opacity = .54f,
                     backdrop = song?.artwork) {
                     Icon(Icons.Rounded.SkipPrevious, "Sebelumnya",
-                        Modifier.size(24.dp).align(Alignment.Center), tint = white)
+                        Modifier.size(if (compact) 20.dp else 24.dp).align(Alignment.Center), tint = white)
                 }
             }
             Tactile(action = state::togglePlay) {
-                Glass(Modifier.size(69.dp), RoundedCornerShape(35.dp),
+                Glass(Modifier.size(if (compact) 50.dp else 69.dp), RoundedCornerShape(35.dp),
                     tint = state.ambientColor, opacity = .85f,
                     backdrop = song?.artwork) {
                     if (state.preparing) {
@@ -2864,17 +2864,17 @@ private fun PlayerControls(state: AurelisState) {
                                     (fadeOut(tween(120)) + scaleOut(targetScale = .7f))
                             }) { playing ->
                             Icon(if (playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-                                "Putar atau jeda", Modifier.size(33.dp), tint = lime)
+                                "Putar atau jeda", Modifier.size(if (compact) 26.dp else 33.dp), tint = lime)
                         }
                     }
                 }
             }
             Tactile(action = state::next) {
-                Glass(Modifier.size(49.dp), RoundedCornerShape(25.dp),
+                Glass(Modifier.size(if (compact) 38.dp else 49.dp), RoundedCornerShape(25.dp),
                     tint = state.ambientColor, opacity = .54f,
                     backdrop = song?.artwork) {
                     Icon(Icons.Rounded.SkipNext, "Berikutnya",
-                        Modifier.size(24.dp).align(Alignment.Center), tint = white)
+                        Modifier.size(if (compact) 20.dp else 24.dp).align(Alignment.Center), tint = white)
                 }
             }
         }
