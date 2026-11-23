@@ -32,21 +32,21 @@
             android:clipChildren="true" android:clipToPadding="true">
             <TextView android:id="@+id/widget_title"
                     android:layout_width="match_parent" android:layout_height="wrap_content"
-                    android:singleLine="true" android:ellipsize="marquee" android:text="Aurelis Symphony"
+                    android:singleLine="true" android:ellipsize="end" android:text="Aurelis Symphony"
                     android:textColor="#FFFFFFFF" android:textStyle="bold" android:textSize="12sp"
                    
                    
-                    android:marqueeRepeatLimit="marquee_forever"
+                    
                     android:requiresFadingEdge="horizontal"
                     android:fadingEdgeLength="10dp"/>
             <ViewFlipper android:id="@+id/widget_title_flipper"
                 android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:visibility="gone"
-                android:flipInterval="7800" android:autoStart="true"
+                android:flipInterval="13800" android:autoStart="true"
                 android:requiresFadingEdge="horizontal" android:fadingEdgeLength="9dp"
-                android:animateFirstView="false"
+                android:animateFirstView="true"
                 android:inAnimation="@anim/widget_title_slide_in"
-                android:outAnimation="@anim/widget_title_slide_out">
+                android:outAnimation="@anim/widget_title_out_instant">
             <TextView android:id="@+id/widget_title_slide_one"
                 android:layout_width="wrap_content" android:layout_height="wrap_content"
                 android:singleLine="true" android:ellipsize="none" android:scrollHorizontally="true"
@@ -120,20 +120,20 @@
                         android:layout_width="match_parent" android:layout_height="wrap_content"
                         android:text="Lagu berikutnya" android:textColor="#F0F8F5"
                         android:textStyle="bold" android:textSize="9sp"
-                        android:singleLine="true" android:ellipsize="marquee"
+                        android:singleLine="true" android:ellipsize="end"
                        
                        
-                       android:marqueeRepeatLimit="marquee_forever"
+                       
                     android:requiresFadingEdge="horizontal"
                     android:fadingEdgeLength="10dp"/>
             <ViewFlipper android:id="@+id/widget_next_one_flipper"
                 android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:visibility="gone"
-                android:flipInterval="7800" android:autoStart="true"
+                android:flipInterval="13800" android:autoStart="true"
                 android:requiresFadingEdge="horizontal" android:fadingEdgeLength="9dp"
-                android:animateFirstView="false"
+                android:animateFirstView="true"
                 android:inAnimation="@anim/widget_title_slide_in"
-                android:outAnimation="@anim/widget_title_slide_out">
+                android:outAnimation="@anim/widget_title_out_instant">
             <TextView android:id="@+id/widget_next_one_slide_one"
                 android:layout_width="wrap_content" android:layout_height="wrap_content"
                 android:singleLine="true" android:ellipsize="none" android:scrollHorizontally="true"
@@ -178,20 +178,20 @@
                         android:layout_width="match_parent" android:layout_height="wrap_content"
                         android:text="Lagu berikutnya" android:textColor="#F0F8F5"
                         android:textStyle="bold" android:textSize="9sp"
-                        android:singleLine="true" android:ellipsize="marquee"
+                        android:singleLine="true" android:ellipsize="end"
                        
                        
-                       android:marqueeRepeatLimit="marquee_forever"
+                       
                     android:requiresFadingEdge="horizontal"
                     android:fadingEdgeLength="10dp"/>
             <ViewFlipper android:id="@+id/widget_next_two_flipper"
                 android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:visibility="gone"
-                android:flipInterval="7800" android:autoStart="true"
+                android:flipInterval="13800" android:autoStart="true"
                 android:requiresFadingEdge="horizontal" android:fadingEdgeLength="9dp"
-                android:animateFirstView="false"
+                android:animateFirstView="true"
                 android:inAnimation="@anim/widget_title_slide_in"
-                android:outAnimation="@anim/widget_title_slide_out">
+                android:outAnimation="@anim/widget_title_out_instant">
             <TextView android:id="@+id/widget_next_two_slide_one"
                 android:layout_width="wrap_content" android:layout_height="wrap_content"
                 android:singleLine="true" android:ellipsize="none" android:scrollHorizontally="true"
@@ -236,20 +236,20 @@
                         android:layout_width="match_parent" android:layout_height="wrap_content"
                         android:text="Lagu berikutnya" android:textColor="#F0F8F5"
                         android:textStyle="bold" android:textSize="9sp"
-                        android:singleLine="true" android:ellipsize="marquee"
+                        android:singleLine="true" android:ellipsize="end"
                        
                        
-                       android:marqueeRepeatLimit="marquee_forever"
+                       
                     android:requiresFadingEdge="horizontal"
                     android:fadingEdgeLength="10dp"/>
             <ViewFlipper android:id="@+id/widget_next_three_flipper"
                 android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:visibility="gone"
-                android:flipInterval="7800" android:autoStart="true"
+                android:flipInterval="13800" android:autoStart="true"
                 android:requiresFadingEdge="horizontal" android:fadingEdgeLength="9dp"
-                android:animateFirstView="false"
+                android:animateFirstView="true"
                 android:inAnimation="@anim/widget_title_slide_in"
-                android:outAnimation="@anim/widget_title_slide_out">
+                android:outAnimation="@anim/widget_title_out_instant">
             <TextView android:id="@+id/widget_next_three_slide_one"
                 android:layout_width="wrap_content" android:layout_height="wrap_content"
                 android:singleLine="true" android:ellipsize="none" android:scrollHorizontally="true"
@@ -294,20 +294,20 @@
                         android:layout_width="match_parent" android:layout_height="wrap_content"
                         android:text="Lagu berikutnya" android:textColor="#F0F8F5"
                         android:textStyle="bold" android:textSize="9sp"
-                        android:singleLine="true" android:ellipsize="marquee"
+                        android:singleLine="true" android:ellipsize="end"
                        
                        
-                       android:marqueeRepeatLimit="marquee_forever"
+                       
                     android:requiresFadingEdge="horizontal"
                     android:fadingEdgeLength="10dp"/>
             <ViewFlipper android:id="@+id/widget_next_four_flipper"
                 android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:visibility="gone"
-                android:flipInterval="7800" android:autoStart="true"
+                android:flipInterval="13800" android:autoStart="true"
                 android:requiresFadingEdge="horizontal" android:fadingEdgeLength="9dp"
-                android:animateFirstView="false"
+                android:animateFirstView="true"
                 android:inAnimation="@anim/widget_title_slide_in"
-                android:outAnimation="@anim/widget_title_slide_out">
+                android:outAnimation="@anim/widget_title_out_instant">
             <TextView android:id="@+id/widget_next_four_slide_one"
                 android:layout_width="wrap_content" android:layout_height="wrap_content"
                 android:singleLine="true" android:ellipsize="none" android:scrollHorizontally="true"
