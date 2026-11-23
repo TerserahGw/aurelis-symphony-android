@@ -16,6 +16,7 @@ import android.graphics.RadialGradient
 import android.graphics.Rect
 import android.graphics.Shader
 import android.util.Log
+import android.view.View
 import android.os.Bundle
 import android.os.SystemClock
 import android.widget.RemoteViews
@@ -92,6 +93,9 @@ open class AurelisWidgetProvider : AppWidgetProvider() {
         private const val COVER_CACHE = "aurelis_widget_cover.jpg"
         private const val TAG = "AurelisWidget"
         private val images = Executors.newSingleThreadExecutor()
+        private val queueArtLock = Any()
+        private val pendingQueueArt = mutableSetOf<String>()
+        private val failedQueueArt = mutableMapOf<String, Long>()
         @Volatile private var inFlightArt: String? = null
         @Volatile private var failedArtwork: String? = null
         @Volatile private var failedAt: Long = 0L
@@ -172,19 +176,25 @@ open class AurelisWidgetProvider : AppWidgetProvider() {
             }.onFailure { Log.w(TAG, "Could not cache main-player artwork", it) }
         }
 
-        /** The same real Up Next list shown by AurelisState, not a fake preview. */
+        /**
+         * Mirror AurelisState's playlist/radio queue, never invent tracks.
+         * Three album cover rows remain readable in a compact 4x2 widget.
+         */
         fun publishQueue(context: Context, queue: List<Song>) {
             val prefs = context.getSharedPreferences(STORE, Context.MODE_PRIVATE)
-            val first = queue.getOrNull(0)
-            val second = queue.getOrNull(1)
-            val values = listOf(
-                first?.title.orEmpty(), first?.artist.orEmpty(),
-                second?.title.orEmpty(), second?.artist.orEmpty()
-            )
-            val keys = listOf("next_one", "next_one_artist", "next_two", "next_two_artist")
-            if (keys.indices.all { prefs.getString(keys[it], "") == values[it] }) return
+            val tracks = listOf(queue.getOrNull(0), queue.getOrNull(1), queue.getOrNull(2))
+            val names = listOf("one", "two", "three")
+            val entries = mutableListOf<Pair<String, String>>()
+            tracks.forEachIndexed { i, song ->
+                val name = names[i]
+                entries.add("next_$name" to song?.title.orEmpty())
+                entries.add("next_${name}_artist" to song?.artist.orEmpty())
+                entries.add("next_${name}_art" to (song?.let(::primaryArtwork).orEmpty()))
+                entries.add("next_${name}_video" to (song?.let(::videoId).orEmpty()))
+            }
+            if (entries.all { (key, value) -> prefs.getString(key, "") == value }) return
             val editor = prefs.edit()
-            keys.indices.forEach { editor.putString(keys[it], values[it]) }
+            entries.forEach { (key, value) -> editor.putString(key, value) }
             editor.apply()
             updateWidgets(context)
         }
@@ -233,6 +243,12 @@ open class AurelisWidgetProvider : AppWidgetProvider() {
             val first = store.getString("next_one", "").orEmpty()
             val second = store.getString("next_two", "").orEmpty()
             val backdrops = mutableMapOf<Size, Bitmap>()
+            val queuedArtToFetch = mutableSetOf<Triple<String, String, String>>()
+            val queueCoverIds = listOf(
+                Triple("one", R.id.widget_next_one_art, R.id.widget_next_one_row),
+                Triple("two", R.id.widget_next_two_art, R.id.widget_next_two_row),
+                Triple("three", R.id.widget_next_three_art, R.id.widget_next_three_row)
+            )
 
             ids.forEach { id ->
                 val provider = manager.getAppWidgetInfo(id)?.provider?.className.orEmpty()
@@ -275,20 +291,46 @@ open class AurelisWidgetProvider : AppWidgetProvider() {
                         actionIntent(app, id * 10 + 3, ACTION_NEXT))
                 }
                 if (size == Size.FOUR_TWO) {
-                    remote.setTextViewText(R.id.widget_next_one,
-                        first.ifBlank { "Belum ada antrean" })
-                    remote.setTextViewText(R.id.widget_next_one_artist,
-                        store.getString("next_one_artist", "").orEmpty()
-                            .ifBlank { "Pilih lagu untuk memulai" })
-                    remote.setTextViewText(R.id.widget_next_two,
-                        second.ifBlank { "Rekomendasi berikutnya" })
-                    remote.setTextViewText(R.id.widget_next_two_artist,
-                        store.getString("next_two_artist", "").orEmpty()
-                            .ifBlank { "Menunggu Up Next" })
+                    queueCoverIds.forEachIndexed { index, (name, coverId, rowId) ->
+                        val nextTitle = store.getString("next_$name", "").orEmpty()
+                        val nextArtist = store.getString("next_${name}_artist", "").orEmpty()
+                        val nextUrl = store.getString("next_${name}_art", "").orEmpty()
+                        val nextVideo = store.getString("next_${name}_video", "").orEmpty()
+                        val titleId = when (index) {
+                            0 -> R.id.widget_next_one
+                            1 -> R.id.widget_next_two
+                            else -> R.id.widget_next_three
+                        }
+                        val artistId = when (index) {
+                            0 -> R.id.widget_next_one_artist
+                            1 -> R.id.widget_next_two_artist
+                            else -> R.id.widget_next_three_artist
+                        }
+                        // Empty queue: show one honest status instead of
+                        // multiple fake or duplicated suggestions.
+                        remote.setViewVisibility(rowId,
+                            if (nextTitle.isNotBlank() || index == 0) View.VISIBLE else View.GONE)
+                        remote.setTextViewText(titleId, nextTitle.ifBlank { "Antrean masih kosong" })
+                        remote.setTextViewText(artistId,
+                            if (nextTitle.isBlank()) "Putar radio atau playlist" else nextArtist)
+                        val thumbFile = File(app.cacheDir, "aurelis_widget_next_$name.jpg")
+                        val valid = nextUrl.isNotBlank() && thumbFile.isFile &&
+                            store.getString("cached_next_${name}_art", "") == nextUrl
+                        val thumb = if (valid) BitmapFactory.decodeFile(thumbFile.absolutePath) else null
+                        if (thumb != null) remote.setImageViewBitmap(coverId, thumb)
+                        else remote.setImageViewResource(coverId, R.drawable.widget_music_note)
+                        if (nextTitle.isNotBlank() && nextUrl.startsWith("https://")
+                            && thumb == null) {
+                            queuedArtToFetch.add(Triple(name, nextUrl, nextVideo))
+                        }
+                    }
                 }
                 manager.updateAppWidget(id, remote)
             }
             if (artUrl.startsWith("https://") && art == null) loadArtwork(app, artUrl, videoId)
+            queuedArtToFetch.forEach { (name, url, video) ->
+                loadQueueArtwork(app, name, url, video)
+            }
         }
 
         private fun actionIntent(context: Context, code: Int, action: String): PendingIntent =
@@ -390,6 +432,70 @@ open class AurelisWidgetProvider : AppWidgetProvider() {
                     Log.w(TAG, "Widget artwork cache unavailable", e)
                 } finally {
                     if (inFlightArt == url) inFlightArt = null
+                }
+            }
+        }
+
+        /**
+         * Queue covers are cached per slot. Requests are bounded, retried on
+         * later updates, and skipped if the playlist changes mid-download.
+         */
+        private fun loadQueueArtwork(context: Context, name: String, url: String, videoId: String) {
+            val key = "$name|$url"
+            val now = SystemClock.elapsedRealtime()
+            synchronized(queueArtLock) {
+                if (pendingQueueArt.contains(key)) return
+                if (now - (failedQueueArt[key] ?: -120_000L) < 60_000L) return
+                pendingQueueArt.add(key)
+            }
+            images.execute {
+                try {
+                    val prefs = context.getSharedPreferences(STORE, Context.MODE_PRIVATE)
+                    if (prefs.getString("next_${name}_art", "") != url) return@execute
+                    val fallback = if (videoPattern.matches(videoId))
+                        "https://i.ytimg.com/vi/$videoId/hqdefault.jpg" else ""
+                    var cached = false
+                    for (candidate in listOf(url, fallback).filter {
+                        it.startsWith("https://")
+                    }.distinct()) {
+                        val bytes = runCatching { downloadArtwork(candidate) }.getOrNull()
+                            ?: continue
+                        val decoded = BitmapFactory.decodeByteArray(
+                            bytes, 0, bytes.size,
+                            BitmapFactory.Options().apply { inSampleSize = 3 }
+                        ) ?: continue
+                        val thumb = Bitmap.createScaledBitmap(decoded, 88, 88, true)
+                        if (thumb !== decoded) decoded.recycle()
+                        if (prefs.getString("next_${name}_art", "") != url) {
+                            thumb.recycle()
+                            return@execute
+                        }
+                        val temporary = File(context.cacheDir, "aurelis_widget_next_$name.tmp")
+                        temporary.outputStream().use {
+                            thumb.compress(Bitmap.CompressFormat.JPEG, 85, it)
+                        }
+                        thumb.recycle()
+                        if (prefs.getString("next_${name}_art", "") != url) {
+                            temporary.delete()
+                            return@execute
+                        }
+                        if (temporary.renameTo(
+                                File(context.cacheDir, "aurelis_widget_next_$name.jpg")
+                            )) {
+                            prefs.edit().putString("cached_next_${name}_art", url).apply()
+                            cached = true
+                            updateWidgets(context)
+                            break
+                        }
+                    }
+                    if (!cached) {
+                        synchronized(queueArtLock) { failedQueueArt[key] = SystemClock.elapsedRealtime() }
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "Could not load Up Next thumbnail", e)
+                    synchronized(queueArtLock) { failedQueueArt[key] = SystemClock.elapsedRealtime() }
+                } finally {
+                    synchronized(queueArtLock) { pendingQueueArt.remove(key) }
                 }
             }
         }
