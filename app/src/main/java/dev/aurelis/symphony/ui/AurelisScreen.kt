@@ -661,7 +661,9 @@ private fun HomePage(
     LazyColumn(
         state = scrollState,
         contentPadding = PaddingValues(
-            start = 21.dp, end = 21.dp, top = 17.dp, bottom = 184.dp
+            start = 21.dp, end = 21.dp,
+            top = if (LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE) 95.dp else 17.dp,
+            bottom = if (LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE) 32.dp else 184.dp
         ),
         verticalArrangement = Arrangement.spacedBy(19.dp)
     ) {
@@ -926,7 +928,9 @@ private fun SearchPage(state: AurelisState, query: String,
     scrollState: androidx.compose.foundation.lazy.LazyListState,
     onPlay: (Song) -> Unit, onMenu: (Song) -> Unit) {
     LazyColumn(state = scrollState,
-        contentPadding = PaddingValues(start = 21.dp, end = 21.dp, top = 18.dp, bottom = 180.dp), verticalArrangement = Arrangement.spacedBy(13.dp)) {
+        contentPadding = PaddingValues(start = 21.dp, end = 21.dp,
+            top = if (LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE) 95.dp else 18.dp,
+            bottom = if (LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE) 32.dp else 180.dp), verticalArrangement = Arrangement.spacedBy(13.dp)) {
         item { SectionHeading(uiText("Search"), if (query.isBlank()) "Mulai cari dari Island Search di bawah" else "Hasil untuk “${query.take(60)}”") }
         if (state.searching) item { LinearProgressIndicator(Modifier.fillMaxWidth(), color = lime) }
         if (query.isBlank()) item { EmptyPage("Temukan sesuatu yang baru", "Cari judul, artis, atau musik untuk didengarkan.") }
@@ -963,7 +967,9 @@ private fun LibraryPage(
     LazyColumn(
         state = scrollState,
         contentPadding = PaddingValues(
-            start = 21.dp, end = 21.dp, top = 18.dp, bottom = 180.dp
+            start = 21.dp, end = 21.dp,
+            top = if (LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE) 95.dp else 18.dp,
+            bottom = if (LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE) 32.dp else 180.dp
         ),
         verticalArrangement = Arrangement.spacedBy(13.dp)
     ) {
