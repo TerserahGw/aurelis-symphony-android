@@ -101,6 +101,8 @@ open class AurelisWidgetProvider : AppWidgetProvider() {
         private val bitmapCacheLock = Any()
         private var cachedCoverKey: String? = null
         private var cachedCoverBitmap: Bitmap? = null
+        private var cachedMiniKey: String? = null
+        private var cachedMiniBitmap: Bitmap? = null
         private var cachedBackdropKey: String? = null
         private val cachedBackdrops = mutableMapOf<Size, Bitmap>()
         private var cachedHeroKey: String? = null
@@ -534,7 +536,17 @@ open class AurelisWidgetProvider : AppWidgetProvider() {
                         }
                         remote.setImageViewBitmap(R.id.widget_art, heroBitmap)
                     } else if (art != null) {
-                        remote.setImageViewBitmap(R.id.widget_art, art)
+                        // Never send a 768x768 source Bitmap through Binder.
+                        // Fixed-size mini covers only need a 120px square and
+                        // the same small bitmap can be shared by all mini IDs.
+                        val mini = synchronized(bitmapCacheLock) {
+                            if (cachedMiniKey != artCacheKey || cachedMiniBitmap == null) {
+                                cachedMiniBitmap = squareCover(art, 120)
+                                cachedMiniKey = artCacheKey
+                            }
+                            cachedMiniBitmap!!
+                        }
+                        remote.setImageViewBitmap(R.id.widget_art, mini)
                     } else {
                         remote.setImageViewResource(
                             R.id.widget_art, R.drawable.widget_music_note
