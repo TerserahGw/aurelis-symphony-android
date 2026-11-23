@@ -23,9 +23,12 @@
             android:layout_weight="1"/>
         <TextView android:id="@+id/widget_title"
             android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:text="Aurelis Symphony" android:maxLines="1"
-            android:ellipsize="end" android:textSize="12sp" android:textStyle="bold"
-            android:textColor="#FFFFFFFF"/>
+            android:text="Aurelis Symphony" android:singleLine="true"
+            android:ellipsize="marquee" android:textSize="12sp" android:textStyle="bold"
+            android:textColor="#FFFFFFFF" android:marqueeRepeatLimit="marquee_forever"
+            android:requiresFadingEdge="horizontal" android:fadingEdgeLength="9dp"
+            android:focusable="true" android:focusableInTouchMode="true"
+/>
         <TextView android:id="@+id/widget_artist"
             android:layout_width="match_parent" android:layout_height="wrap_content"
             android:layout_marginTop="2dp" android:layout_marginBottom="5dp"
