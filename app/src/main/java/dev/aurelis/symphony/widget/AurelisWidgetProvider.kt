@@ -127,6 +127,11 @@ open class AurelisWidgetProvider : AppWidgetProvider() {
         )
 
         private val videoPattern = Regex("[A-Za-z0-9_-]{11}")
+        private const val ART_CACHE_VERSION = 2
+        private const val HERO_CACHE_SIZE = 768
+        private val googleSizePattern = Regex("=w[0-9]+-h[0-9]+[^?]*")
+        private val googleSquarePattern = Regex("=s[0-9]+[^?]*")
+        private val youtubeThumbPattern = Regex("/(default|mqdefault|hqdefault|sddefault|maxresdefault)\\.jpg")
 
         private fun videoId(song: Song): String {
             if (videoPattern.matches(song.videoId)) return song.videoId
@@ -134,14 +139,52 @@ open class AurelisWidgetProvider : AppWidgetProvider() {
             return if (song.id.startsWith("yt-") && videoPattern.matches(fromKey)) fromKey else ""
         }
 
-        private fun primaryArtwork(song: Song): String {
+        private fun originalArtwork(song: Song): String {
             val raw = song.artwork.trim()
             if (raw.startsWith("https://")) return raw
             if (raw.startsWith("/") && !raw.startsWith("//"))
                 return "https://aurelis-symphony.go.altare.global$raw"
-            val id = videoId(song)
-            return if (id.isNotBlank()) "https://i.ytimg.com/vi/$id/hqdefault.jpg" else ""
+            return videoId(song).takeIf { it.isNotBlank() }
+                ?.let { "https://i.ytimg.com/vi/$it/hqdefault.jpg" }.orEmpty()
         }
+
+        private fun upgradedArtwork(url: String): String {
+            if (!url.startsWith("https://")) return url
+            val host = runCatching { URL(url).host.lowercase() }.getOrDefault("")
+            return when {
+                host.endsWith("googleusercontent.com") || host.endsWith("ggpht.com") -> {
+                    when {
+                        googleSizePattern.containsMatchIn(url) ->
+                            url.replace(googleSizePattern, "=w1080-h1080-l90-rj")
+                        googleSquarePattern.containsMatchIn(url) ->
+                            url.replace(googleSquarePattern, "=s1080")
+                        else -> url
+                    }
+                }
+                host.endsWith("ytimg.com") && youtubeThumbPattern.containsMatchIn(url) ->
+                    url.replace(youtubeThumbPattern, "/maxresdefault.jpg")
+                else -> url
+            }
+        }
+
+        private fun artworkCandidates(url: String, videoId: String): List<String> {
+            val candidates = mutableListOf<String>()
+            fun add(value: String) {
+                if (value.startsWith("https://") && !candidates.contains(value))
+                    candidates.add(value)
+            }
+            add(upgradedArtwork(url))
+            add(url)
+            // Only fall back to a YouTube video thumbnail if the genuine album
+            // cover cannot be fetched in good resolution.
+            if (videoPattern.matches(videoId)) {
+                for (quality in listOf("maxresdefault", "sddefault", "hqdefault"))
+                    add("https://i.ytimg.com/vi/$videoId/$quality.jpg")
+            }
+            return candidates
+        }
+
+        private fun primaryArtwork(song: Song) = upgradedArtwork(originalArtwork(song))
 
         fun publish(context: Context, song: Song?, playing: Boolean, accent: Int) {
             val prefs = context.getSharedPreferences(STORE, Context.MODE_PRIVATE)
@@ -274,8 +317,8 @@ open class AurelisWidgetProvider : AppWidgetProvider() {
          */
         fun publishQueue(context: Context, queue: List<Song>) {
             val prefs = context.getSharedPreferences(STORE, Context.MODE_PRIVATE)
-            val tracks = listOf(queue.getOrNull(0), queue.getOrNull(1), queue.getOrNull(2))
-            val names = listOf("one", "two", "three")
+            val tracks = (0 until 5).map(queue::getOrNull)
+            val names = listOf("one", "two", "three", "four", "five")
             val entries = mutableListOf<Pair<String, String>>()
             tracks.forEachIndexed { i, song ->
                 val name = names[i]
@@ -328,6 +371,7 @@ open class AurelisWidgetProvider : AppWidgetProvider() {
             val file = File(app.cacheDir, COVER_CACHE)
             val validArt = artUrl.isNotBlank() &&
                 artUrl == store.getString("cached_artwork", "") && file.isFile
+            val needsHdRefresh = store.getInt("cached_art_version", 0) < ART_CACHE_VERSION
             val artCacheKey = if (validArt) {
                 "$artUrl:${file.lastModified()}:${file.length()}"
             } else "none"
@@ -350,7 +394,9 @@ open class AurelisWidgetProvider : AppWidgetProvider() {
             val queueCoverIds = listOf(
                 Triple("one", R.id.widget_next_one_art, R.id.widget_next_one_row),
                 Triple("two", R.id.widget_next_two_art, R.id.widget_next_two_row),
-                Triple("three", R.id.widget_next_three_art, R.id.widget_next_three_row)
+                Triple("three", R.id.widget_next_three_art, R.id.widget_next_three_row),
+                Triple("four", R.id.widget_next_four_art, R.id.widget_next_four_row),
+                Triple("five", R.id.widget_next_five_art, R.id.widget_next_five_row)
             )
 
             ids.forEach { id ->
@@ -401,6 +447,9 @@ open class AurelisWidgetProvider : AppWidgetProvider() {
                 }
                 remote.setTextViewText(R.id.widget_title, title)
                 remote.setTextViewText(R.id.widget_artist, artist)
+                // TextView marquee runs on the launcher's UI thread only when
+                // the title overflows. Built-in fading edges hide both cuts.
+                remote.setBoolean(R.id.widget_title, "setSelected", true)
 
                 val openIntent = Intent(app, MainActivity::class.java).apply {
                     flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or
@@ -426,9 +475,7 @@ open class AurelisWidgetProvider : AppWidgetProvider() {
                 }
                 if (size == Size.FOUR_TWO) {
                     val count = store.getInt("next_queue_total", 0)
-                    remote.setTextViewText(R.id.widget_queue_header,
-                        if (count > 3) "UP NEXT  ·  3 / $count"
-                        else "UP NEXT")
+                    remote.setTextViewText(R.id.widget_queue_header, "UP NEXT")
                     queueCoverIds.forEachIndexed { index, (name, coverId, rowId) ->
                         val nextTitle = store.getString("next_$name", "").orEmpty()
                         val nextArtist = store.getString("next_${name}_artist", "").orEmpty()
@@ -437,18 +484,23 @@ open class AurelisWidgetProvider : AppWidgetProvider() {
                         val titleId = when (index) {
                             0 -> R.id.widget_next_one
                             1 -> R.id.widget_next_two
-                            else -> R.id.widget_next_three
+                            2 -> R.id.widget_next_three
+                            3 -> R.id.widget_next_four
+                            else -> R.id.widget_next_five
                         }
                         val artistId = when (index) {
                             0 -> R.id.widget_next_one_artist
                             1 -> R.id.widget_next_two_artist
-                            else -> R.id.widget_next_three_artist
+                            2 -> R.id.widget_next_three_artist
+                            3 -> R.id.widget_next_four_artist
+                            else -> R.id.widget_next_five_artist
                         }
                         // Empty queue: show one honest status instead of
                         // multiple fake or duplicated suggestions.
                         remote.setViewVisibility(rowId,
                             if (nextTitle.isNotBlank() || index == 0) View.VISIBLE else View.GONE)
                         remote.setTextViewText(titleId, nextTitle.ifBlank { "Antrean masih kosong" })
+                        remote.setBoolean(titleId, "setSelected", nextTitle.isNotBlank())
                         remote.setTextViewText(artistId,
                             if (nextTitle.isBlank()) "Putar radio atau playlist" else nextArtist)
                         val thumbFile = File(app.cacheDir, "aurelis_widget_next_$name.jpg")
@@ -468,7 +520,8 @@ open class AurelisWidgetProvider : AppWidgetProvider() {
                 runCatching { manager.updateAppWidget(id, remote) }
                     .onFailure { Log.w(TAG, "Failed to update widget $id", it) }
             }
-            if (artUrl.startsWith("https://") && art == null) loadArtwork(app, artUrl, videoId)
+            if (artUrl.startsWith("https://") && (art == null || needsHdRefresh))
+                loadArtwork(app, artUrl, videoId)
             queuedArtToFetch.forEach { (name, url, video) ->
                 loadQueueArtwork(app, name, url, video)
             }
