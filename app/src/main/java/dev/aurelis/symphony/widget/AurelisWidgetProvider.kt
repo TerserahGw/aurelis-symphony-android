@@ -15,6 +15,7 @@ import android.graphics.Paint
 import android.graphics.RadialGradient
 import android.graphics.Rect
 import android.graphics.Shader
+import android.util.Log
 import android.os.Bundle
 import android.os.SystemClock
 import android.widget.RemoteViews
@@ -89,6 +90,7 @@ open class AurelisWidgetProvider : AppWidgetProvider() {
         const val ACTION_REFRESH = "dev.aurelis.symphony.WIDGET_REFRESH"
         private const val STORE = "aurelis_widget_state"
         private const val COVER_CACHE = "aurelis_widget_cover.jpg"
+        private const val TAG = "AurelisWidget"
         private val images = Executors.newSingleThreadExecutor()
         @Volatile private var inFlightArt: String? = null
         @Volatile private var failedArtwork: String? = null
@@ -108,17 +110,66 @@ open class AurelisWidgetProvider : AppWidgetProvider() {
             AurelisWidgetFourByOneProvider::class.java
         )
 
+        private val videoPattern = Regex("[A-Za-z0-9_-]{11}")
+
+        private fun videoId(song: Song): String {
+            if (videoPattern.matches(song.videoId)) return song.videoId
+            val fromKey = song.id.removePrefix("yt-")
+            return if (song.id.startsWith("yt-") && videoPattern.matches(fromKey)) fromKey else ""
+        }
+
+        private fun primaryArtwork(song: Song): String {
+            val raw = song.artwork.trim()
+            if (raw.startsWith("https://")) return raw
+            if (raw.startsWith("/") && !raw.startsWith("//"))
+                return "https://aurelis-symphony.go.altare.global$raw"
+            val id = videoId(song)
+            return if (id.isNotBlank()) "https://i.ytimg.com/vi/$id/hqdefault.jpg" else ""
+        }
+
         fun publish(context: Context, song: Song?, playing: Boolean, accent: Int) {
             val prefs = context.getSharedPreferences(STORE, Context.MODE_PRIVATE)
             val editor = prefs.edit()
             if (song != null) {
                 editor.putString("title", song.title)
                     .putString("artist", song.artist)
-                    .putString("artwork", song.artwork)
+                    .putString("artwork", primaryArtwork(song))
+                    .putString("video_id", videoId(song))
                     .putString("song_key", song.key)
             }
             editor.putBoolean("playing", playing).putInt("accent", accent).apply()
             updateWidgets(context)
+        }
+
+        /**
+         * Reuse artwork bytes downloaded by the main player for its ambient
+         * palette, instead of depending on a second widget-only request.
+         */
+        fun cacheArtworkBytes(context: Context, song: Song, bytes: ByteArray) {
+            val app = context.applicationContext
+            val prefs = app.getSharedPreferences(STORE, Context.MODE_PRIVATE)
+            val url = primaryArtwork(song)
+            if (url.isBlank() || prefs.getString("song_key", "") != song.key) return
+            runCatching {
+                if (bytes.size > 5_000_000) return
+                val options = BitmapFactory.Options().apply { inSampleSize = 2 }
+                val decoded = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
+                    ?: return
+                val small = Bitmap.createScaledBitmap(decoded, 192, 192, true)
+                if (small !== decoded) decoded.recycle()
+                val tmp = File(app.cacheDir, "$COVER_CACHE.tmp")
+                tmp.outputStream().use { small.compress(Bitmap.CompressFormat.JPEG, 89, it) }
+                small.recycle()
+                if (prefs.getString("song_key", "") != song.key) {
+                    tmp.delete()
+                    return
+                }
+                if (tmp.renameTo(File(app.cacheDir, COVER_CACHE))) {
+                    prefs.edit().putString("cached_artwork", url).apply()
+                    failedArtwork = null
+                    updateWidgets(app)
+                }
+            }.onFailure { Log.w(TAG, "Could not cache main-player artwork", it) }
         }
 
         /** The same real Up Next list shown by AurelisState, not a fake preview. */
@@ -169,6 +220,7 @@ open class AurelisWidgetProvider : AppWidgetProvider() {
                 .getString("visualStyle", "GLASS")
             val glass = theme != "AMBIENT"
             val artUrl = store.getString("artwork", "").orEmpty()
+            val videoId = store.getString("video_id", "").orEmpty()
             val file = File(app.cacheDir, COVER_CACHE)
             val art = if (artUrl.isNotBlank() &&
                 artUrl == store.getString("cached_artwork", "") && file.isFile) {
@@ -196,7 +248,7 @@ open class AurelisWidgetProvider : AppWidgetProvider() {
                 }
                 remote.setImageViewBitmap(R.id.widget_background, background)
                 if (art != null) remote.setImageViewBitmap(R.id.widget_art, art)
-                else remote.setImageViewResource(R.id.widget_art, R.drawable.ic_aurelis_foreground)
+                else remote.setImageViewResource(R.id.widget_art, R.drawable.widget_music_note)
                 remote.setTextViewText(R.id.widget_title, title)
                 remote.setTextViewText(R.id.widget_artist, artist)
 
@@ -236,7 +288,7 @@ open class AurelisWidgetProvider : AppWidgetProvider() {
                 }
                 manager.updateAppWidget(id, remote)
             }
-            if (artUrl.startsWith("https://") && art == null) loadArtwork(app, artUrl)
+            if (artUrl.startsWith("https://") && art == null) loadArtwork(app, artUrl, videoId)
         }
 
         private fun actionIntent(context: Context, code: Int, action: String): PendingIntent =
@@ -255,65 +307,88 @@ open class AurelisWidgetProvider : AppWidgetProvider() {
             }
         }
 
-        private fun loadArtwork(context: Context, url: String) {
+        private fun downloadArtwork(url: String): ByteArray? {
+            val connection = (URL(url).openConnection() as HttpURLConnection).apply {
+                connectTimeout = 6000
+                readTimeout = 6000
+                instanceFollowRedirects = true
+                setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 16) AppleWebKit/537.36 Chrome/131.0 Mobile Safari/537.36")
+                setRequestProperty("Accept", "image/avif,image/webp,image/apng,image/*,*/*;q=0.8")
+            }
+            return try {
+                if (connection.responseCode !in 200..299) return null
+                if (connection.contentLength > 5_000_000) return null
+                connection.inputStream.use { input ->
+                    val output = ByteArrayOutputStream()
+                    val buffer = ByteArray(8192)
+                    while (true) {
+                        val count = input.read(buffer)
+                        if (count < 0) break
+                        if (output.size() + count > 5_000_000) return null
+                        output.write(buffer, 0, count)
+                    }
+                    output.toByteArray()
+                }
+            } finally {
+                connection.disconnect()
+            }
+        }
+
+        private fun loadArtwork(context: Context, url: String, videoId: String) {
             if (inFlightArt == url) return
             val now = SystemClock.elapsedRealtime()
-            if (failedArtwork == url && now - failedAt < 180_000L) return
+            if (failedArtwork == url && now - failedAt < 60_000L) return
             synchronized(this) {
                 if (inFlightArt == url) return
                 inFlightArt = url
             }
             images.execute {
                 try {
-                    val connection = (URL(url).openConnection() as HttpURLConnection).apply {
-                        connectTimeout = 4500
-                        readTimeout = 4500
-                        instanceFollowRedirects = true
-                        setRequestProperty("User-Agent", "AurelisWidget/1.2.8")
-                    }
-                    val bytes = try {
-                        if (connection.contentLength > 2_000_000) return@execute
-                        connection.inputStream.use { stream ->
-                            val out = ByteArrayOutputStream()
-                            val buffer = ByteArray(8192)
-                            while (true) {
-                                val n = stream.read(buffer)
-                                if (n < 0) break
-                                if (out.size() + n > 2_000_000) return@execute
-                                out.write(buffer, 0, n)
-                            }
-                            out.toByteArray()
+                    val fallback = if (videoPattern.matches(videoId))
+                        "https://i.ytimg.com/vi/$videoId/hqdefault.jpg" else ""
+                    val candidates = listOf(url, fallback).filter { it.startsWith("https://") }.distinct()
+                    var saved = false
+                    for (candidate in candidates) {
+                        val bytes = try { downloadArtwork(candidate) }
+                        catch (e: Exception) {
+                            Log.w(TAG, "Artwork unavailable from " + URL(candidate).host, e)
+                            null
+                        } ?: continue
+                        val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size,
+                            BitmapFactory.Options().apply { inSampleSize = 2 }) ?: continue
+                        val small = Bitmap.createScaledBitmap(bitmap, 192, 192, true)
+                        if (small !== bitmap) bitmap.recycle()
+                        val prefs = context.getSharedPreferences(STORE, Context.MODE_PRIVATE)
+                        if (prefs.getString("artwork", "") != url) {
+                            small.recycle()
+                            return@execute
                         }
-                    } finally { connection.disconnect() }
-                    val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size,
-                        BitmapFactory.Options().apply { inSampleSize = 2 })
-                        ?: return@execute
-                    val small = Bitmap.createScaledBitmap(bitmap, 160, 160, true)
-                    if (small !== bitmap) bitmap.recycle()
-                    val prefs = context.getSharedPreferences(STORE, Context.MODE_PRIVATE)
-                    if (prefs.getString("artwork", "") != url) {
+                        val temporary = File(context.cacheDir, "$COVER_CACHE.tmp")
+                        temporary.outputStream().use {
+                            small.compress(Bitmap.CompressFormat.JPEG, 89, it)
+                        }
                         small.recycle()
-                        return@execute
+                        if (prefs.getString("artwork", "") != url) {
+                            temporary.delete()
+                            return@execute
+                        }
+                        if (temporary.renameTo(File(context.cacheDir, COVER_CACHE))) {
+                            prefs.edit().putString("cached_artwork", url).apply()
+                            saved = true
+                            failedArtwork = null
+                            updateWidgets(context)
+                            break
+                        }
                     }
-                    val destination = File(context.cacheDir, COVER_CACHE)
-                    val temporary = File(context.cacheDir, COVER_CACHE + ".tmp")
-                    temporary.outputStream().use {
-                        small.compress(Bitmap.CompressFormat.JPEG, 86, it)
-                    }
-                    small.recycle()
-                    if (temporary.renameTo(destination)) {
-                        prefs.edit().putString("cached_artwork", url).apply()
-                        failedArtwork = null
-                        updateWidgets(context)
-                    }
-                } catch (_: Exception) {
-                    // Offline: leave the usable cover placeholder intact.
-                } finally {
-                    if (context.getSharedPreferences(STORE, Context.MODE_PRIVATE)
-                            .getString("cached_artwork", "") != url) {
+                    if (!saved) {
                         failedArtwork = url
                         failedAt = SystemClock.elapsedRealtime()
                     }
+                } catch (e: Exception) {
+                    failedArtwork = url
+                    failedAt = SystemClock.elapsedRealtime()
+                    Log.w(TAG, "Widget artwork cache unavailable", e)
+                } finally {
                     if (inFlightArt == url) inFlightArt = null
                 }
             }
@@ -337,48 +412,49 @@ open class AurelisWidgetProvider : AppWidgetProvider() {
             val image = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
             val canvas = Canvas(image)
             val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
-            val base = mix(accent, 0xFF11252A.toInt(), if (glass) .63f else .82f)
-            val bright = mix(accent, 0xFFA9F3DD.toInt(), .42f)
+            val slate = 0xFF101C27.toInt()
+            val base = mix(accent, slate, if (glass) .58f else .79f)
+            val upper = mix(base, 0xFF324B58.toInt(), if (glass) .28f else .12f)
             paint.shader = LinearGradient(
                 0f, 0f, width.toFloat(), height.toFloat(),
                 if (glass) intArrayOf(
-                    rgba(mix(base, 0xFF26383C.toInt(), .22f), 222),
-                    rgba(base, 228), 0xE90A161D.toInt()
+                    rgba(upper, 242), rgba(base, 242), rgba(0xFF0C1720.toInt(), 250)
                 ) else intArrayOf(
-                    0xFF1A302E.toInt(), rgba(base, 255), 0xFF0C171D.toInt()
-                ),
-                null, Shader.TileMode.CLAMP
+                    0xFF1A252E.toInt(), rgba(base, 255), 0xFF0B141B.toInt()
+                ), null, Shader.TileMode.CLAMP
             )
             canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), paint)
             paint.shader = null
-            if (glass && artwork != null) {
-                // Artwork tint is subdued enough to keep small titles readable.
-                val tiny = Bitmap.createScaledBitmap(artwork, 10, 10, true)
-                paint.alpha = 38
-                canvas.drawBitmap(tiny, null, Rect(width / 3, -height / 3,
-                    width + width / 4, height + height / 3), paint)
+
+            if (artwork != null) {
+                // Upscaling an extremely small thumbnail produces a soft
+                // frosted artwork-reactive wash without wallpaper capture.
+                val tiny = Bitmap.createScaledBitmap(artwork, 7, 7, true)
+                paint.alpha = if (glass) 92 else 34
+                canvas.drawBitmap(tiny, null,
+                    Rect(width / 3, -height / 3, width + width / 3, height + height / 3), paint)
                 tiny.recycle()
                 paint.alpha = 255
             }
+            val highlight = mix(accent, 0xFFE3FFFA.toInt(), .72f)
             paint.shader = RadialGradient(
-                width * .09f, height * .01f, width * .82f,
-                intArrayOf(rgba(bright, if (glass) 87 else 34), 0x00000000),
+                width * .1f, height * .05f, width * .8f,
+                intArrayOf(rgba(highlight, if (glass) 74 else 26), Color.TRANSPARENT),
                 null, Shader.TileMode.CLAMP
             )
             canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), paint)
             paint.shader = RadialGradient(
-                width * .98f, height * .92f, width * .76f,
-                intArrayOf(if (glass) 0x365A9BC6 else 0x142A7064, 0x00000000),
+                width * .97f, height * .99f, width * .68f,
+                intArrayOf(if (glass) 0x2C85BFE1 else 0x183B807E, Color.TRANSPARENT),
                 null, Shader.TileMode.CLAMP
             )
             canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), paint)
             paint.shader = null
-            // Soft top lip. Rounded contour is applied in dp by the XML root,
-            // not pre-rasterized into a bitmap that the launcher can stretch.
-            paint.color = if (glass) 0x27FFFFFF else 0x12FFFFFF
-            canvas.drawRect(12f, 2f, width - 12f, 3.5f, paint)
+            paint.color = if (glass) 0x24FFFFFF else 0x09FFFFFF
+            canvas.drawRect(22f, 2f, width - 22f, 3f, paint)
             return image
         }
+
     }
 }
 
