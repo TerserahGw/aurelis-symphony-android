@@ -192,6 +192,49 @@ private fun Modifier.featherScrollEdges(top: Dp, bottom: Dp): Modifier =
         )
     }
 
+/** Alpha feather for horizontal Home carousels (works in both orientations). */
+private fun Modifier.featherHorizontalEdges(
+    start: Dp, end: Dp, fadeStart: Boolean = true, fadeEnd: Boolean = true
+): Modifier = this.graphicsLayer {
+    compositingStrategy = CompositingStrategy.Offscreen
+}.drawWithContent {
+    drawContent()
+    if (size.width <= 0f) return@drawWithContent
+    val l = if (fadeStart) (start.toPx() / size.width).coerceIn(0f, .35f) else 0f
+    val r = if (fadeEnd) (end.toPx() / size.width).coerceIn(0f, .35f) else 0f
+    drawRect(
+        brush = Brush.horizontalGradient(
+            colorStops = arrayOf(
+                0f to if (fadeStart) Color.Transparent else Color.Black,
+                l to Color.Black,
+                (1f - r) to Color.Black,
+                1f to if (fadeEnd) Color.Transparent else Color.Black
+            )
+        ),
+        blendMode = BlendMode.DstIn
+    )
+}
+
+/** Use source-resolution art whenever an image host offers it. */
+private fun highResolutionCover(song: Song): String {
+    val url = song.artwork
+    if (!url.startsWith("https://")) return url
+    val host = runCatching { android.net.Uri.parse(url).host.orEmpty() }.getOrDefault("")
+    if (host.contains("googleusercontent.com") || host.contains("ggpht.com")) {
+        val dimensions = Regex("=w[0-9]+-h[0-9]+[^?]*")
+        if (dimensions.containsMatchIn(url))
+            return url.replace(dimensions, "=w1080-h1080-l90-rj")
+        val square = Regex("=s[0-9]+[^?]*")
+        if (square.containsMatchIn(url)) return url.replace(square, "=s1080")
+    }
+    if (host.contains("ytimg.com")) {
+        val oldThumbnail = Regex("/(default|mqdefault|hqdefault|sddefault)\\.jpg")
+        if (oldThumbnail.containsMatchIn(url))
+            return url.replace(oldThumbnail, "/maxresdefault.jpg")
+    }
+    return url
+}
+
 private fun Color.mix(other: Color, amount: Float) = Color(
     red = red * (1 - amount) + other.red * amount,
     green = green * (1 - amount) + other.green * amount,
@@ -319,6 +362,15 @@ fun AurelisScreen(state: AurelisState) {
     val searchScrollState = rememberLazyListState()
     val libraryScrollState = rememberLazyListState()
     var compactDock by remember { mutableStateOf(false) }
+    // React to actual vertical scrolling; the 3s portrait idle delay is
+    // deliberately NOT used for the landscape music/Search morph.
+    val landscapeScrollState = when (tab) {
+        "Search" -> searchScrollState
+        "Library" -> libraryScrollState
+        else -> homeScrollState
+    }
+    val landscapeDockMerging = isLandscape &&
+        landscapeScrollState.isScrollInProgress && state.current != null
     var expanded by rememberSaveable { mutableStateOf(false) }
     var searchExpanded by rememberSaveable { mutableStateOf(false) }
     var searchQuery by rememberSaveable { mutableStateOf("") }
@@ -628,6 +680,7 @@ fun AurelisScreen(state: AurelisState) {
                     state = state,
                     query = searchQuery,
                     searchExpanded = searchExpanded,
+                    scrolling = landscapeDockMerging,
                     onSearchClick = {
                         tab = "Search"
                         searchExpanded = !searchExpanded
@@ -2026,6 +2079,7 @@ private fun LandscapeTopDock(
     state: AurelisState,
     query: String,
     searchExpanded: Boolean,
+    scrolling: Boolean,
     onSearchClick: () -> Unit,
     onQuery: (String) -> Unit,
     onExpandPlayer: () -> Unit
@@ -2033,12 +2087,16 @@ private fun LandscapeTopDock(
     val focus = LocalFocusManager.current
     val reduced = LocalReducedMotion.current
     val railRight = state.settings.landscapeRailRight
+    val merged = scrolling && !searchExpanded && state.current != null
     BoxWithConstraints(modifier.fillMaxWidth().height(62.dp)) {
         val hasMini = state.current != null
         val searchTarget = if (searchExpanded)
             (maxWidth * .44f).coerceAtMost(292.dp) else 62.dp
-        val miniTarget = if (searchExpanded) 62.dp
-            else (maxWidth * .35f).coerceAtMost(250.dp)
+        val miniTarget = when {
+            merged -> 0.dp
+            searchExpanded -> 62.dp
+            else -> (maxWidth * .35f).coerceAtMost(250.dp)
+        }
         val capsuleAnimation = if (reduced) tween<Dp>(0)
             else spring<Dp>(dampingRatio = .91f,
                 stiffness = Spring.StiffnessMediumLow)
@@ -2046,6 +2104,11 @@ private fun LandscapeTopDock(
             label = "landscapeSearchWidth")
         val miniWidth by animateDpAsState(miniTarget, capsuleAnimation,
             label = "landscapeMiniPlayerWidth")
+        val miniGap by animateDpAsState(
+            targetValue = if (merged || !hasMini) 0.dp else 9.dp,
+            animationSpec = capsuleAnimation,
+            label = "landscapeMiniMergeGap"
+        )
 
         // Animate one normalized side, not a fixed pixel X position. The
         // changing capsule widths automatically shift the group so Search
@@ -2057,8 +2120,8 @@ private fun LandscapeTopDock(
                     stiffness = Spring.StiffnessMediumLow),
             label = "landscapeTopDockSide"
         )
-        val gap = if (hasMini) 9.dp else 0.dp
-        val groupWidth = (searchWidth + if (hasMini) miniWidth + gap else 0.dp)
+        val gap = miniGap.coerceAtLeast(0.dp)
+        val groupWidth = (searchWidth + if (hasMini) miniWidth.coerceAtLeast(0.dp) + gap else 0.dp)
             .coerceIn(62.dp, maxWidth.coerceAtLeast(62.dp))
         val travel = (maxWidth - groupWidth).coerceAtLeast(0.dp)
         val dockX = travel * sideProgress.coerceIn(0f, 1f)
@@ -2101,10 +2164,41 @@ private fun LandscapeTopDock(
                         }
                     }
                 } else {
-                    Tactile(Modifier.fillMaxSize(), onSearchClick) {
-                        Icon(Icons.Rounded.Search, "Buka pencarian",
-                            Modifier.size(23.dp).align(Alignment.Center),
-                            tint = white)
+                    // Search becomes the single now-playing artwork capsule
+                    // while vertical scrolling is active.
+                    AnimatedContent(
+                        targetState = merged,
+                        modifier = Modifier.fillMaxSize(),
+                        label = "landscapeSearchToCoverMorph",
+                        transitionSpec = {
+                            (fadeIn(tween(if (reduced) 0 else 225)) +
+                                scaleIn(
+                                    initialScale = .66f,
+                                    animationSpec = if (reduced) tween(0)
+                                        else spring(dampingRatio = .82f,
+                                            stiffness = Spring.StiffnessMediumLow)
+                                )) togetherWith
+                            (fadeOut(tween(if (reduced) 0 else 165)) +
+                                scaleOut(targetScale = .70f,
+                                    animationSpec = tween(if (reduced) 0 else 190)))
+                        }
+                    ) { mergedNow ->
+                        if (mergedNow) {
+                            state.current?.let { track ->
+                                Tactile(Modifier.fillMaxSize(), onExpandPlayer) {
+                                    Box(Modifier.fillMaxSize(),
+                                        contentAlignment = Alignment.Center) {
+                                        Artwork(track, 44.dp, 16.dp)
+                                    }
+                                }
+                            }
+                        } else {
+                            Tactile(Modifier.fillMaxSize(), onSearchClick) {
+                                Icon(Icons.Rounded.Search, "Buka pencarian",
+                                    Modifier.size(23.dp).align(Alignment.Center),
+                                    tint = white)
+                            }
+                        }
                     }
                 }
             }
@@ -2112,7 +2206,13 @@ private fun LandscapeTopDock(
 
         val miniCapsule: @Composable () -> Unit = {
             state.current?.let { track ->
-                Tactile(Modifier.width(miniWidth).fillMaxHeight(), onExpandPlayer) {
+                val miniAlpha = (miniWidth.value / 62f).coerceIn(0f, 1f)
+                if (miniWidth > 1.dp) {
+                Tactile(
+                    Modifier.width(miniWidth.coerceAtLeast(0.dp)).fillMaxHeight()
+                        .graphicsLayer { alpha = miniAlpha },
+                    onExpandPlayer
+                ) {
                     Glass(Modifier.fillMaxSize(), RoundedCornerShape(28.dp),
                         tint = state.ambientColor, opacity = .42f,
                         backdrop = track.artwork,
@@ -2153,6 +2253,7 @@ private fun LandscapeTopDock(
                             }
                         }
                     }
+                }
                 }
             }
         }
