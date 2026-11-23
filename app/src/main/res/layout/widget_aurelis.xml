@@ -39,15 +39,15 @@
             </LinearLayout>
             <LinearLayout android:layout_width="match_parent" android:layout_height="36dp"
                 android:orientation="horizontal" android:gravity="center">
-                <ImageView android:id="@+id/widget_prev" android:layout_width="42dp"
+                <ImageView android:id="@+id/widget_prev" android:layout_width="0dp" android:layout_weight="1"
                     android:layout_height="36dp" android:padding="8dp"
                     android:src="@drawable/widget_previous" android:tint="#E2F6ED"
                     android:contentDescription="Lagu sebelumnya"/>
-                <ImageView android:id="@+id/widget_toggle" android:layout_width="45dp"
+                <ImageView android:id="@+id/widget_toggle" android:layout_width="0dp" android:layout_weight="1.15"
                     android:layout_height="36dp" android:padding="7dp"
                     android:src="@drawable/widget_play" android:tint="#C8FFDF"
                     android:contentDescription="Play atau pause"/>
-                <ImageView android:id="@+id/widget_next" android:layout_width="42dp"
+                <ImageView android:id="@+id/widget_next" android:layout_width="0dp" android:layout_weight="1"
                     android:layout_height="36dp" android:padding="8dp"
                     android:src="@drawable/widget_next" android:tint="#E2F6ED"
                     android:contentDescription="Lagu berikutnya"/>
