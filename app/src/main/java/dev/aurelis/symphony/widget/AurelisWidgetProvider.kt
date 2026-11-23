@@ -453,6 +453,35 @@ open class AurelisWidgetProvider : AppWidgetProvider() {
             ), playing, snapshot.getInt("accent", 0xFF315A4C.toInt()))
         }
 
+        /**
+         * Native widget TextView.setSelected is not a safe RemoteViews action
+         * on every Android launcher. ViewFlipper is a supported remote view,
+         * so long titles slide between two readable overlapping segments.
+         * Short titles remain static (no unnecessary looping/recomposition).
+         */
+        private fun updateSlidingTitle(
+            views: RemoteViews, originalId: Int, flipperId: Int,
+            firstId: Int, secondId: Int, title: String, maxCharacters: Int
+        ) {
+            val text = title.trim()
+            val codePoints = text.codePointCount(0, text.length)
+            val shouldSlide = codePoints > maxCharacters
+            views.setViewVisibility(originalId, if (shouldSlide) View.GONE else View.VISIBLE)
+            views.setViewVisibility(flipperId, if (shouldSlide) View.VISIBLE else View.GONE)
+            if (!shouldSlide) return
+            val estimatedEnd = text.offsetByCodePoints(
+                0, minOf(maxCharacters, codePoints)
+            )
+            val lastSpace = text.lastIndexOf(' ', estimatedEnd.coerceAtMost(text.lastIndex))
+            val split = if (lastSpace in (estimatedEnd - 10)..estimatedEnd &&
+                lastSpace > 0) lastSpace else estimatedEnd
+            val overlapStart = (split - 7).coerceAtLeast(0)
+            val first = text.substring(0, split).trim()
+            val second = text.substring(overlapStart).trim()
+            views.setTextViewText(firstId, first)
+            views.setTextViewText(secondId, second)
+        }
+
         fun updateWidgets(context: Context, widgetIds: IntArray? = null) {
             val app = context.applicationContext
             val manager = AppWidgetManager.getInstance(app)
@@ -555,9 +584,17 @@ open class AurelisWidgetProvider : AppWidgetProvider() {
                 }
                 remote.setTextViewText(R.id.widget_title, title)
                 remote.setTextViewText(R.id.widget_artist, artist)
-                // TextView marquee runs on the launcher's UI thread only when
-                // the title overflows. Built-in fading edges hide both cuts.
-                remote.setBoolean(R.id.widget_title, "setSelected", true)
+                val maxTitleLength = when (size) {
+                    Size.TWO_ONE -> 16
+                    Size.TWO_TWO -> 23
+                    Size.FOUR_ONE -> 34
+                    Size.FOUR_TWO -> 26
+                }
+                updateSlidingTitle(
+                    remote, R.id.widget_title, R.id.widget_title_flipper,
+                    R.id.widget_title_slide_one, R.id.widget_title_slide_two,
+                    title, maxTitleLength
+                )
 
                 val openIntent = Intent(app, MainActivity::class.java).apply {
                     flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or
@@ -607,7 +644,29 @@ open class AurelisWidgetProvider : AppWidgetProvider() {
                         remote.setViewVisibility(rowId,
                             if (nextTitle.isNotBlank() || index == 0) View.VISIBLE else View.GONE)
                         remote.setTextViewText(titleId, nextTitle.ifBlank { "Antrean masih kosong" })
-                        remote.setBoolean(titleId, "setSelected", nextTitle.isNotBlank())
+                        val titleFlipperId = when (index) {
+                            0 -> R.id.widget_next_one_flipper
+                            1 -> R.id.widget_next_two_flipper
+                            2 -> R.id.widget_next_three_flipper
+                            3 -> R.id.widget_next_four_flipper
+                            else -> R.id.widget_next_five_flipper
+                        }
+                        val titlePageOneId = when (index) {
+                            0 -> R.id.widget_next_one_slide_one
+                            1 -> R.id.widget_next_two_slide_one
+                            2 -> R.id.widget_next_three_slide_one
+                            3 -> R.id.widget_next_four_slide_one
+                            else -> R.id.widget_next_five_slide_one
+                        }
+                        val titlePageTwoId = when (index) {
+                            0 -> R.id.widget_next_one_slide_two
+                            1 -> R.id.widget_next_two_slide_two
+                            2 -> R.id.widget_next_three_slide_two
+                            3 -> R.id.widget_next_four_slide_two
+                            else -> R.id.widget_next_five_slide_two
+                        }
+                        updateSlidingTitle(remote, titleId, titleFlipperId,
+                            titlePageOneId, titlePageTwoId, nextTitle, 23)
                         remote.setTextViewText(artistId,
                             if (nextTitle.isBlank()) "Putar radio atau playlist" else nextArtist)
                         val thumbFile = File(app.cacheDir, "aurelis_widget_next_$name.jpg")
